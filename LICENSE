@@ -1,0 +1,50 @@
+GATE^FLAME NETWORK SECURITY NODE — LICENSE
+
+Copyright (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM2
+
+Governance:  Policy 986 AED
+License:     AED 900 (Hardware & Software)
+Secondary:   Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+             (CC BY-NC-SA 4.0) where expressly stated on a file or document.
+Author:      Johan Wilhelm van Antwerp (ORCID 0009-0005-7181-0347)
+Web:         https://www.ionity.today | https://www.ionity.world
+Reference:   https://www.ionity.co.za
+
+--------------------------------------------------------------------------------
+1. GRANT
+
+Subject to Policy 986 AED and licence AED 900, permission is granted to view, clone,
+study, and modify this source for non-commercial purposes, provided that:
+
+  a) this notice and the AEDI header block are retained in all copies and
+     substantial portions of the work;
+  b) attribution is given to Johan Wilhelm van Antwerp / Ionity (Pty) Ltd;
+  c) derivative works are distributed under these same terms (ShareAlike).
+
+2. COMMERCIAL USE
+
+Commercial use, redistribution, sublicensing, or incorporation into a commercial
+product requires a written AED 900 licence from Ionity (Pty) Ltd.
+Contact: info@ionity.today
+
+3. TRADEMARKS
+
+"Ionity", "AEDI", "Gate^Flame", "Antwerp Designs" and associated marks and logos
+are trademarks of Ionity (Pty) Ltd (TM2) and are not licensed by this grant.
+
+4. THIRD-PARTY COMPONENTS
+
+Dependencies retain their own licences. See package.json and the respective
+upstream projects.
+
+5. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+--------------------------------------------------------------------------------
+
+Building Tomorrow, Today. | Anything is Possible with God.
