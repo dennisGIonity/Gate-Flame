@@ -53,10 +53,32 @@ Conventional Commits: `type(scope): summary` — e.g. `fix(mobile): correct DNS 
 ## Hard rules
 
 1. **Never commit secrets.** No `.env`, `.env.local`, API keys, `google-services.json`,
-   keystores, or `*.pem`. `.gitignore` blocks these — do not override it.
-2. **Never commit build output.** `dist*/`, `release/`, `node_modules/`, `*.apk`, `*.aab`.
-3. Run `npm run lint` (`tsc --noEmit`) before pushing.
-4. Anything carrying the AEDI header block keeps the header intact.
+   keystores, `keystore.properties`, or `*.pem`. `.gitignore` blocks these — do not
+   override it. The release keystore is the one file in this project with no recovery
+   path; see [`android/KEYSTORE.md`](android/KEYSTORE.md).
+2. **Never commit build output.** `dist*/`, `release/`, `node_modules/`, `*.apk`, `*.aab`,
+   `*.tar.gz`. Release binaries go to GitHub Releases — the `Release` workflow publishes
+   them. A tarball tracked in git was once silently destroyed by a text decode and nobody
+   noticed.
+3. **Prove push access before you start.** If you are working in a sandbox, container or
+   AI session, run `git push --dry-run origin HEAD` **first**. `git ls-remote` succeeding
+   proves nothing — this repo is public, so anonymous read needs no credential. Only a
+   push reveals whether one was injected. If push is refused, write every artefact to a
+   real disk as you go, rather than to chat or an ephemeral workspace.
+
+   > This rule exists because ~7,500 lines of backend were lost exactly this way: two
+   > commits were made, the push 403'd, and the workspace was reclaimed before the work
+   > was written anywhere durable.
+
+4. **One Capacitor config.** `capacitor.config.ts` only. Never add a `.json` alongside it
+   — `@capacitor/cli` resolves `.ts` first and silently ignores the `.json`, which made
+   the old `build:apk-kiosk` a no-op for months.
+5. **Bump `versionCode`** in `android/version.properties` (`npm run version:bump`) for any
+   change that will reach a device. Android refuses an APK whose `versionCode` is ≤ the
+   installed one, and uninstalling to work around it wipes the customer's node pairing.
+6. Run `npm run lint` (`tsc --noEmit`) before pushing. CI runs it too, plus the build,
+   tarball verification and a tracked-artefact check.
+7. Anything carrying the AEDI header block keeps the header intact.
 
 ## Document standard
 

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gate^Flame mobile companion — backup / transfer policy.
+
+  The app stores a node pairing token. That token grants control of a customer's
+  network security appliance, so it must never leave the handset it was issued
+  to — not into Google cloud backup, and not through a device-to-device
+  transfer. Both channels are refused below.
+
+  Consequence, and it is the intended one: restoring a phone from backup does
+  NOT restore the pairing. The customer re-pairs at the node's own screen with
+  a fresh six-digit code. Physical presence at the appliance is the credential,
+  which is the whole point — a token that survives a phone restore would let
+  someone who obtains a backup image adopt a node they have never touched.
+
+  Required by android:dataExtractionRules on API 31+.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

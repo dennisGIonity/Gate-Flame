@@ -1,0 +1,118 @@
+name: CI
+
+# Runs on every push and PR. This is the check that would have caught, before
+# they reached main: the stale committed bundles, the corrupt release tarball,
+# the dependency advisories, and build output being tracked at all.
+
+on:
+  push:
+    branches: [main, 'feat/**', 'fix/**', 'chore/**', 'build/**', 'docs/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, build, and check repo hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Build (web)
+        run: npm run build
+
+      - name: Build (mobile + kiosk HTML)
+        run: |
+          npm run build:html-mobile
+          npm run build:html-kiosk
+
+      - name: Assert Capacitor webDir has an index.html
+        # dist-mobile/index.html was previously committed by hand and produced
+        # by no script. Without it, `cap sync` gives the APK a webDir with
+        # nothing to load and the app opens to a blank screen.
+        run: |
+          test -f dist-mobile/index.html || { echo "::error::dist-mobile/index.html missing — cap sync would produce a blank app"; exit 1; }
+          test -f dist-kiosk/index.html  || { echo "::error::dist-kiosk/index.html missing"; exit 1; }
+          echo "✓ both webDirs have an index.html"
+
+      - name: Package and verify release tarball
+        # `npm run package:release` ends in `gzip -t`. The tarball on main was
+        # once a UTF-8-mangled file with 282,516 replacement characters in it;
+        # this step makes that unshippable rather than undetected.
+        run: npm run package:release
+
+      - name: Assert tarball is real gzip
+        run: |
+          f=release/GateFlame-Complete-Package.tar.gz
+          gzip -t "$f" || { echo "::error::$f is not valid gzip"; exit 1; }
+          magic=$(od -An -tx1 -N2 "$f" | tr -d ' ')
+          [ "$magic" = "1f8b" ] || { echo "::error::bad magic bytes: $magic (expected 1f8b)"; exit 1; }
+          if grep -qc $'\xef\xbf\xbd' "$f" 2>/dev/null; then
+            echo "::error::$f contains U+FFFD — it has been through a text decode"; exit 1
+          fi
+          echo "✓ tarball magic 1f8b, gzip verifies, no replacement characters"
+
+      - name: Assert no build output or secrets are tracked
+        run: |
+          fail=0
+          if git ls-files | grep -E '^(dist|dist-kiosk|dist-mobile|dist-standalone|release|node_modules)/' ; then
+            echo "::error::build output is tracked in git — see CONTRIBUTING.md rule 2"; fail=1
+          fi
+          if git ls-files | grep -E '\.(apk|aab|jks|keystore|tar\.gz)$' ; then
+            echo "::error::binary artefact tracked in git"; fail=1
+          fi
+          if git ls-files | grep -E '(^|/)keystore\.properties$|(^|/)\.env$' ; then
+            echo "::error::a secret file is tracked in git"; fail=1
+          fi
+          if git ls-files | grep -E '^capacitor\..*\.json$' ; then
+            echo "::error::a capacitor .json config is back — it silently shadows capacitor.config.ts"; fail=1
+          fi
+          [ "$fail" = "0" ] && echo "✓ nothing tracked that should not be"
+          exit $fail
+
+      - name: Assert versionCode was bumped against main
+        # Android refuses an APK whose versionCode is <= the installed one.
+        # A PR that changes app code without bumping is a build customers
+        # cannot install.
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          base=$(git show origin/${{ github.base_ref }}:android/version.properties 2>/dev/null | grep '^VERSION_CODE=' | cut -d= -f2 || echo 0)
+          head=$(grep '^VERSION_CODE=' android/version.properties | cut -d= -f2)
+          echo "base=$base head=$head"
+          if [ "$head" -le "$base" ]; then
+            echo "::warning::versionCode not bumped ($head <= $base). Run 'npm run version:bump' if this PR changes app code."
+          else
+            echo "✓ versionCode bumped $base → $head"
+          fi
+
+  audit:
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: npm audit (high and above)
+        run: npm audit --audit-level=high

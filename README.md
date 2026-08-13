@@ -29,13 +29,22 @@ Gate^Flame is a digital perimeter security node — a Pi-hole–class DNS/networ
 glass-panel command surface. This repository holds the full front-end and mobile build
 chain for the node's control application.
 
-| Surface | Entry point | Build target |
-|---|---|---|
-| Desktop / web dashboard | `index.html` → `src/main.tsx` | `vite.config.ts` |
-| Mobile dashboard | `mobile.html` → `src/main-mobile.tsx` | `vite.mobile.config.ts` |
-| Device kiosk | `kiosk.html` → `src/main-kiosk.tsx` | `vite.kiosk.config.ts` |
-| Standalone bundle | `build-standalone.js` | `vite.standalone.config.ts` |
-| Android APK | `android/` (Capacitor) | `capacitor.config.ts` |
+| Surface | Entry point | Build target | Ships as |
+|---|---|---|---|
+| Desktop / web dashboard | `index.html` → `src/main.tsx` | `vite.config.ts` | Web |
+| Mobile dashboard | `mobile.html` → `src/main-mobile.tsx` | `vite.mobile.config.ts` | Inside the APK |
+| Device kiosk | `kiosk.html` → `src/main-kiosk.tsx` | `vite.kiosk.config.ts` | **HTML served by the node** |
+| Standalone bundle | `build-standalone.js` | `vite.standalone.config.ts` | Web |
+| Android APK | `android/` (Capacitor) | `capacitor.config.ts` | `org.ionity.gateflame` |
+
+> **The kiosk is not an Android app.** It runs as Chromium in `--kiosk` mode in the
+> `gateflame-display-kiosk` container on Raspberry Pi OS / Armbian, pointed at
+> `KIOSK_URL=http://localhost:8080/device-kiosk`. The Pi does not run Android.
+> There is exactly **one** APK — the customer's companion app.
+>
+> Do not add `capacitor.config.json` or `capacitor.kiosk.config.json`.
+> `@capacitor/cli` resolves `.ts` **before** `.json`, so a `.json` sitting alongside
+> `capacitor.config.ts` is silently ignored.
 
 ## Stack
 
@@ -55,10 +64,26 @@ npm run dev                    # http://localhost:3000
 ### Android
 
 ```bash
-npm run build
-npx cap sync android
-cd android && ./gradlew assembleDebug
+npm run build:apk          # bump version, build, sync, sign, print fingerprint
+npm run build:apk-debug    # debug build; installs alongside a release build
 ```
+
+`build:apk` produces a **signed release** APK at `release/GateFlame-Mobile.apk`.
+
+Two things must be set up before the first unit ships, and both are irreversible
+afterwards:
+
+| | |
+|---|---|
+| **Signing key** | Read [`android/KEYSTORE.md`](android/KEYSTORE.md) **first**. An APK signed with a different key can never update one already installed — every customer would have to uninstall and re-pair. The keystore cannot be regenerated if lost. |
+| **`versionCode`** | Single-sourced in [`android/version.properties`](android/version.properties), bumped by `npm run version:bump`. Android refuses to install an APK whose `versionCode` is ≤ the installed one. |
+
+The build **refuses** to emit an unsigned release rather than silently falling back
+to the debug key. Override deliberately with
+`./gradlew assembleRelease -PallowUnsignedRelease=true`.
+
+Pairing, the support feed and APK distribution are specified in
+[`docs/PAIRING-AND-TELEMETRY.md`](docs/PAIRING-AND-TELEMETRY.md).
 
 ## Environment
 
