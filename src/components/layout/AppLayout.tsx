@@ -4,6 +4,7 @@ import { ShieldCheck, Smartphone, Cpu, Server, Terminal, Box, Sparkles, Package,
 import { cn } from '../../lib/utils';
 import { LiveBackground } from '../LiveBackground';
 import { motion } from 'motion/react';
+import { DataSourceBanner } from '../DataSourceBanner';
 
 interface AppLayoutProps {
   currentView: AppViewMode;
@@ -146,8 +147,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           </div>
         </header>
 
+        {/* Data-source honesty banner. Sits above every view, deliberately:
+            if anything on screen is simulated, the user is told before they
+            read it, not after. See src/components/DataSourceBanner.tsx. */}
+        <div className="px-8 pt-4">
+          <div className="max-w-7xl mx-auto">
+            <DataSourceBanner />
+          </div>
+        </div>
+
         {/* Dynamic View Content */}
-        <div className="flex-1 overflow-y-auto p-8 relative">
+        <div className="flex-1 overflow-y-auto p-8 pt-4 relative">
           <motion.div
             key={currentView}
             initial={{ opacity: 0, y: 10 }}

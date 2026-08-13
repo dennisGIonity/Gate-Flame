@@ -1,7 +1,11 @@
 /**
  * @license
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-AED-900
  * Ionity Global (Pty) Ltd — Header Component
+ *
+ * (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - All Rights Reserved - TM2
+ * Governance: Policy 986 AED | Licence: AED 900 - see LICENSE at the repo root.
+ * Non-commercial grant; commercial use requires written permission.
  */
 
 import React from 'react';

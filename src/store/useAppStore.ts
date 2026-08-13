@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { SystemTelemetry, ThreatLogEntry, ConnectedClient, IonityUserAccount } from '../types';
+// Seed values only. These are the pre-connection placeholders — the telemetry
+// loop replaces telemetry, threatLogs and clients on its first successful poll,
+// and while they are still on screen the connection state reads `demo` and
+// DataSourceBanner says so. See src/services/gateflameApi.ts.
 import { INITIAL_TELEMETRY, MOCK_THREAT_LOGS, MOCK_CLIENTS, INITIAL_USER_ACCOUNT } from '../data/mockData';
 
 interface AppState {
@@ -12,6 +16,7 @@ interface AppState {
   
   setTelemetry: (updater: SystemTelemetry | ((prev: SystemTelemetry) => SystemTelemetry)) => void;
   setThreatLogs: (updater: ThreatLogEntry[] | ((prev: ThreatLogEntry[]) => ThreatLogEntry[])) => void;
+  setClients: (updater: ConnectedClient[] | ((prev: ConnectedClient[]) => ConnectedClient[])) => void;
   setUserAccount: (updater: IonityUserAccount | ((prev: IonityUserAccount) => IonityUserAccount)) => void;
   
   toggleModule: (moduleId: string, enable: boolean) => void;
@@ -65,8 +70,12 @@ export const useAppStore = create<AppState>()(
         telemetry: typeof updater === 'function' ? updater(state.telemetry) : updater 
       })),
       
-      setThreatLogs: (updater) => set((state) => ({ 
-        threatLogs: typeof updater === 'function' ? updater(state.threatLogs) : updater 
+      setThreatLogs: (updater) => set((state) => ({
+        threatLogs: typeof updater === 'function' ? updater(state.threatLogs) : updater
+      })),
+
+      setClients: (updater) => set((state) => ({
+        clients: typeof updater === 'function' ? updater(state.clients) : updater
       })),
       
       setUserAccount: (updater) => set((state) => ({ 

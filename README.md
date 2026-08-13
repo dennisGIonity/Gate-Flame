@@ -49,7 +49,7 @@ chain for the node's control application.
 ## Stack
 
 React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS 4 · Zustand · Recharts · Motion ·
-Lucide · Capacitor 8 (Android) · `@google/genai` (Gemini, server-side)
+Lucide · Capacitor 8 (Android)
 
 ## Quick start
 
@@ -57,9 +57,21 @@ Lucide · Capacitor 8 (Android) · `@google/genai` (Gemini, server-side)
 git clone https://github.com/dennisGIonity/Gate-Flame.git
 cd Gate-Flame
 npm install
-cp .env.example .env.local     # then fill in your own GEMINI_API_KEY
 npm run dev                    # http://localhost:3000
 ```
+
+No environment file is needed to run it. The app looks for a Gate^Flame node on
+the LAN — `gateflame.local` over mDNS first, then the common private addresses —
+and if none answers it falls back to **clearly-labelled simulated data**.
+
+To pin a specific node, or to force demo mode, copy `.env.example` to
+`.env.local`. Every variable in it is optional.
+
+> **On simulated data.** When no node is connected, the app shows a
+> non-dismissible `SIMULATED DATA — NOT YOUR NETWORK` banner and marks every
+> affected card. Set `VITE_STRICT_LIVE=true` to disable the fallback entirely
+> and surface connection errors instead — recommended for QA, so a broken API
+> cannot hide behind plausible-looking numbers.
 
 ### Android
 
@@ -87,13 +99,28 @@ Pairing, the support feed and APK distribution are specified in
 
 ## Environment
 
-Copy `.env.example` → `.env.local`. **Never commit `.env` or `.env.local`** — they are
-git-ignored, and any key that reaches a public commit must be rotated immediately.
+All optional. Copy `.env.example` → `.env.local` if you need any of them.
+**Never commit `.env` or `.env.local`** — they are git-ignored, and any key that
+reaches a public commit must be rotated immediately.
 
 | Variable | Purpose |
 |---|---|
-| `GEMINI_API_KEY` | Gemini API calls. Injected automatically by AI Studio at runtime. |
-| `APP_URL` | Host URL of the applet. Injected by AI Studio with the Cloud Run service URL. |
+| `VITE_NODE_BASE_URL` | Pin a node instead of discovering one, e.g. `http://192.168.1.105`. |
+| `VITE_USE_MOCK_DATA` | Force simulated data even when a node is reachable. Demo switch. |
+| `VITE_STRICT_LIVE` | Never fall back to simulation — show connection errors instead. |
+| `VITE_API_TIMEOUT_MS` | Request timeout. Default `4000`. |
+| `VITE_POLL_INTERVAL_MS` | Telemetry poll interval. Default `4000`. |
+
+Only `VITE_`-prefixed variables reach the client, and everything that does is
+readable in the shipped bundle — **none of these is a secret**. The node device
+token is not a build-time value: it is issued at pairing and lives only in the
+handset.
+
+> `GEMINI_API_KEY` and `APP_URL` were previously documented here as required.
+> Neither was ever read — no `import.meta.env` reference, no `define:` block in
+> any Vite config, and `@google/genai` imported by no source file. They were AI
+> Studio scaffolding and have been removed rather than left implying a setup
+> step that does nothing.
 
 ## Contributing
 

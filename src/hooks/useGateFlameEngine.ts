@@ -1,91 +1,112 @@
-import { useEffect } from 'react';
+/**
+ * Gate^Flame — the telemetry loop.
+ *
+ * Polls the node for real telemetry and threat activity. When no node is
+ * reachable, `gateflameApi` routes to the simulator and flips the connection
+ * state to `demo`, which is what makes DataSourceBanner appear. This loop does
+ * not know which of the two it got — that decision lives in one place.
+ *
+ * What this replaced: a `setInterval(4000)` fabricating query counts, block
+ * percentages, saved-megabytes and threat-log rows from `Math.random()` over
+ * six hardcoded domains, with nothing anywhere indicating it was fiction.
+ */
+
+import { useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { ThreatLogEntry } from '../types';
+import { gateflameApi } from '../services/gateflameApi';
+import { mockAdapter } from '../services/mockAdapter';
+import { config } from '../config/env';
+import { ApiRequestError } from '../services/apiClient';
+import type { SystemTelemetry } from '../types';
 
 export const useGateFlameEngine = () => {
-  const { telemetry, setTelemetry, setThreatLogs } = useAppStore();
+  const setTelemetry = useAppStore((s) => s.setTelemetry);
+  const setThreatLogs = useAppStore((s) => s.setThreatLogs);
+  const setClients = useAppStore((s) => s.setClients);
+
+  // Read telemetry through a ref so the interval does not tear down and rebuild
+  // on every tick. The previous implementation listed telemetry fields in its
+  // dependency array, so the timer it had just created was cleared and replaced
+  // four seconds later, every time, forever.
+  const telemetryRef = useRef<SystemTelemetry>(useAppStore.getState().telemetry);
+  useEffect(
+    () =>
+      useAppStore.subscribe((s) => {
+        telemetryRef.current = s.telemetry;
+      }),
+    [],
+  );
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (telemetry.protectionStatus !== 'active') return;
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let inFlight = false;
 
-      const increment = Math.floor(Math.random() * 4) + 1;
-      let blockedIncrement = 0;
-      let blockProbability = 0;
+    const tick = async () => {
+      // Skip if the previous poll has not returned. On a slow or flapping LAN
+      // this otherwise stacks requests until the node is the bottleneck.
+      if (inFlight || abort.signal.aborted) return;
 
-      switch (telemetry.filterLevel) {
-        case 'none':
-          blockProbability = 0;
-          break;
-        case 'low':
-          blockProbability = 0.15;
-          break;
-        case 'medium':
-          blockProbability = 0.37;
-          break;
-        case 'high':
-          blockProbability = 0.60;
-          break;
-        default:
-          blockProbability = 0.37;
-      }
+      const current = telemetryRef.current;
+      if (current.protectionStatus !== 'active') return;
 
-      if (Math.random() < blockProbability) {
-        blockedIncrement = 1;
-      }
+      inFlight = true;
+      try {
+        const summary = await gateflameApi.telemetry(current);
+        if (abort.signal.aborted) return;
 
-      setTelemetry((prev) => {
-        const newTotal = prev.totalQueriesToday + increment;
-        const newBlocked = prev.queriesBlockedToday + blockedIncrement;
-        const newPercentage = Number(((newBlocked / newTotal) * 100).toFixed(1));
-        const newSavedMB = Number((prev.dataSavedMB + (blockedIncrement * 0.12)).toFixed(1));
-
-        return {
+        setTelemetry((prev) => ({
           ...prev,
-          totalQueriesToday: newTotal,
-          queriesBlockedToday: newBlocked,
-          blockPercentage: newPercentage,
-          dataSavedMB: newSavedMB,
-        };
-      });
+          totalQueriesToday: summary.totalQueriesToday,
+          queriesBlockedToday: summary.queriesBlockedToday,
+          blockPercentage: summary.blockPercentage,
+          domainsOnGravity: summary.domainsOnGravity,
+          activeClientsCount: summary.activeClientsCount,
+          dataSavedMB: summary.dataSavedMB,
+          avgLatencyMs: summary.avgLatencyMs,
+          uptimeSeconds: summary.uptimeSeconds,
+        }));
 
-      if (blockedIncrement > 0) {
-        const sampleDomains = [
-          'telemetry.smart-tv.samsungcloud.com',
-          'trackers.ads-network.io',
-          'analytics.windows-telemetry.com',
-          'beacon.evil-domain-phishing.xyz',
-          'adservice.google.com/pagead',
-          'crypto-miner.pool-hash.top',
-        ];
-        const sampleClients = [
-          'Living Room Smart TV 75"',
-          'Dennis-MacBook-Pro',
-          'Office-Workstation-04',
-          'Guest-Android-Phone',
-        ];
-        const categories: ThreatLogEntry['category'][] = [
-          'Telemetry', 'Ad Tracker', 'Phishing', 'Cryptojacking', 'Adult / Gambling'
-        ];
+        const source = gateflameApi.getConnection().dataSource;
 
-        const now = new Date();
-        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-        
-        const newLog: ThreatLogEntry = {
-          id: `log-${Date.now()}`,
-          timestamp: timeStr,
-          domain: sampleDomains[Math.floor(Math.random() * sampleDomains.length)],
-          clientIp: '192.168.1.112',
-          clientName: sampleClients[Math.floor(Math.random() * sampleClients.length)],
-          category: categories[Math.floor(Math.random() * categories.length)],
-          action: 'Blocked',
-          severity: telemetry.filterLevel === 'high' ? 'high' : (Math.random() > 0.5 ? 'high' : 'medium'),
-        };
-        
-        setThreatLogs((prev) => [newLog, ...prev.slice(0, 19)]);
+        if (source === 'live') {
+          // The node owns the threat log and the client list. Never synthesise
+          // entries over them, and never leave the seeded placeholders in
+          // place once real data is available — a stale mock client list beside
+          // live telemetry is the worst of both.
+          const [threats, clientList] = await Promise.all([
+            gateflameApi.threats(20),
+            gateflameApi.clients(),
+          ]);
+          if (abort.signal.aborted) return;
+          setThreatLogs(threats.entries);
+          setClients(clientList.clients);
+        } else if (source === 'demo') {
+          const fabricated = mockAdapter.threatTick(current.filterLevel);
+          if (fabricated) {
+            setThreatLogs((prev) => [fabricated, ...prev.slice(0, 19)]);
+          }
+        }
+      } catch (err) {
+        // Only genuine refusals reach here — unreachability is handled inside
+        // gateflameApi by falling back and flipping the banner.
+        if (!(err instanceof ApiRequestError)) throw err;
+        console.warn('[gateflame] telemetry poll rejected:', err.message);
+      } finally {
+        inFlight = false;
       }
-    }, 4000);
+    };
 
-    return () => clearInterval(interval);
-  }, [telemetry.protectionStatus, telemetry.filterLevel, setTelemetry, setThreatLogs]);
+    // Establish the data source first, then start polling.
+    void gateflameApi.connect(abort.signal).then(() => {
+      if (abort.signal.aborted) return;
+      void tick();
+      timer = setInterval(() => void tick(), config.pollIntervalMs);
+    });
+
+    return () => {
+      abort.abort();
+      if (timer) clearInterval(timer);
+    };
+  }, [setTelemetry, setThreatLogs, setClients]);
 };
