@@ -1,0 +1,39 @@
+# ── Line-ending normalisation ─────────────────────────
+* text=auto eol=lf
+
+# ── Binary: never normalise, never diff as text ───────
+# release/GateFlame-Complete-Package.tar.gz was destroyed once by a UTF-8 text
+# decode that replaced 68.5% of its bytes with U+FFFD. These rules stop that
+# class of corruption at the door.
+*.tar.gz    binary
+*.tgz       binary
+*.zip       binary
+*.gz        binary
+*.apk       binary
+*.aab       binary
+*.jar       binary
+*.keystore  binary
+*.jks       binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.webp      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.mp4       binary
+
+# ── Scripts that must keep LF even on Windows ─────────
+*.sh        text eol=lf
+gradlew     text eol=lf
+
+# ── Windows-only scripts keep CRLF ────────────────────
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+gradlew.bat text eol=crlf
+
+# ── Lockfiles: generated, collapse in review ──────────
+package-lock.json  linguist-generated=true -diff
