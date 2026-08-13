@@ -92,19 +92,20 @@ Reference docs cited in the build chain:
 
 ---
 
-## 4. GitHub — Ionity-Global/Gate-Flame
+## 4. GitHub — dennisGIonity/Gate-Flame
 
 | Purpose | Link |
 |---|---|
-| Repository | <https://github.com/Ionity-Global/Gate-Flame> |
-| Clone (HTTPS) | `https://github.com/Ionity-Global/Gate-Flame.git` |
-| Clone (SSH) | `git@github.com:Ionity-Global/Gate-Flame.git` |
-| Clone (CLI) | `gh repo clone Ionity-Global/Gate-Flame` |
-| Issues | <https://github.com/Ionity-Global/Gate-Flame/issues> |
-| Pull requests | <https://github.com/Ionity-Global/Gate-Flame/pulls> |
-| Actions | <https://github.com/Ionity-Global/Gate-Flame/actions> |
-| Releases | <https://github.com/Ionity-Global/Gate-Flame/releases> |
-| Collaborator settings | <https://github.com/Ionity-Global/Gate-Flame/settings/access> |
+| Repository | <https://github.com/dennisGIonity/Gate-Flame> |
+| Clone (HTTPS) | `https://github.com/dennisGIonity/Gate-Flame.git` |
+| Clone (SSH) | `git@github.com:dennisGIonity/Gate-Flame.git` |
+| Clone (CLI) | `gh repo clone dennisGIonity/Gate-Flame` |
+| Issues | <https://github.com/dennisGIonity/Gate-Flame/issues> |
+| Pull requests | <https://github.com/dennisGIonity/Gate-Flame/pulls> |
+| Actions | <https://github.com/dennisGIonity/Gate-Flame/actions> |
+| Releases | <https://github.com/dennisGIonity/Gate-Flame/releases> |
+| Collaborator settings | <https://github.com/dennisGIonity/Gate-Flame/settings/access> |
+| Owner account | <https://github.com/dennisGIonity> |
 | Organisation | <https://github.com/Ionity-Global> |
 | Assets repo (reference) | <https://github.com/Ionity-Global/ionity-assets-ionity-global-ionity-today> |
 | 2026 doc template | <https://github.com/Ionity-Global/ionity-assets-ionity-global-ionity-today/blob/main-Ionity/TEMPLATE_2026_OFFICAL_v1.1%20(1).docx> |

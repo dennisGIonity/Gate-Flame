@@ -4,21 +4,23 @@ Governance: **Policy 986 AED** · Ionity (Pty) Ltd — AEDI
 
 ## Access
 
-This repository is **public** (anyone can read and clone). Members of the
-**Ionity-Global** organisation have **write** access and can push directly.
-External contributors: fork the repo and open a pull request.
+This repository is **public** — anyone can read and clone it.
+
+Team members added as **collaborators** (Settings → Collaborators → Add people) have
+**write** access and can push directly. Everyone else: fork the repo and open a pull
+request.
 
 ## Clone
 
 ```bash
 # HTTPS
-git clone https://github.com/Ionity-Global/Gate-Flame.git
+git clone https://github.com/dennisGIonity/Gate-Flame.git
 
 # SSH
-git clone git@github.com:Ionity-Global/Gate-Flame.git
+git clone git@github.com:dennisGIonity/Gate-Flame.git
 
 # GitHub CLI
-gh repo clone Ionity-Global/Gate-Flame
+gh repo clone dennisGIonity/Gate-Flame
 ```
 
 ## Everyday flow

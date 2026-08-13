@@ -45,7 +45,7 @@ Lucide · Capacitor 8 (Android) · `@google/genai` (Gemini, server-side)
 ## Quick start
 
 ```bash
-git clone https://github.com/Ionity-Global/Gate-Flame.git
+git clone https://github.com/dennisGIonity/Gate-Flame.git
 cd Gate-Flame
 npm install
 cp .env.example .env.local     # then fill in your own GEMINI_API_KEY
@@ -72,8 +72,9 @@ git-ignored, and any key that reaches a public commit must be rotated immediatel
 
 ## Contributing
 
-Everyone in the **Ionity-Global** organisation has push access. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the branch and commit convention.
+The repo is public — anyone can read and clone. Team members added as **collaborators**
+can push directly. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and commit
+convention.
 
 ## Related links
 
