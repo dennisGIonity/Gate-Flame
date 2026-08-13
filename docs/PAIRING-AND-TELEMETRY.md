@@ -16,6 +16,35 @@ This is the contract the rebuilt `node-agent` backend must implement, and the on
 the mobile app builds against. It supersedes the "device ID inserted into the
 mobile APK" approach.
 
+## At a glance
+
+Replaces "device ID baked into the APK", which would mean one build and one
+signature **per unit sold**, and is not a secret anyway — anyone can unzip the
+APK and read it.
+
+**Pairing.** One universal APK. Six-digit code shown on the node's own screen,
+5 min validity, single use, destroyed after 5 wrong guesses, issuable only from
+the kiosk over loopback. Physical presence is the credential, so a node you
+cannot touch cannot be adopted. Scopes: `read` / `control` (any paired handset,
+incl. **starting** a module) vs `kiosk` (loopback only — **stopping** a module,
+revoking devices).
+
+> ⚠ **Carries forward the revoke-all fix:** the `provisioned` flag must survive
+> revocation, or a lost phone becomes a node takeover.
+
+**Support feed.** Health only — `nodeId`, versions, uptime, module status + named
+gap, resource/thermal counters, WAN budget. **Never** domains, client IPs,
+hostnames, threat logs or DPI output. That line is drawn there because DNS
+queries and client identifiers tied to an identifiable household are personal
+information under **POPIA**, bringing lawful-basis, processing-agreement,
+Information Officer and breach-notification duties. Health-only stays clear;
+anything more is explicit, revocable, kiosk-taken opt-in. Outbound only, visible,
+killable, batched ≤ 8 KB / 15 min, fails silent.
+
+Detail follows: product shape (§1), why not a baked-in ID (§2), pairing
+endpoints and scopes (§3), the feed and its POPIA reasoning (§4), APK
+distribution (§5), what has already landed in the repo (§6).
+
 ## 1. The product shape it assumes
 
 ```

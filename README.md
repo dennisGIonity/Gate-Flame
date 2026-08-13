@@ -101,10 +101,14 @@ The repo is public — anyone can read and clone. Team members added as **collab
 can push directly. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and commit
 convention.
 
-## Related links
+## Documentation
 
-The complete index of every Gate^Flame link — AI Studio, Antigravity, Android Studio,
-GitHub and the Ionity properties — lives in [`docs/LINKS.md`](docs/LINKS.md).
+| Document | Covers |
+|---|---|
+| [`docs/PAIRING-AND-TELEMETRY.md`](docs/PAIRING-AND-TELEMETRY.md) | **The backend contract.** Six-digit pairing, scopes, and the health-only support feed with its POPIA reasoning. Read this before implementing `node-agent`. |
+| [`android/KEYSTORE.md`](android/KEYSTORE.md) | Release signing — generation, 3-2-1 backup, verification. Read before the first unit ships. |
+| [`docs/LINKS.md`](docs/LINKS.md) | Complete index of every Gate^Flame link — AI Studio, Antigravity, Android Studio, GitHub and the Ionity properties. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Branch and commit convention, and the hard rules. |
 
 ## License
 
