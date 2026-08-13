@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gate^Flame Security Node</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+    <script>
+      window.addEventListener('error', function(e) {
+        if (e.message === 'ResizeObserver loop limit exceeded' || e.message === 'ResizeObserver loop completed with undelivered notifications.') {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      });
+      (function() {
+        try {
+          var stateStr = localStorage.getItem('ionity-app-storage');
+          var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var filterLevel = 'high';
+          if (stateStr) {
+            var state = JSON.parse(stateStr);
+            var theme = state.state?.userAccount?.appTheme;
+            if (theme === 'dark') isDark = true;
+            else if (theme === 'light') isDark = false;
+            
+            if (state.state?.telemetry?.filterLevel) {
+              filterLevel = state.state.telemetry.filterLevel;
+            }
+          }
+          document.documentElement.classList.add(isDark ? 'dark' : 'light');
+          document.body.setAttribute('data-filter-level', filterLevel);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

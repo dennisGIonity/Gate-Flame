@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-display: "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-slate-950: #050505;
+  --color-slate-900: #0a0a0a;
+  --color-slate-800: #141414;
+  --color-slate-700: #262626;
+  --color-slate-600: #404040;
+  
+  --color-sky-400: #38bdf8;
+  --color-sky-500: #0ea5e9;
+  --color-sky-600: #0284c7;
+}
+
+@property --glass-border-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(14, 165, 233, 0.6);
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 transition-colors duration-500;
+  }
+  
+  .dark body {
+    @apply bg-slate-950 text-slate-50;
+  }
+  
+  :root {
+    --glass-border-color: rgba(14, 165, 233, 0.6) !important;
+    --glass-glow: 0 0 16px 2px rgba(14, 165, 233, 0.25) !important;
+  }
+  
+  body[data-filter-level="none"] {
+    --glass-border-color: rgba(244, 63, 94, 0.6);
+    --glass-glow: 0 0 16px 2px rgba(244, 63, 94, 0.25);
+  }
+  body[data-filter-level="low"] {
+    --glass-border-color: rgba(16, 185, 129, 0.6);
+    --glass-glow: 0 0 16px 2px rgba(16, 185, 129, 0.25);
+  }
+  body[data-filter-level="medium"] {
+    --glass-border-color: rgba(168, 85, 247, 0.6);
+    --glass-glow: 0 0 16px 2px rgba(168, 85, 247, 0.25);
+  }
+  body[data-filter-level="high"] {
+    --glass-border-color: rgba(14, 165, 233, 0.6) !important;
+    --glass-glow: 0 0 16px 2px rgba(14, 165, 233, 0.25) !important;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .glass-panel {
+    @apply bg-white/95 dark:bg-black/60 backdrop-blur-3xl transition-all duration-500;
+    border: 1px solid var(--glass-border-color);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.05), var(--glass-glow);
+  }
+  @supports not (backdrop-filter: blur(10px)) {
+    .glass-panel {
+      @apply bg-slate-50 dark:bg-slate-900;
+    }
+  }
+  
+  
+
+  .dark .glass-panel {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), var(--glass-glow);
+  }
+}
+
+/* Custom crisp executive dark scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
