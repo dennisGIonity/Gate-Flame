@@ -4,42 +4,59 @@ import { SECURITY_MODULES } from '../services/serviceManager';
 import { Activity, Shield, Network, Server, Zap, Lock, Cpu, Globe, Target } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAppStore } from '../store/useAppStore';
+import { gateflameApi } from '../services/gateflameApi';
+import { useConnection } from '../hooks/useConnection';
+import { SimulatedBadge } from './DataSourceBanner';
+import { config } from '../config/env';
+import type { ModuleMetricsResponse } from '../types/api';
+
+/** Chart x-axis label: seconds ago, derived from the node's own timestamps. */
+const relativeLabel = (iso: string, now: number): string => {
+  const delta = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  return `${delta}s`;
+};
 
 export const DynamicModuleTab: React.FC<{ moduleId: string }> = ({ moduleId }) => {
   const moduleConfig = SECURITY_MODULES.find((m) => m.id === moduleId);
   const { userAccount } = useAppStore();
+  const { dataSource, nodeName } = useConnection();
   const isDark = userAccount.appTheme === 'dark' || (userAccount.appTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-  const [stats, setStats] = useState({ metric1: 0, metric2: 0, metric3: 0 });
-  const [dummyData, setDummyData] = useState(() => Array.from({ length: 20 }).map((_, i) => ({
-    time: `${i * 2}s`,
-    value1: Math.floor(Math.random() * 50) + 20,
-    value2: Math.floor(Math.random() * 30) + 10,
-  })));
+  const [metrics, setMetrics] = useState<ModuleMetricsResponse | null>(null);
 
+  // Metrics come from the node. When none is reachable, gateflameApi routes to
+  // the simulator and the connection state flips to `demo`, which is what makes
+  // the SimulatedBadge appear below. Previously this component ran seven
+  // Math.random() feeds on a 2s timer and presented them as measurements.
   useEffect(() => {
-    const interval = setInterval(() => {
-      setStats({
-        metric1: Math.floor(Math.random() * 1000),
-        metric2: Math.floor(Math.random() * 50) + 10,
-        metric3: Math.floor(Math.random() * 100)
-      });
-      setDummyData(prev => {
-        const newData = [...prev.slice(1)];
-        const lastTimeMatch = newData[newData.length - 1].time.match(/(\d+)/);
-        const lastTime = lastTimeMatch ? parseInt(lastTimeMatch[1]) + 2 : 40;
-        newData.push({
-          time: `${lastTime}s`,
-          value1: Math.floor(Math.random() * 50) + 20,
-          value2: Math.floor(Math.random() * 30) + 10,
-        });
-        return newData;
-      });
-    }, 2000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const next = await gateflameApi.moduleMetrics(moduleId);
+        if (!cancelled) setMetrics(next);
+      } catch {
+        if (!cancelled) setMetrics(null);
+      }
+    };
+
+    void load();
+    const interval = setInterval(() => void load(), config.pollIntervalMs);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [moduleId]);
 
   if (!moduleConfig) return null;
+
+  const now = Date.now();
+  const chartData = (metrics?.series ?? []).map((p) => ({
+    time: relativeLabel(p.t, now),
+    value1: p.value1,
+    value2: p.value2,
+  }));
+  const tiles = metrics?.tiles ?? [];
 
   const tooltipStyle = isDark 
     ? { backgroundColor: '#1e3a8a', borderColor: '#3b82f6', borderRadius: '12px', fontSize: '10px', color: '#60a5fa', padding: '8px' }
@@ -61,25 +78,32 @@ export const DynamicModuleTab: React.FC<{ moduleId: string }> = ({ moduleId }) =
           </div>
           <div>
             <h2 className="text-sm font-bold text-slate-900 dark:text-blue-300 leading-tight">{moduleConfig.title}</h2>
-            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-100 dark:bg-blue-900/30 text-emerald-700 dark:text-blue-300 text-[9px] font-mono rounded border border-emerald-200 dark:border-blue-500/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-blue-400 animate-pulse"></span>
-              SERVICE ACTIVE
+            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-100 dark:bg-blue-900/30 text-emerald-700 dark:text-blue-300 text-[9px] font-mono rounded border border-emerald-200 dark:border-blue-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-blue-400 animate-pulse"></span>
+                SERVICE ACTIVE
+              </div>
+              <SimulatedBadge />
             </div>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 shrink-0">
-        {[
-          { label: 'Packets / Actions', value: stats.metric1.toString(), icon: Activity },
-          { label: 'Threats / Flags', value: stats.metric2.toString(), icon: Shield },
-          { label: 'Connections', value: '891', icon: Network },
-          { label: 'Uptime', value: '99.9%', icon: Server },
-        ].map((stat, i) => (
+        {[Activity, Shield, Network, Server].map((Icon, i) => ({
+          label: tiles[i]?.label ?? ['Packets / Actions', 'Threats / Flags', 'Connections', 'Uptime'][i],
+          // An em dash, not a plausible number. Until the node reports a value
+          // there is nothing honest to display here.
+          value: tiles[i]?.value ?? '—',
+          unit: tiles[i]?.unit,
+          icon: Icon,
+        })).map((stat, i) => (
           <div key={i} className="bg-white dark:bg-blue-900/20 border border-slate-200 dark:border-blue-500/50 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
              <stat.icon className="w-4 h-4 mb-3 text-sky-500 dark:text-blue-400" />
              <div>
-                 <div className="text-xl font-mono font-medium text-slate-900 dark:text-blue-100 tracking-tight">{stat.value}</div>
+                 <div className="text-xl font-mono font-medium text-slate-900 dark:text-blue-100 tracking-tight">
+                   {stat.value}{stat.unit ? <span className="text-xs ml-0.5 opacity-60">{stat.unit}</span> : null}
+                 </div>
                  <div className="text-[9px] font-mono text-slate-400 dark:text-blue-400/60 uppercase tracking-wider mt-1">{stat.label}</div>
              </div>
           </div>
@@ -89,13 +113,16 @@ export const DynamicModuleTab: React.FC<{ moduleId: string }> = ({ moduleId }) =
       <div className="bg-white dark:bg-blue-900/20 border border-slate-200 dark:border-blue-500/50 rounded-3xl p-5 shrink-0 flex flex-col shadow-sm h-[200px]">
         <div className="flex justify-between items-start mb-4">
             <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-blue-300">Live Telemetry Flow</h3>
-                <p className="text-[10px] font-mono text-slate-400 dark:text-blue-400/70 mt-0.5 uppercase tracking-widest">Real-time Analysis</p>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-blue-300">Telemetry Flow</h3>
+                <p className="text-[10px] font-mono text-slate-400 dark:text-blue-400/70 mt-0.5 uppercase tracking-widest">
+                  {chartData.length === 0 ? 'Awaiting node' : 'From node'}
+                </p>
             </div>
+            <SimulatedBadge />
         </div>
         <div className="flex-1 min-h-0 -ml-4">
            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dummyData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorVal1" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={isDark ? "#60a5fa" : "#0ea5e9"} stopOpacity={0.3} />
@@ -119,11 +146,15 @@ export const DynamicModuleTab: React.FC<{ moduleId: string }> = ({ moduleId }) =
       {/* Console output visualizer */}
       <div className="bg-slate-900 dark:bg-blue-950/40 border border-slate-800 dark:border-blue-900/60 rounded-2xl p-4 font-mono text-[10px] text-emerald-400 dark:text-blue-500 h-32 overflow-hidden relative shrink-0">
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent to-slate-900 dark:to-blue-950/20 z-10 pointer-events-none"></div>
+        {/* Was a fixed set of invented lines printed regardless of state.
+            Now it reports what the client actually knows. Per-module journald
+            tailing needs GET /api/v1/services/{slug}/logs on the node — see
+            docs/PAIRING-AND-TELEMETRY.md. */}
         <div className="space-y-1 relative z-0 flex flex-col justify-end h-full">
-            <p>&gt; [API] Listening on {moduleConfig.apiEndpoint}</p>
-            <p>&gt; Initializing hooks in kernel space...</p>
-            <p>&gt; Status: OK. Allocating buffers...</p>
-            <p>&gt; Metric {stats.metric3} routed successfully.</p>
+            <p>&gt; [API] endpoint {moduleConfig.apiEndpoint}</p>
+            <p>&gt; [SRC] {dataSource === 'live' ? `live — ${nodeName ?? 'node'}` : dataSource === 'demo' ? 'SIMULATED — no node connected' : dataSource}</p>
+            <p>&gt; [DATA] {chartData.length} point{chartData.length === 1 ? '' : 's'} in window</p>
+            <p>&gt; [LOGS] awaiting /services/{moduleConfig.apiEndpoint.split('/').pop()}/logs</p>
         </div>
       </div>
     </motion.div>

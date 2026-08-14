@@ -1,3 +1,7 @@
+import { gateflameApi } from './gateflameApi';
+import { ApiRequestError } from './apiClient';
+import type { ModuleStatus } from '../types/api';
+
 export interface ModuleConfig {
   id: string;
   title: string;
@@ -62,29 +66,61 @@ export const SECURITY_MODULES: ModuleConfig[] = [
   }
 ];
 
+/** `/api/v1/services/net-scan` → `net-scan`. */
+export const slugFor = (moduleConfig: ModuleConfig): string =>
+  moduleConfig.apiEndpoint.split('/').filter(Boolean).pop() ?? moduleConfig.id;
+
+export interface ToggleResult {
+  ok: boolean;
+  status: ModuleStatus;
+  /** Set when the node acted in name only, or when the result is simulated. */
+  advisory?: string;
+  /** Set when the node refused — e.g. stopping without kiosk scope. */
+  error?: string;
+}
+
 export const ApiService = {
   /**
-   * Physically engages or disengages a backend security module
+   * Start or stop a security module on the node.
+   *
+   * This used to be `setTimeout(800); return true`, with the real fetch
+   * commented out. It always reported success, so every switch in the product
+   * turned green whether or not anything existed to turn on.
+   *
+   * It now goes through `gateflameApi`, which either reaches real hardware or
+   * routes to the simulator and marks the result as simulated. Callers must
+   * surface `advisory` rather than treating `ok` as the whole story: a firewall
+   * bounce recorded with no packet-filter control is a success *and* a caveat.
    */
-  toggleService: async (moduleId: string, endpoint: string, enable: boolean): Promise<boolean> => {
+  toggleService: async (
+    moduleId: string,
+    endpoint: string,
+    enable: boolean,
+  ): Promise<ToggleResult> => {
+    const slug = endpoint.split('/').filter(Boolean).pop() ?? moduleId;
+
     try {
-      console.log(`[API CALL] Engaging hardware API: POST ${endpoint} -> State: ${enable ? 'ON' : 'OFF'}`);
-      
-      // MOCK API CALL: Replace this block with your actual fetch request
-      // const response = await fetch(endpoint, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
-      //   body: JSON.stringify({ action: enable ? 'start' : 'stop' })
-      // });
-      // if (!response.ok) throw new Error('Hardware API rejected request');
-      
-      // Simulating network/hardware spin-up delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      return true; // Success
+      const result = await gateflameApi.toggleService(moduleId, slug, enable);
+      const advisory =
+        result.advisory ??
+        (result.gap ? `${result.gap}${result.remedy ? ` — ${result.remedy}` : ''}` : undefined);
+
+      return {
+        ok: result.status === 'running' || result.status === 'stopped' || result.status === 'degraded',
+        status: result.status,
+        advisory,
+      };
     } catch (error) {
-      console.error(`[API ERROR] Failed to engage module ${moduleId}:`, error);
-      return false; // Failed
+      const message =
+        error instanceof ApiRequestError || error instanceof Error
+          ? error.message
+          : 'Unknown error';
+
+      // A refusal is information, not a glitch. Stopping a module requires
+      // kiosk scope by design, so a phone receives a 403 here and the user has
+      // to be told why rather than shown a toggle that silently snaps back.
+      console.error(`[gateflame] ${enable ? 'start' : 'stop'} ${slug} failed:`, message);
+      return { ok: false, status: 'failed', error: message };
     }
-  }
+  },
 };

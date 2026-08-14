@@ -1,0 +1,87 @@
+name: Release
+
+# Publishes the release tarball as a GitHub Release ASSET.
+#
+# This exists so binaries never get committed again. The corrupt
+# GateFlame-Complete-Package.tar.gz was tracked in git; it bloated every clone,
+# could not be diffed, and was silently destroyed by a text decode without
+# anyone noticing. Release assets have none of those properties.
+#
+# It also means no interactive session ever needs push rights to publish an
+# artifact — the built-in GITHUB_TOKEN does it.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v1.0.1)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Package
+        run: npm run package:release
+
+      - name: Verify the tarball before it is published
+        run: |
+          f=release/GateFlame-Complete-Package.tar.gz
+          gzip -t "$f"
+          magic=$(od -An -tx1 -N2 "$f" | tr -d ' ')
+          [ "$magic" = "1f8b" ] || { echo "::error::bad magic: $magic"; exit 1; }
+          mkdir -p /tmp/verify && tar xzf "$f" -C /tmp/verify
+          test -f /tmp/verify/dist-mobile/index.html
+          test -f /tmp/verify/dist-kiosk/index.html
+          echo "✓ tarball verified and round-trips"
+
+      - name: Checksums
+        run: |
+          cd release
+          sha256sum GateFlame-Complete-Package.tar.gz > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Read app version
+        id: ver
+        run: |
+          echo "code=$(grep '^VERSION_CODE=' android/version.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+          echo "name=$(grep '^VERSION_NAME=' android/version.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Gate^Flame ${{ steps.ver.outputs.name }}
+          body: |
+            Gate^Flame Network Security Node — ${{ steps.ver.outputs.name }}
+            (Android versionCode ${{ steps.ver.outputs.code }})
+
+            Verify your download against `SHA256SUMS.txt`.
+
+            The APK is **not** attached automatically — it is signed on a machine
+            that holds the release keystore, never in CI by default.
+            See `android/KEYSTORE.md`.
+
+            © 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — Policy 986 AED
+          files: |
+            release/GateFlame-Complete-Package.tar.gz
+            release/SHA256SUMS.txt

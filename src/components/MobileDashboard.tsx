@@ -31,6 +31,7 @@ interface MobileDashboardProps {
 }
 
 import { useAppStore } from '../store/useAppStore';
+import { DataSourceBanner } from './DataSourceBanner';
 
 const GlassPanel: React.FC<{ children: React.ReactNode, className?: string, filterLevel: string }> = ({ children, className, filterLevel }) => {
   return (
@@ -54,34 +55,32 @@ const GlassPanel: React.FC<{ children: React.ReactNode, className?: string, filt
 };
 
 const TerminalView: React.FC = () => {
-  const [logs, setLogs] = useState<{ id: string; time: string; text: string; type: 'info' | 'alert' | 'success' }[]>([
-    { id: '1', time: new Date().toLocaleTimeString(), text: 'System initialized.', type: 'info' },
-    { id: '2', time: new Date().toLocaleTimeString(), text: 'Onboarding agent ready.', type: 'success' },
-  ]);
+  const threatLogs = useAppStore(state => state.threatLogs);
 
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      const types: ('info' | 'alert' | 'success')[] = ['info', 'info', 'alert', 'success'];
-      const msgs = [
-        'Checking DNS integrity...',
-        'Threat neutralized: ads.track.net',
-        'Node synchronization complete.',
-        'Ping response: 12ms',
-        'Device onboarded successfully.',
-        'Suspicious query blocked.',
-        'Updating Gravity lists...',
-        'Filtering anomalous traffic...'
-      ];
-      const type = types[Math.floor(Math.random() * types.length)];
-      const text = msgs[Math.floor(Math.random() * msgs.length)];
-      
-      setLogs(prev => {
-        const newLogs = [...prev, { id: Math.random().toString(), time: new Date().toLocaleTimeString(), text, type }];
-        return newLogs.slice(-100);
-      });
-    }, 4500);
-    return () => clearInterval(interval);
-  }, []);
+  // This console previously invented a line every 4.5 seconds from a fixed
+  // list — "Threat neutralized: ads.track.net", "Ping response: 12ms",
+  // "Device onboarded successfully." — whether or not anything was connected,
+  // and with no marker that it was fiction. Fabricated *security events* are
+  // the least defensible thing this UI could display, so they are gone.
+  //
+  // It now mirrors the real threat log, which is itself either live from the
+  // node or clearly marked simulated by DataSourceBanner. Per-module journald
+  // tailing needs GET /api/v1/services/{slug}/logs on the node — see
+  // docs/PAIRING-AND-TELEMETRY.md.
+  const logs = useMemo(
+    () =>
+      threatLogs.slice(0, 100).map(entry => ({
+        id: entry.id,
+        time: entry.timestamp,
+        text: `${entry.action}: ${entry.domain} (${entry.category}) — ${entry.clientName}`,
+        type: (entry.action === 'Blocked'
+          ? 'alert'
+          : entry.action === 'Whitelisted'
+            ? 'success'
+            : 'info') as 'info' | 'alert' | 'success',
+      })),
+    [threatLogs],
+  );
 
   const terminalRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
@@ -297,6 +296,11 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                 <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400 transition-colors duration-500">
                 {userAccount.deviceNickname} &mdash; Mobile View
                 </p>
+                {/* The customer-facing surface. If any figure below is
+                    generated rather than measured, they see it here first. */}
+                <div className="mt-3">
+                  <DataSourceBanner />
+                </div>
             </div>
 
             <div className="p-4 relative">

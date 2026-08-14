@@ -7,6 +7,21 @@
 secrets.json
 google-services.json
 
+# ── Signing — LOSING THESE IS UNRECOVERABLE ──────────
+# The release keystore is the single most valuable file in this project.
+# It cannot be regenerated: an APK signed with a different key can never
+# update one already installed, so losing it strands every device in the
+# field permanently. Back it up offline, in three places, before first use.
+# It must never enter git, a chat window, a ticket, or a CI log.
+*.jks
+*.keystore
+keystore.properties
+android/keystore.properties
+android/keystore/
+upload-keystore*
+release-keystore*
+play-service-account*.json
+
 # ── Dependencies ─────────────────────────────────────
 node_modules/
 .pnp

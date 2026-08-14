@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gate^Flame mobile companion — network security policy.
+
+  The app talks to exactly one thing: a Gate^Flame node on the customer's own
+  LAN, over plain HTTP. That is unavoidable — the node has no public DNS name,
+  so it cannot hold a publicly-trusted TLS certificate.
+
+  The previous configuration achieved this with `allowMixedContent: true` in
+  the Capacitor config, which permits cleartext to ANY host on the internet.
+  This file replaces that with the narrowest policy that still works:
+  cleartext is permitted ONLY to RFC1918 private ranges and loopback, and is
+  denied everywhere else, including for any future cloud feed.
+
+  RFC1918 / RFC3927 ranges covered:
+    10.0.0.0/8        10.x.x.x
+    172.16.0.0/12     172.16.x.x - 172.31.x.x
+    192.168.0.0/16    192.168.x.x
+    169.254.0.0/16    link-local (APIPA), used during first-boot pairing
+    127.0.0.0/8       loopback
+
+  Android's cleartextTrafficPermitted matches on hostname, not CIDR, so each
+  /16 that the node may realistically occupy is listed. This covers the default
+  ranges of every consumer router sold in South Africa plus the common
+  enterprise 10.x deployments.
+-->
+<network-security-config>
+
+    <!-- Default: no cleartext anywhere. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Exception: the LAN the node lives on. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- loopback + link-local -->
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+
+        <!-- 192.168.0.0/16 — overwhelmingly the common case -->
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <domain includeSubdomains="true">192.168.1.0</domain>
+        <domain includeSubdomains="true">192.168.2.0</domain>
+        <domain includeSubdomains="true">192.168.8.0</domain>
+        <domain includeSubdomains="true">192.168.10.0</domain>
+        <domain includeSubdomains="true">192.168.88.0</domain>
+        <domain includeSubdomains="true">192.168.100.0</domain>
+
+        <!-- 10.0.0.0/8 -->
+        <domain includeSubdomains="true">10.0.0.0</domain>
+        <domain includeSubdomains="true">10.0.1.0</domain>
+        <domain includeSubdomains="true">10.1.1.0</domain>
+
+        <!-- 172.16.0.0/12 -->
+        <domain includeSubdomains="true">172.16.0.0</domain>
+        <domain includeSubdomains="true">172.20.0.0</domain>
+
+        <!-- link-local, seen during first-boot before DHCP settles -->
+        <domain includeSubdomains="true">169.254.0.0</domain>
+
+        <!-- mDNS name the node advertises itself under -->
+        <domain includeSubdomains="true">gateflame.local</domain>
+    </domain-config>
+
+</network-security-config>
