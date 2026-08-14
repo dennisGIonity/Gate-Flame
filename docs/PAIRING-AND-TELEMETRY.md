@@ -63,7 +63,7 @@ distribution (§5), what has already landed in the repo (§6).
 
 The kiosk is **not** an Android app. It is Chromium in `--kiosk` mode in the
 `gateflame-display-kiosk` container on RPi OS / Armbian. Only one APK exists:
-`org.ionity.gateflame`, the customer's companion app.
+`today.ionity.gateflame`, the customer's companion app.
 
 ## 2. Why the device ID is not baked into the APK
 
@@ -273,7 +273,7 @@ prerequisites, and they are now in place.
 
 Already done in this commit:
 
-- One Capacitor config, `capacitor.config.ts`, `appId org.ionity.gateflame`.
+- One Capacitor config, `capacitor.config.ts`, `appId today.ionity.gateflame`.
 - Kiosk APK target removed; `build:html-kiosk` retained for the Chromium kiosk.
 - `versionCode` / `versionName` single-sourced with auto-bump.
 - Release signing wired; unsigned releases refused.

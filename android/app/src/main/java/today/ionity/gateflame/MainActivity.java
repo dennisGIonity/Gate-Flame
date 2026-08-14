@@ -1,4 +1,4 @@
-package org.ionity.gateflame;
+package today.ionity.gateflame;
 
 import com.getcapacitor.BridgeActivity;
 

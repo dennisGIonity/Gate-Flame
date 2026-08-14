@@ -35,7 +35,7 @@ chain for the node's control application.
 | Mobile dashboard | `mobile.html` → `src/main-mobile.tsx` | `vite.mobile.config.ts` | Inside the APK |
 | Device kiosk | `kiosk.html` → `src/main-kiosk.tsx` | `vite.kiosk.config.ts` | **HTML served by the node** |
 | Standalone bundle | `build-standalone.js` | `vite.standalone.config.ts` | Web |
-| Android APK | `android/` (Capacitor) | `capacitor.config.ts` | `org.ionity.gateflame` |
+| Android APK | `android/` (Capacitor) | `capacitor.config.ts` | `today.ionity.gateflame` |
 
 > **The kiosk is not an Android app.** It runs as Chromium in `--kiosk` mode in the
 > `gateflame-display-kiosk` container on Raspberry Pi OS / Armbian, pointed at
