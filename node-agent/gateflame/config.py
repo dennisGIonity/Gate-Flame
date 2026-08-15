@@ -17,6 +17,11 @@ class Config:
     feed_enabled: bool = os.environ.get("GATEFLAME_FEED_ENABLED", "false").lower() == "true"
     feed_interval_seconds: int = int(os.environ.get("GATEFLAME_FEED_INTERVAL_SECONDS", "900"))
     pihole_api_url: str | None = os.environ.get("GATEFLAME_PIHOLE_URL")
+    # Directory holding the built kiosk bundle (dist-kiosk). When it contains an
+    # index.html the bundle is served at /device-kiosk. When it does not, the
+    # route is not mounted AT ALL rather than mounted-and-empty, so a 404 means
+    # "no kiosk installed" and never "installed but broken".
+    kiosk_dir: str = os.environ.get("GATEFLAME_KIOSK_DIR", "/opt/gateflame/kiosk")
 
 
 config = Config()

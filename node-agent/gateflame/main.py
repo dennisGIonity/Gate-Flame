@@ -11,8 +11,11 @@ or via the systemd unit in install.sh on the Pi.
 
 from __future__ import annotations
 
+import os
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from . import clients as clients_mod
 from . import services, telemetry, threats
@@ -281,3 +284,70 @@ def _iso(epoch: float) -> str:
     import time
 
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+# ---------------------------------------------------------------------------
+# Device kiosk
+#
+# The kiosk is NOT an Android app - it is Chromium in --kiosk mode ON the Pi,
+# pointed at http://localhost:8080/device-kiosk. `npm run build:html-kiosk`
+# produced the bundle every release and NOTHING SERVED IT: node-agent had no
+# static route, so /device-kiosk always 404'd and the built HTML was dead
+# weight on disk. The kiosk has never rendered, on any device.
+# ---------------------------------------------------------------------------
+
+
+def mount_device_kiosk(target_app: FastAPI, kiosk_dir: str) -> bool:
+    """Mount the kiosk bundle on `target_app` and record the result in state.
+
+    Factored out of module scope so it is testable WITHOUT reloading this
+    module. Reloading re-runs `store = Store(...)` and rebuilds every
+    ScopeChecker, which leaks into any test module imported afterwards - that
+    silently broke three pairing tests while this was being written.
+
+    Returns True when a bundle was found and mounted.
+    """
+    mounted = os.path.isfile(os.path.join(kiosk_dir, "index.html"))
+
+    if mounted:
+        target_app.mount(
+            "/device-kiosk",
+            StaticFiles(directory=kiosk_dir, html=True),
+            name="device-kiosk",
+        )
+
+        # The bundle is built with base "/", so its <script src> is
+        # "/assets/kiosk.<hash>.js" - an ABSOLUTE path from the server root,
+        # not relative to /device-kiosk/. Mounting only /device-kiosk serves
+        # index.html with a 200 and then 404s every script it asks for: a blank
+        # screen that looks exactly like a frontend bug and is not one.
+        #
+        # Fixed here rather than by setting `base` in the Vite config, because
+        # that config is SHARED with the mobile build, where Capacitor serves
+        # from the webview root and a relative base would break the APK.
+        assets = os.path.join(kiosk_dir, "assets")
+        if os.path.isdir(assets):
+            target_app.mount("/assets", StaticFiles(directory=assets), name="kiosk-assets")
+
+    target_app.state.kiosk = {
+        "mounted": mounted,
+        "path": "/device-kiosk" if mounted else None,
+        "directory": kiosk_dir,
+        "gap": None if mounted else f"no index.html in {kiosk_dir}",
+    }
+    return mounted
+
+
+mount_device_kiosk(app, config.kiosk_dir)
+
+
+@app.get("/api/v1/system/kiosk")
+def kiosk_status(request: Request):
+    """Whether a kiosk bundle is installed, and where it is served from.
+
+    Exists so install-kiosk.sh and the Pi validator can ASSERT the kiosk is
+    reachable instead of assuming it - which is how it stayed broken while the
+    bundle was rebuilt every release and served by nothing.
+    """
+    require_lan(request)
+    return request.app.state.kiosk
