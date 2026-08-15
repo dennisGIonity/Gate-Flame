@@ -15,7 +15,24 @@ fi
 id -u "$SERVICE_USER" &>/dev/null || useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
 
 mkdir -p "$INSTALL_DIR" "$DATA_DIR"
-cp -r ./gateflame ./requirements.txt "$INSTALL_DIR"/
+
+# Replace the package rather than merging over it.
+#
+# `cp -r ./gateflame "$INSTALL_DIR"/` onto an existing install MERGES: files
+# present in both are overwritten, but any module the new version deleted or
+# renamed survives from the old one. The install then holds a mix of two
+# versions and starts cleanly, so nothing looks wrong — right up until a stale
+# module shadows a renamed one, or a removed module is still importable and
+# still registers a route that was deliberately withdrawn.
+#
+# Upgrades and re-runs are the normal case, not the exception, so the package
+# directory is removed before it is written.
+rm -rf "$INSTALL_DIR/gateflame"
+cp -r ./gateflame "$INSTALL_DIR"/
+cp ./requirements.txt "$INSTALL_DIR"/
+# Stale bytecode survives a source replacement and is loaded in preference to
+# a .py whose mtime it still matches. Clear it with the source.
+find "$INSTALL_DIR" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$DATA_DIR"
 
 python3 -m venv "$INSTALL_DIR/venv"
@@ -32,6 +49,12 @@ Wants=network-online.target
 Type=simple
 User=gateflame
 Group=gateflame
+# vcgencmd talks to the VideoCore mailbox at /dev/vcio, which udev owns as
+# root:video. Without this the agent runs vcgencmd successfully as a binary and
+# gets a permission error back, so throttle flags read null on a machine that
+# can perfectly well report them — a silent, plausible-looking wrong answer.
+# The group does not exist on non-Pi hosts; systemd tolerates that.
+SupplementaryGroups=video
 Environment=GATEFLAME_DB_PATH=/var/lib/gateflame/state.db
 Environment=GATEFLAME_HOST=0.0.0.0
 Environment=GATEFLAME_PORT=8080
