@@ -211,11 +211,16 @@ def _canonical(raw: object) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
         ) from None
 
 
-def _assert_bounceable(
-    ip: ipaddress.IPv4Address | ipaddress.IPv6Address, ctx: LocalContext
-) -> None:
-    """Refuse the addresses where a bounce would be a self-inflicted outage,
-    a no-op, or a misuse of the product."""
+def _assert_address_class(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> None:
+    """Refusals that need no knowledge of this host.
+
+    Split from the host-specific checks and run FIRST, deliberately. Local
+    context discovery fails closed (see `discover_local_context`), so if it
+    were consulted first, `bounce("8.8.8.8")` on a host with no `ip` binary
+    would answer "cannot identify the gateway" instead of "only LAN hosts can
+    be bounced". Both refuse, but only one tells the caller what is actually
+    wrong with their request.
+    """
     if ip.is_loopback:
         raise FirewallRefusal(
             "refused_loopback", "Refusing to bounce loopback — that is this node itself."
@@ -237,6 +242,13 @@ def _assert_bounceable(
             "refused_not_lan",
             "Only LAN hosts can be bounced. Use DNS filtering to block internet destinations.",
         )
+
+
+def _assert_not_this_network(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address, ctx: LocalContext
+) -> None:
+    """Refusals that need to know which host this is. Both of these bounces
+    are self-inflicted outages."""
     text = str(ip)
     if text in ctx.own_addresses:
         raise FirewallRefusal(
@@ -322,8 +334,10 @@ class Firewall:
 
     def bounce(self, address: object, seconds: object = DEFAULT_SECONDS) -> dict:
         ip = _canonical(address)
-        ctx = self._context_provider()
-        _assert_bounceable(ip, ctx)
+        # Context-free refusals first — see _assert_address_class for why the
+        # order is load-bearing rather than incidental.
+        _assert_address_class(ip)
+        _assert_not_this_network(ip, self._context_provider())
         duration = _clamp_seconds(seconds)
         self.ensure_installed()
 

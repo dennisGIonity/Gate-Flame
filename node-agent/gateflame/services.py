@@ -17,15 +17,23 @@ import shutil
 import threading
 import time
 
+from . import dpi as dpi_mod
 from . import firewall as firewall_mod
 from . import pihole
+from . import posture as posture_mod
+from . import wan as wan_mod
 
 _lock = threading.Lock()
 _enabled: dict[str, bool] = {}
 
-# One controller for the process, so the ruleset is installed once and the
-# "already installed" latch inside it means something.
+# One controller per module for the process. Each is constructed here rather
+# than per-request so the ruleset install latch, the counter state and the
+# flow table all mean something across calls. None of these constructors may
+# touch the network or the disk — see WanAudit's lazy store.
 firewall = firewall_mod.Firewall()
+wan = wan_mod.WanAudit()
+posture = posture_mod.PostureAudit()
+flows = dpi_mod.FlowTable()
 
 
 def _has(binary: str) -> bool:
@@ -61,15 +69,24 @@ MODULE_DEFS = {
     },
     "module_dpi_flow": {
         "label": "Deep Packet Inspection (headers only)",
-        "check": lambda: (False, "AF_PACKET SNI/Host capture not implemented in this build"),
+        # Implemented 2026-08-14. Reports the real CAP_NET_RAW state; without
+        # it, `degraded` plus the remedy, and zero observed flows — never a
+        # fabricated one.
+        "check": lambda: dpi_mod.capability(),
     },
     "module_wan_audit": {
         "label": "WAN Quality & Budget",
-        "check": lambda: (False, "throughput/latency/budget accounting not implemented in this build"),
+        # Implemented 2026-08-14. Degrades when no WAN interface is
+        # configured: the link is never guessed, because guessing wrong bills
+        # LAN traffic against the customer's data cap.
+        "check": lambda: wan.capability(),
     },
     "module_zero_trust": {
         "label": "Zero-Trust Posture",
-        "check": lambda: (False, "posture audit + hardened unit generation not implemented in this build"),
+        # Implemented 2026-08-14. Read-only: this module audits and never
+        # remediates. Auditing and changing a customer's sshd config are
+        # different products.
+        "check": lambda: posture.capability(),
     },
 }
 

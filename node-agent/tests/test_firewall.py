@@ -466,3 +466,42 @@ def test_the_single_subprocess_call_sets_shell_false_explicitly():
     source = pathlib.Path(fw.__file__).read_text()
     assert "shell=False" in source
     assert "timeout=_NFT_TIMEOUT_SECONDS" in source
+
+
+# ── 10. Refusal ordering ───────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "address,reason",
+    [
+        ("8.8.8.8", "refused_not_lan"),
+        ("127.0.0.1", "refused_loopback"),
+        ("224.0.0.1", "refused_multicast"),
+        ("0.0.0.0", "refused_unspecified"),
+    ],
+)
+def test_context_free_refusals_beat_a_failing_discovery(address, reason):
+    """Local context discovery fails CLOSED, so if it ran first every one of
+    these would answer 'cannot identify the gateway' on a host without the
+    `ip` binary. Both refuse — but only one tells the caller what is actually
+    wrong with their request."""
+
+    def broken_context():
+        raise FirewallUnavailable("cannot identify the gateway")
+
+    f = Firewall(runner=FakeNft(), context_provider=broken_context)
+    with pytest.raises(FirewallRefusal) as exc:
+        f.bounce(address)
+    assert exc.value.reason == reason
+
+
+def test_a_lan_address_still_fails_closed_when_discovery_is_broken():
+    """The safety property survives the reordering: a plausible LAN target
+    cannot be bounced while the gateway is unknown."""
+
+    def broken_context():
+        raise FirewallUnavailable("cannot identify the gateway")
+
+    f = Firewall(runner=FakeNft(), context_provider=broken_context)
+    with pytest.raises(FirewallUnavailable):
+        f.bounce(VICTIM)

@@ -61,17 +61,76 @@ regression case. Endpoints: `POST /api/v1/firewall/bounce`,
 Pi. Without `CAP_NET_ADMIN` the capability probe reports `degraded` and the
 exact remedy, never a green light over a bouncer that cannot drop a packet.
 
-It deliberately does **not** yet implement, and says so at `/api/v1/services`:
+### `module_dpi_flow` — implemented 2026-08-14
 
-- `module_dpi_flow` — AF_PACKET SNI/Host parsing. Needs raw-socket capability
-  and real traffic to test against; a sandbox container has neither.
-- `module_wan_audit` — persisted monthly data budget, jitter/loss measurement.
-- `module_zero_trust` — posture audit and hardened-unit generation.
+`gateflame/dpi.py`. Answers one question: which hostnames is each device on
+the LAN talking to? It reads the TLS ClientHello SNI and the HTTP/1.x Host
+header, and nothing else.
 
-None of these are silently faked. The UI's `SimulatedBadge`/`DataSourceBanner`
+"DPI" covers everything from reading a hostname to decrypting a customer's
+banking session; this sits at the shallow end and the boundary is
+structural. No plaintext body is ever read. Nothing is terminated, proxied,
+downgraded or MITM'd, and no certificate is ever generated — a test asserts
+the module imports no TLS library and references no key material. The
+`Observation` type has three fields (source, hostname, protocol) and
+therefore nowhere to put a payload even if one had been read.
+
+`parse_frame()` is a pure function — bytes in, an observation or None out —
+which is what makes a packet parser fuzzable on a laptop instead of only on
+hardware. Every read is bounds-checked, a length field claiming more than
+the buffer holds is refused rather than clamped, and any parse failure
+degrades to "I learned nothing" rather than an exception in the capture
+loop. 61 tests: truncation at *every* offset of a valid frame, ~10,000
+random and bit-flipped mutants, hostile length fields, and a corpus of
+non-hostnames (null bytes, CRLF injection, SQL, path traversal) that must be
+*rejected* rather than sanitised. Two Host headers make a frame unreadable
+rather than picking one, because tolerating both is where request smuggling
+starts.
+
+Encrypted Client Hello makes SNI unreadable, and that number will shrink
+over the coming years. The snapshot says so in its own payload — otherwise
+an empty list reads as "nothing is happening" when it means "everything is
+using ECH". Endpoint: `GET /api/v1/flows/recent`.
+
+### `module_wan_audit` — implemented 2026-08-14
+
+`gateflame/wan.py`. Monthly data budget accounting and link quality.
+Interface byte counters are not monotonic in reality — they reset on reboot
+and on interface down/up, and 32-bit counters still wrap — so a naive
+`now - last` either goes negative or invents a multi-gigabyte spike on the
+customer's capped line. Reset is *observed* (via `boot_id` and
+`carrier_changes`) rather than inferred, both signals are tri-state so
+"unknown" survives to a named outcome, and every branch is bounded by the
+NIC's physical ceiling. The WAN interface is never guessed: guessing wrong
+bills LAN traffic against the customer's cap, so an unconfigured module
+degrades and says so. Months roll over on *local* civil time, because the
+number exists to be compared against an ISP invoice. Endpoint:
+`GET /api/v1/wan/summary`.
+
+### `module_zero_trust` — implemented 2026-08-14
+
+`gateflame/posture.py`. **Read-only.** It audits and never remediates —
+auditing a host and silently rewriting a customer's sshd config are
+different products. Findings carry a stable id, severity, what was actually
+observed, and a concrete remedy. Where it cannot be sure (Match blocks,
+nested includes, a root-owned Pi-hole config an unprivileged agent cannot
+read) it emits a named gap rather than a verdict. Endpoint:
+`GET /api/v1/posture/audit`.
+
+**All nine modules now have real implementations.** What remains is not
+missing code but missing *evidence*: none of this has executed on a
+Raspberry Pi. Every module therefore reports its own capability honestly at
+`/api/v1/services` — a Pi without `CAP_NET_ADMIN` gets `degraded` and the
+exact systemd remedy, an unconfigured WAN interface gets `degraded` and the
+env var to set, and a host that cannot be audited says so.
+
+Nothing is silently faked. The UI's `SimulatedBadge`/`DataSourceBanner`
 architecture (see the main repo's `src/services/mockAdapter.ts` and
 `gateflameApi.ts`) means a customer never sees a green light for a capability
-that isn't there — they see `not_implemented` and the gap.
+that isn't there — they see the status and the named gap.
+
+Run `./validate-on-pi.sh` on the appliance before believing any number in
+this document.
 
 ## Running it
 

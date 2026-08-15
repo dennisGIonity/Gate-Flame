@@ -245,6 +245,38 @@ def firewall_bounced(_=Depends(read_scope)):
     return {"bounced": services.firewall.bounced()}
 
 
+# ---- WAN budget, posture, flows --------------------------------------------
+
+
+@app.get("/api/v1/wan/summary")
+def wan_summary(_=Depends(read_scope)):
+    """Monthly usage against the configured cap, plus link quality.
+
+    `gap` is non-null whenever a number could not be measured. The UI's
+    DataSourceBanner keys off that rather than off a zero, because a zero is
+    indistinguishable from "nothing happened".
+    """
+    return services.wan.report()
+
+
+@app.get("/api/v1/posture/audit")
+def posture_audit(_=Depends(read_scope)):
+    """Read-only posture findings. Never remediates anything."""
+    return services.posture.audit()
+
+
+@app.get("/api/v1/flows/recent")
+def flows_recent(limit: int = 200, _=Depends(read_scope)):
+    """Hostnames observed on the LAN — SNI and HTTP Host only.
+
+    The response carries its own `note` stating that no payload is read and
+    that Encrypted Client Hello flows are invisible here. That matters:
+    without it, an empty list reads as "nothing is happening" when it may
+    mean "everything is using ECH".
+    """
+    return services.flows.snapshot(limit=max(1, min(limit, 500)))
+
+
 def _iso(epoch: float) -> str:
     import time
 
