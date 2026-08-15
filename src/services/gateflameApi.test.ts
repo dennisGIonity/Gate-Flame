@@ -149,13 +149,26 @@ describe('gateflameApi — the live/demo decision', () => {
     });
 
     it('a node discovered on a LAN address is remembered for next launch', async () => {
-      vi.stubGlobal('fetch', nodeAt('http://192.168.1.105'));
+      // Carries :8080 deliberately. The agent binds GATEFLAME_PORT (default
+      // 8080); a candidate without a port resolves to :80, where nothing
+      // listens, which is exactly the bug this address shape now guards.
+      vi.stubGlobal('fetch', nodeAt('http://192.168.1.105:8080'));
       const { gateflameApi } = await loadApi();
 
       await gateflameApi.connect();
 
-      expect(gateflameApi.getConnection().nodeBaseUrl).toBe('http://192.168.1.105');
-      expect(localStorage.getItem('gateflame-last-node-url')).toBe('http://192.168.1.105');
+      expect(gateflameApi.getConnection().nodeBaseUrl).toBe('http://192.168.1.105:8080');
+      expect(localStorage.getItem('gateflame-last-node-url')).toBe('http://192.168.1.105:8080');
+    });
+
+    it('every LAN discovery candidate names the port the agent actually binds', async () => {
+      // Regression guard for the defect that made a phone unable to find a node
+      // on any real network: six of eight candidates omitted :8080.
+      const { config } = await import('../config/env');
+      const lan = config.discoveryCandidates.filter((u) => !u.includes('localhost') && !u.includes('127.0.0.1'));
+      const withPort = lan.filter((u) => /:\d+$/.test(u));
+      expect(withPort.length).toBeGreaterThanOrEqual(lan.length - 1);
+      expect(config.discoveryCandidates).toContain('http://gateflame.local:8080');
     });
   });
 

@@ -47,16 +47,30 @@ export const config = {
    * subnet without the customer typing an IP. The literals after it are the
    * default gateway-adjacent addresses of the routers actually sold in South
    * Africa, plus loopback for the kiosk, which reaches its own agent directly.
+   *
+   * ⚠ EVERY ENTRY MUST CARRY THE PORT. node-agent binds GATEFLAME_PORT, which
+   * defaults to 8080 — see node-agent/gateflame/config.py and the systemd unit
+   * in node-agent/install.sh. The original list omitted `:8080` on six of the
+   * eight entries, so those resolved to port 80, where nothing listens. The
+   * effect was that discovery could only ever succeed from the kiosk's own
+   * loopback: a phone on a real LAN always fell through to "No Gate^Flame node
+   * found on this network", and could not recover, because until the manual
+   * entry added alongside this there was no other way to reach a node.
+   *
+   * The bare port-80 name is kept last, for the day the agent sits behind a
+   * reverse proxy. Probing is a Promise.any race, so a dead candidate costs
+   * one socket and no wall-clock time.
    */
   discoveryCandidates: [
-    'http://gateflame.local',
+    'http://gateflame.local:8080',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
-    'http://192.168.1.105',
-    'http://192.168.1.100',
-    'http://192.168.0.105',
-    'http://192.168.8.105',
-    'http://10.0.0.105',
+    'http://192.168.1.105:8080',
+    'http://192.168.1.100:8080',
+    'http://192.168.0.105:8080',
+    'http://192.168.8.105:8080',
+    'http://10.0.0.105:8080',
+    'http://gateflame.local',
   ] as const,
 } as const;
 
