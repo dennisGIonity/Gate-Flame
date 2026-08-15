@@ -16,13 +16,16 @@
  */
 
 import { config } from '../config/env';
-import { apiRequest, ApiRequestError } from './apiClient';
+import { apiRequest, ApiRequestError, storeToken } from './apiClient';
 import { discoverNode } from './nodeDiscovery';
 import { mockAdapter } from './mockAdapter';
 import type {
   ClientsResponse,
   ConnectionState,
   ModuleMetricsResponse,
+  PairClaimResponse,
+  PairedDevicesResponse,
+  PairRequestResponse,
   ServiceActionResponse,
   ServicesResponse,
   TelemetrySummaryResponse,
@@ -195,4 +198,51 @@ export const gateflameApi = {
         }),
       () => mockAdapter.toggleService(moduleId, enable),
     ),
+
+  /**
+   * Pairing has no demo fallback — either a real node answers, or the screen
+   * shows a real error. Faking a pairing code would be worse than useless.
+   *
+   * `requestPairingCode` is only ever called from the kiosk, which reaches
+   * its own node over loopback and therefore carries `kiosk` scope with no
+   * bearer token — see docs/PAIRING-AND-TELEMETRY.md §3.1/§3.2.
+   */
+  requestPairingCode: (): Promise<PairRequestResponse> => {
+    if (!connection.nodeBaseUrl) {
+      throw new ApiRequestError('No node connection — the kiosk must be live to issue a pairing code.');
+    }
+    return apiRequest<PairRequestResponse>(connection.nodeBaseUrl, '/pair/request', { method: 'POST' });
+  },
+
+  /**
+   * Called from the phone, against whichever node it just discovered. Takes
+   * an explicit `baseUrl` rather than reading `connection` because the app
+   * may be claiming against a node it found seconds ago and hasn't yet
+   * marked `live` — pairing is what makes it live.
+   */
+  claimPairingCode: async (baseUrl: string, code: string, deviceName: string): Promise<PairClaimResponse> => {
+    const result = await apiRequest<PairClaimResponse>(baseUrl, '/pair/claim', {
+      method: 'POST',
+      body: { code, deviceName },
+      anonymous: true,
+    });
+    storeToken(result.deviceToken);
+    return result;
+  },
+
+  pairedDevices: () =>
+    liveOrFallback<PairedDevicesResponse>(
+      (base) => apiRequest<PairedDevicesResponse>(base, '/pair/devices'),
+      () => ({ devices: [] }),
+    ),
+
+  /** Revoking a device requires kiosk scope — see toggleService's note above. */
+  revokeDevice: (deviceId: string) => {
+    if (!connection.nodeBaseUrl) {
+      throw new ApiRequestError('No node connection.');
+    }
+    return apiRequest<{ ok: boolean }>(connection.nodeBaseUrl, `/pair/devices/${deviceId}`, {
+      method: 'DELETE',
+    });
+  },
 };

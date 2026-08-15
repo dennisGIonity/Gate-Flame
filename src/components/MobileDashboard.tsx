@@ -1,20 +1,50 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { Suspense, lazy, useState, useMemo, useRef, useCallback } from 'react';
 import { SystemTelemetry, ThreatLogEntry, ConnectedClient, IonityUserAccount } from '../types';
-import { GravityParticleCanvas } from './GravityParticleCanvas';
-import { IonicrobesGame } from './IonicrobesGame';
 import { LiveBackground } from './LiveBackground';
-import { 
-  ShieldCheck, ShieldAlert, Activity, RefreshCw, Power, Plus, 
+import {
+  ShieldCheck, ShieldAlert, Activity, RefreshCw, Power, Plus,
   BarChart3, Wifi, Layers, CheckCircle2, Lock, Sparkles,
   SlidersHorizontal, Tv, Laptop, Smartphone, Server, Gamepad2, ChevronDown, ChevronUp, Terminal, Zap
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
-import { DNSTrafficChart } from './DNSTrafficChart';
 import { motion, AnimatePresence } from 'motion/react';
 import { SECURITY_MODULES, ApiService } from '../services/serviceManager';
-import { DynamicModuleTab } from './DynamicModuleTab';
-import { SettingsManager } from './SettingsManager';
 import { cn, getFilterBorderColor, getFilterColor } from '../lib/utils';
+import { InlineFallback, PanelFallback } from './LazyFallback';
+
+/*
+ * Code-split boundaries.
+ *
+ * This dashboard is the app's first paint, so anything it does not need in
+ * order to draw that first screen is loaded on demand:
+ *
+ *  - the two recharts surfaces, because recharts plus its d3 and redux
+ *    dependency tree is ~415 kB — 45% of what the entry chunk used to be;
+ *  - the particle canvas and the game, only reachable on the `shield` and
+ *    `game` tabs;
+ *  - per-module tabs and the settings pane, which most sessions never open.
+ *
+ * The dashboard tab's own chart is lazy as well. It is above the fold, but it
+ * sits in a fixed-height panel with its own fallback, so deferring it costs a
+ * brief spinner in one panel instead of ~415 kB before anything renders at all.
+ */
+const DNSTrafficChart = lazy(() =>
+  import('./DNSTrafficChart').then((m) => ({ default: m.DNSTrafficChart })),
+);
+const ThreatCategoryChart = lazy(() =>
+  import('./ThreatCategoryChart').then((m) => ({ default: m.ThreatCategoryChart })),
+);
+const GravityParticleCanvas = lazy(() =>
+  import('./GravityParticleCanvas').then((m) => ({ default: m.GravityParticleCanvas })),
+);
+const IonicrobesGame = lazy(() =>
+  import('./IonicrobesGame').then((m) => ({ default: m.IonicrobesGame })),
+);
+const DynamicModuleTab = lazy(() =>
+  import('./DynamicModuleTab').then((m) => ({ default: m.DynamicModuleTab })),
+);
+const SettingsManager = lazy(() =>
+  import('./SettingsManager').then((m) => ({ default: m.SettingsManager })),
+);
 
 interface MobileDashboardProps {
   telemetry: SystemTelemetry;
@@ -401,7 +431,9 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                                 </div>
                             </div>
                             <div className="flex-1 min-h-0 -ml-4">
-                                <DNSTrafficChart data={chartData} theme={userAccount.appTheme} />
+                                <Suspense fallback={<InlineFallback label="Loading chart" />}>
+                                    <DNSTrafficChart data={chartData} theme={userAccount.appTheme} />
+                                </Suspense>
                             </div>
                         </GlassPanel>
 
@@ -448,7 +480,9 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                                 
                                 {/* Gravity Animation Canvas */}
                                 <div className="flex-1 w-full relative mb-4">
-                                    <GravityParticleCanvas isPaused={telemetry.protectionStatus !== 'active'} />
+                                    <Suspense fallback={<InlineFallback label="Loading gravity field" />}>
+                                        <GravityParticleCanvas isPaused={telemetry.protectionStatus !== 'active'} />
+                                    </Suspense>
                                 </div>
                                 
                                 {/* Stats Grid */}
@@ -491,29 +525,9 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                         <GlassPanel filterLevel={telemetry.filterLevel} className="rounded-3xl p-5 h-[200px] flex flex-col">
                             <h3 className="text-sm font-display font-medium text-slate-900 dark:text-white mb-4">Threat Vectors</h3>
                             <div className="flex-1 min-h-0 -ml-4">
-                                <ResponsiveContainer key={userAccount.appTheme} width="100%" height="100%">
-                                <BarChart data={categoryBreakdown} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                                    <XAxis type="number" hide />
-                                    <YAxis dataKey="name" type="category" width={80} stroke="#737373" fontSize={9} tickLine={false} axisLine={false} />
-                                    <Tooltip
-    cursor={{ fill: userAccount.appTheme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }}
-    contentStyle={{ 
-        backgroundColor: userAccount.appTheme === 'dark' || (userAccount.appTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? '#0a0a0a' : '#ffffff', 
-        borderColor: userAccount.appTheme === 'dark' || (userAccount.appTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? '#262626' : '#e5e7eb', 
-        borderRadius: '12px', 
-        fontSize: '10px', 
-        color: userAccount.appTheme === 'dark' || (userAccount.appTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? '#fff' : '#0f172a', 
-        padding: '6px',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-    }}
-/>
-                                    <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={16}>
-                                    {categoryBreakdown.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                    </Bar>
-                                </BarChart>
-                                </ResponsiveContainer>
+                                <Suspense fallback={<InlineFallback label="Loading chart" />}>
+                                    <ThreatCategoryChart data={categoryBreakdown} theme={userAccount.appTheme} />
+                                </Suspense>
                             </div>
                         </GlassPanel>
 
@@ -634,7 +648,9 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                     transition={{ duration: 0.2 }}
                     className="flex flex-col h-[600px] max-h-[70vh]"
                     >
-                        <IonicrobesGame embedded={true} />
+                        <Suspense fallback={<PanelFallback label="Loading Ionicrobes" className="min-h-0" />}>
+                            <IonicrobesGame embedded={true} />
+                        </Suspense>
                     </motion.div>
                 )}
 
@@ -683,7 +699,9 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                             <div className="h-px w-full bg-sky-100 dark:bg-white/5" />
                             
                                                         {/* Service Manager */}
-                            <SettingsManager />
+                            <Suspense fallback={<InlineFallback label="Loading services" className="min-h-[120px]" />}>
+                                <SettingsManager />
+                            </Suspense>
                             <div className="h-px w-full bg-sky-100 dark:bg-white/5" />
                             <div>
                             <h3 className="text-sm font-display font-medium text-sky-950 dark:text-white mb-3">Whitelist</h3>
@@ -751,7 +769,9 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                     </motion.div>
                 )}
                 {activeModules.includes(activeTab) && (
-                    <DynamicModuleTab moduleId={activeTab} />
+                    <Suspense fallback={<PanelFallback label="Loading module" />}>
+                        <DynamicModuleTab moduleId={activeTab} />
+                    </Suspense>
                 )}
                 </AnimatePresence>
             </div>

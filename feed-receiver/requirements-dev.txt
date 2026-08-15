@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27
+# The client-contract test imports node-agent's health_feed.build_payload and
+# posts the object it really produces. That pulls in the agent's own runtime
+# deps — the test is worthless if it exercises a stub instead of the client.
+psutil>=6.0

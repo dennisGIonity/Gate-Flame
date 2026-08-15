@@ -22,21 +22,25 @@ import type { CapacitorConfig } from '@capacitor/cli';
 /**
  * appId MUST equal `applicationId` in android/app/build.gradle.
  *
- * `org.ionity.gateflame` is chosen because the whole Android side already uses
- * it — the Gradle namespace, the applicationId, and the on-disk Java package
- * android/app/src/main/java/org/ionity/gateflame/MainActivity.java. The three
- * `com.gateflame.*` values in the deleted JSON configs were the outliers.
+ * ✅ DECIDED 2026-08-14 by Dennis: `today.ionity.gateflame`.
  *
- * ⚠ DECIDE BEFORE THE FIRST UNIT SHIPS. An Android applicationId can never be
- * changed afterwards — a new id is a different app, so every deployed customer
- * would have to uninstall, reinstall and re-pair. Reverse-DNS convention says
- * this should be a domain Ionity actually controls; ionity.org is not one of
- * them. If you want `today.ionity.gateflame` or `za.co.ionity.gateflame`
- * instead, change it here, in build.gradle, and move the Java package — now,
- * while it costs nothing.
+ * Reverse-DNS of ionity.today — the product's canonical home and the primary
+ * web property in Policy 986 AED. The previous value, `org.ionity.gateflame`,
+ * was abandoned because `ionity.org` is NOT a domain Ionity controls, so it
+ * broke the reverse-DNS contract and could in principle collide with an
+ * unrelated publisher.
+ *
+ * ⚠ THIS IS NOW FROZEN. An Android applicationId can never be changed after
+ * the first unit ships — a new id is a different app, so every deployed
+ * customer would have to uninstall, reinstall and re-pair (which wipes the
+ * node pairing). Changed here, in android/app/build.gradle (applicationId AND
+ * namespace), in android/app/src/main/res/values/strings.xml
+ * (package_name, custom_url_scheme), and the Java package was moved to
+ * android/app/src/main/java/today/ionity/gateflame/MainActivity.java. All five
+ * must agree; CI asserts it.
  */
 const config: CapacitorConfig = {
-  appId: 'org.ionity.gateflame',
+  appId: 'today.ionity.gateflame',
   appName: 'Gate^Flame',
   webDir: 'dist-mobile',
   android: {

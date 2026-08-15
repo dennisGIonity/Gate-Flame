@@ -108,5 +108,18 @@ export const useGateFlameEngine = () => {
       abort.abort();
       if (timer) clearInterval(timer);
     };
+    // Deps are the three store setters and nothing else.
+    //
+    // `useAppStore.getState().telemetry.totalQueriesToday` sat in this array
+    // until 2026-08-14, which defeated the whole point of the telemetryRef
+    // above: totalQueriesToday changes on every successful poll, so the effect
+    // re-ran on every tick — aborting its own AbortController, clearing the
+    // interval it had just created, building a new one, and calling
+    // gateflameApi.connect() again. On real hardware that is a fresh discovery
+    // handshake against the node every four seconds, forever.
+    //
+    // Zustand setters are stable references, so this array never changes and
+    // the loop is built exactly once per mount. Anything a tick needs to READ
+    // from the store goes through telemetryRef — never through a dependency.
   }, [setTelemetry, setThreatLogs, setClients]);
 };

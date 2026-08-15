@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">GateFlame</string>
     <string name="title_activity_main">GateFlame</string>
-    <string name="package_name">org.ionity.gateflame</string>
-    <string name="custom_url_scheme">org.ionity.gateflame</string>
+    <string name="package_name">today.ionity.gateflame</string>
+    <string name="custom_url_scheme">today.ionity.gateflame</string>
 </resources>

@@ -63,7 +63,7 @@ distribution (§5), what has already landed in the repo (§6).
 
 The kiosk is **not** an Android app. It is Chromium in `--kiosk` mode in the
 `gateflame-display-kiosk` container on RPi OS / Armbian. Only one APK exists:
-`org.ionity.gateflame`, the customer's companion app.
+`today.ionity.gateflame`, the customer's companion app.
 
 ## 2. Why the device ID is not baked into the APK
 
@@ -244,8 +244,15 @@ Authorization: Bearer <per-node feed token, issued at provisioning>
 ```
 
 Note what is absent: no domains, no client identifiers, no query counts per
-client. A support engineer can act on every field here, and none of it describes
-a person.
+client. A support engineer can act on every field here, and **none of it
+describes what anyone did on the network.**
+
+> Wording note (2026-08-14): this previously read "none of it describes a
+> person". That overclaims. A `nodeId` is linked to a purchaser in Ionity's
+> own sales records, so the payload is best treated as low-risk personal
+> information rather than none. This changes nothing about the controls —
+> all of them are already built — but it changes what the documentation
+> should assert. See `docs/POPIA-REVIEW.md` §3.3.
 
 ## 5. Distribution — getting the APK onto the phone
 
@@ -273,7 +280,7 @@ prerequisites, and they are now in place.
 
 Already done in this commit:
 
-- One Capacitor config, `capacitor.config.ts`, `appId org.ionity.gateflame`.
+- One Capacitor config, `capacitor.config.ts`, `appId today.ionity.gateflame`.
 - Kiosk APK target removed; `build:html-kiosk` retained for the Chromium kiosk.
 - `versionCode` / `versionName` single-sourced with auto-bump.
 - Release signing wired; unsigned releases refused.

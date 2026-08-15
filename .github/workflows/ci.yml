@@ -88,6 +88,53 @@ jobs:
           [ "$fail" = "0" ] && echo "✓ nothing tracked that should not be"
           exit $fail
 
+      - name: Assert the applicationId agrees in all five places
+        # Decided 2026-08-14 and now FROZEN: today.ionity.gateflame (reverse-DNS
+        # of ionity.today, a domain Ionity provably controls). The retired value
+        # was org.ionity.gateflame, and ionity.org is not ours.
+        #
+        # An applicationId can never change after the first unit ships — a
+        # different id is a different app, so every fielded customer would have
+        # to uninstall, reinstall and re-pair, and re-pairing wipes node state.
+        # Five places must agree, and Capacitor silently tolerates a mismatch,
+        # which is exactly why this is asserted rather than trusted.
+        run: |
+          expected="today.ionity.gateflame"
+          fail=0
+          check() {
+            if [ "$2" != "$expected" ]; then
+              echo "::error::$1 is '$2', expected '$expected'"; fail=1
+            else
+              echo "  ✓ $1"
+            fi
+          }
+          check "capacitor.config.ts appId" \
+            "$(grep -oP "appId:\s*'\K[^']+" capacitor.config.ts)"
+          check "build.gradle applicationId" \
+            "$(grep -oP 'applicationId\s+"\K[^"]+' android/app/build.gradle)"
+          check "build.gradle namespace" \
+            "$(grep -oP 'namespace\s*=\s*"\K[^"]+' android/app/build.gradle)"
+          check "strings.xml package_name" \
+            "$(grep -oP '<string name="package_name">\K[^<]+' android/app/src/main/res/values/strings.xml)"
+          check "strings.xml custom_url_scheme" \
+            "$(grep -oP '<string name="custom_url_scheme">\K[^<]+' android/app/src/main/res/values/strings.xml)"
+
+          pkgdir="android/app/src/main/java/$(echo "$expected" | tr '.' '/')"
+          if [ ! -f "$pkgdir/MainActivity.java" ]; then
+            echo "::error::expected $pkgdir/MainActivity.java"; fail=1
+          else
+            echo "  ✓ Java package directory"
+          fi
+          if grep -rqn 'package org\.ionity\.gateflame' android/app/src 2>/dev/null; then
+            echo "::error::the retired org.ionity.gateflame package declaration is still present"; fail=1
+          fi
+          if [ -d android/app/src/main/java/org/ionity ]; then
+            echo "::error::android/app/src/main/java/org/ionity still exists — Gradle would compile both"; fail=1
+          fi
+
+          [ "$fail" = "0" ] && echo "✓ applicationId is $expected in all five places"
+          exit $fail
+
       - name: Assert versionCode was bumped against main
         # Android refuses an APK whose versionCode is <= the installed one.
         # A PR that changes app code without bumping is a build customers
