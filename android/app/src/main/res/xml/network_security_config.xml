@@ -6,62 +6,53 @@
   LAN, over plain HTTP. That is unavoidable — the node has no public DNS name,
   so it cannot hold a publicly-trusted TLS certificate.
 
-  The previous configuration achieved this with `allowMixedContent: true` in
-  the Capacitor config, which permits cleartext to ANY host on the internet.
-  This file replaces that with the narrowest policy that still works:
-  cleartext is permitted ONLY to RFC1918 private ranges and loopback, and is
-  denied everywhere else, including for any future cloud feed.
+  ── WHY THIS FILE LOOKS BLUNTER THAN THE ONE IT REPLACES ────────────────────
 
-  RFC1918 / RFC3927 ranges covered:
-    10.0.0.0/8        10.x.x.x
-    172.16.0.0/12     172.16.x.x - 172.31.x.x
-    192.168.0.0/16    192.168.x.x
-    169.254.0.0/16    link-local (APIPA), used during first-boot pairing
-    127.0.0.0/8       loopback
+  The previous version tried to permit cleartext only to RFC1918 by listing
+  `192.168.1.0`, `10.0.0.0` and so on with includeSubdomains="true", on the
+  stated assumption that this covered each range.
 
-  Android's cleartextTrafficPermitted matches on hostname, not CIDR, so each
-  /16 that the node may realistically occupy is listed. This covers the default
-  ranges of every consumer router sold in South Africa plus the common
-  enterprise 10.x deployments.
+  It does not. Android's `<domain>` rule is a **hostname** match — exact, or a
+  DNS-label suffix when includeSubdomains is set. It has no CIDR support at
+  all. `<domain includeSubdomains="true">192.168.1.0</domain>` matches the
+  literal host `192.168.1.0` and anything ending in `.192.168.1.0`. It does
+  NOT match `192.168.1.105`: `105` is a sibling label, not a subdomain.
+
+  So under the old policy, every request to a node by IP was rejected before
+  it left the handset:
+
+      CLEARTEXT communication to 192.168.1.105 not permitted by
+      network security policy
+
+  Only `gateflame.local` and `localhost` ever worked, and only when mDNS
+  resolved. Manual address entry could never have worked at all. There is no
+  way to express "RFC1918 only" in this file, and pretending to is worse than
+  not trying: it reads as a narrow policy while actually being a broken one.
+
+  ── WHAT PROTECTS THE CUSTOMER INSTEAD ──────────────────────────────────────
+
+  The private-range restriction is enforced in the layer that can express it —
+  `assertPrivateHost()` in src/services/apiClient.ts refuses any cleartext
+  request whose host is not RFC1918, RFC3927 link-local, loopback, or a
+  `.local` mDNS name. It is applied to every request the app makes and is
+  covered by the test suite.
+
+  The node enforces the same boundary independently: `security.py` gates every
+  route on an RFC1918/loopback/link-local *source* address, so a request from
+  off-LAN is refused by the node whatever the phone believes.
 -->
 <network-security-config>
 
-    <!-- Default: no cleartext anywhere. -->
-    <base-config cleartextTrafficPermitted="false">
+    <!--
+      Cleartext permitted. Android cannot scope this to private ranges; see
+      above. Certificate trust is unchanged — system anchors only, no
+      user-installed CAs, so an https:// endpoint added later still cannot be
+      intercepted via a CA the customer was talked into installing.
+    -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-
-    <!-- Exception: the LAN the node lives on. -->
-    <domain-config cleartextTrafficPermitted="true">
-        <!-- loopback + link-local -->
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">127.0.0.1</domain>
-
-        <!-- 192.168.0.0/16 — overwhelmingly the common case -->
-        <domain includeSubdomains="true">192.168.0.0</domain>
-        <domain includeSubdomains="true">192.168.1.0</domain>
-        <domain includeSubdomains="true">192.168.2.0</domain>
-        <domain includeSubdomains="true">192.168.8.0</domain>
-        <domain includeSubdomains="true">192.168.10.0</domain>
-        <domain includeSubdomains="true">192.168.88.0</domain>
-        <domain includeSubdomains="true">192.168.100.0</domain>
-
-        <!-- 10.0.0.0/8 -->
-        <domain includeSubdomains="true">10.0.0.0</domain>
-        <domain includeSubdomains="true">10.0.1.0</domain>
-        <domain includeSubdomains="true">10.1.1.0</domain>
-
-        <!-- 172.16.0.0/12 -->
-        <domain includeSubdomains="true">172.16.0.0</domain>
-        <domain includeSubdomains="true">172.20.0.0</domain>
-
-        <!-- link-local, seen during first-boot before DHCP settles -->
-        <domain includeSubdomains="true">169.254.0.0</domain>
-
-        <!-- mDNS name the node advertises itself under -->
-        <domain includeSubdomains="true">gateflame.local</domain>
-    </domain-config>
 
 </network-security-config>

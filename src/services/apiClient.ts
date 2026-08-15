@@ -67,6 +67,63 @@ export const clearToken = (): void => {
 
 export const hasToken = (): boolean => readToken() !== null;
 
+/**
+ * Refuse cleartext to anything that is not the customer's own LAN.
+ *
+ * This lives here rather than in android/app/src/main/res/xml/
+ * network_security_config.xml because Android's `<domain>` rule matches
+ * hostnames, not CIDR ranges — it cannot express "RFC1918 only", and the
+ * version that tried to instead blocked every request to a node by IP. See the
+ * note at the top of that file.
+ *
+ * So the manifest permits cleartext and this does the narrowing, on every
+ * request, in the one place all of them pass through. HTTPS is always allowed:
+ * the restriction is about sending a bearer token in the clear, not about
+ * where the app may talk.
+ */
+export function assertPrivateHost(baseUrl: string): void {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new ApiRequestError(`"${baseUrl}" is not a valid address.`, { isNetwork: true });
+  }
+
+  if (url.protocol === 'https:') return;
+  if (url.protocol !== 'http:') {
+    throw new ApiRequestError(`Refusing to use ${url.protocol} — only http and https are supported.`, {
+      isNetwork: true,
+    });
+  }
+
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+
+  // Loopback, and mDNS names, which only resolve on the local link.
+  if (host === 'localhost' || host === '::1' || host.endsWith('.local')) return;
+
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (v4) {
+    const octets = [Number(v4[1]), Number(v4[2]), Number(v4[3]), Number(v4[4])];
+    if (octets.some((n) => n > 255)) {
+      throw new ApiRequestError(`"${host}" is not a valid IP address.`, { isNetwork: true });
+    }
+    const [a, b] = octets;
+    if (a === 127) return; // 127.0.0.0/8    loopback
+    if (a === 10) return; // 10.0.0.0/8     RFC1918
+    if (a === 192 && b === 168) return; // 192.168.0.0/16 RFC1918
+    if (a === 172 && b >= 16 && b <= 31) return; // 172.16.0.0/12  RFC1918
+    if (a === 169 && b === 254) return; // 169.254.0.0/16 RFC3927 link-local
+  }
+
+  // IPv6 unique-local (fc00::/7) and link-local (fe80::/10).
+  if (/^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host)) return;
+
+  throw new ApiRequestError(
+    `Refusing to send an unencrypted request to ${host} — a Gate^Flame node is only ever reached on your own network.`,
+    { isNetwork: true },
+  );
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'DELETE' | 'PUT';
   body?: unknown;
@@ -94,6 +151,10 @@ export async function apiRequest<T>(
     anonymous = false,
     signal,
   } = options;
+
+  // Throws before any socket is opened, so a token can never leave the device
+  // towards a host outside the customer's own network.
+  assertPrivateHost(baseUrl);
 
   const url = `${baseUrl}${config.apiPrefix}${path}`;
   const controller = new AbortController();
