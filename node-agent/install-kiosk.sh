@@ -15,9 +15,20 @@
 # codes can only ever be issued to a loopback caller.
 #
 # USAGE
-#   sudo bash install-kiosk.sh /path/to/dist-kiosk           # HDMI console (:0)
-#   sudo bash install-kiosk.sh /path/to/dist-kiosk --vnc     # VNC display (:1)
+#   sudo bash install-kiosk.sh /path/to/dist-kiosk                # auto-detect display
+#   sudo bash install-kiosk.sh /path/to/dist-kiosk --display :0   # force a display
 #   sudo bash install-kiosk.sh --uninstall
+#
+# DISPLAY DETECTION
+#
+# An earlier version took a --vnc flag that hardcoded DISPLAY=:1. That was an
+# assumption, and it was wrong on the very first machine it met: wabakipi runs
+# its VNC server on port 5900, which is display :0, not :1. The unit would have
+# restart-looped on "cannot open display" with nothing obviously at fault.
+#
+# The display is therefore DETECTED - from the X sockets that actually exist
+# and the VNC ports that are actually listening (5900+N = display :N).
+# --display overrides it when you know better.
 # ========================================================================================
 
 set -euo pipefail
@@ -27,7 +38,32 @@ UNIT="gateflame-kiosk.service"
 DROPIN_DIR="/etc/systemd/system/gateflame-node-agent.service.d"
 KIOSK_USER="${KIOSK_USER:-${SUDO_USER:-pi}}"
 PORT="${GATEFLAME_PORT:-8080}"
-MODE="hdmi"
+DISPLAY_VAL=""   # empty => auto-detect
+
+
+detect_display() {
+    # 1. VNC ports that are actually listening. RFB display :N is port 5900+N,
+    #    so a listener on 5900 means :0 - which is exactly the case this
+    #    function exists for.
+    local n port
+    for n in 0 1 2 3 4; do
+        port=$((5900 + n))
+        if ss -ltn 2>/dev/null | grep -qE "[:.]${port}\b"; then
+            if [ -e "/tmp/.X11-unix/X${n}" ]; then
+                echo ":${n}"; return 0
+            fi
+        fi
+    done
+
+    # 2. Any X socket at all - covers a plain HDMI desktop with no VNC.
+    local s
+    for s in /tmp/.X11-unix/X*; do
+        [ -e "$s" ] || continue
+        echo ":${s##*/X}"; return 0
+    done
+
+    return 1
+}
 
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[1;32m[ OK ]\033[0m %s\n' "$*"; }
@@ -44,7 +80,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
   exit 0
 fi
 
-[[ $EUID -eq 0 ]] || die "Run as root:  sudo bash install-kiosk.sh <dist-kiosk> [--vnc]"
+[[ $EUID -eq 0 ]] || die "Run as root:  sudo bash install-kiosk.sh <dist-kiosk> [--display :N]"
 
 SRC="${1:-}"
 [[ -n "$SRC" ]] || die "Give me the dist-kiosk directory."
@@ -53,7 +89,13 @@ SRC="${1:-}"
 
 for arg in "${@:2}"; do
   case "$arg" in
-    --vnc) MODE="vnc" ;;
+    --display) die "--display needs a value, e.g. --display :0" ;;
+    --display=*) DISPLAY_VAL="${arg#*=}" ;;
+    --display\ *) DISPLAY_VAL="${arg#* }" ;;
+    :[0-9]*) DISPLAY_VAL="$arg" ;;
+    --vnc)
+      # Kept so the old instruction does not silently do the wrong thing.
+      die "--vnc is gone: it hardcoded :1, which was wrong on this very Pi (VNC on 5900 = :0). Omit it to auto-detect, or pass --display :0" ;;
     *) die "Unknown option: $arg" ;;
   esac
 done
@@ -120,11 +162,23 @@ fi
 [[ -n "$BROWSER" ]] || die "no chromium available"
 ok "browser: $BROWSER"
 
-if [[ "$MODE" == "vnc" ]]; then
-  DISPLAY_VAL=":1"; EXTRA_AFTER=""
-  warn "VNC mode: your VNC session on :1 must already be running."
+if [[ -n "$DISPLAY_VAL" ]]; then
+  ok "display: $DISPLAY_VAL (forced with --display)"
 else
-  DISPLAY_VAL=":0"; EXTRA_AFTER="graphical.target"
+  if DISPLAY_VAL="$(detect_display)"; then
+    ok "display: $DISPLAY_VAL (detected)"
+  else
+    die "No X display found. Start the desktop or a VNC session first, then re-run - or pass --display :0 explicitly."
+  fi
+fi
+
+# :0 is normally the seat-0 console, which systemd orders after graphical.target.
+# A VNC-only display is started by a user session and has no such target, so
+# ordering after it would hang the unit forever.
+if [[ "$DISPLAY_VAL" == ":0" ]] && systemctl list-unit-files graphical.target >/dev/null 2>&1; then
+  EXTRA_AFTER="graphical.target"
+else
+  EXTRA_AFTER=""
 fi
 
 cat > "/etc/systemd/system/$UNIT" <<EOF
@@ -166,7 +220,7 @@ cat <<EOF
 
   Kiosk ......... http://localhost:$PORT/device-kiosk/
   From a desk ... http://${LAN:-<pi-ip>}:$PORT/device-kiosk/
-  Display ....... $DISPLAY_VAL ($MODE)
+  Display ....... $DISPLAY_VAL
 
   PAIR A PHONE
       curl -s -X POST http://127.0.0.1:$PORT/api/v1/pair/request
