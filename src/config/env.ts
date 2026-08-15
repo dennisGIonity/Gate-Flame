@@ -63,13 +63,25 @@ export const config = {
    */
   discoveryCandidates: [
     'http://gateflame.local:8080',
+    // Raspberry Pi OS publishes <hostname>.local over avahi out of the box, and
+    // the stock hostname is `raspberrypi`. This works BEFORE deploy-on-pi.sh
+    // has published the gateflame.local alias, which matters on a first run and
+    // on any node where the alias step failed.
+    'http://raspberrypi.local:8080',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
+    // Common static-lease addresses. EVERY entry must carry :8080 - the agent
+    // binds 8080, and a bare host resolves to :80. `.10` is as common a
+    // reservation as `.105` and was missing entirely.
+    'http://192.168.0.10:8080',
+    'http://192.168.1.10:8080',
     'http://192.168.1.105:8080',
     'http://192.168.1.100:8080',
     'http://192.168.0.105:8080',
     'http://192.168.8.105:8080',
     'http://10.0.0.105:8080',
+    // Deliberate: the one bare port-80 entry, kept last, for the day the agent
+    // sits behind a reverse proxy. Not an instance of the missing-port defect.
     'http://gateflame.local',
   ] as const,
 } as const;
