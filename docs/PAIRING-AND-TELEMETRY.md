@@ -244,8 +244,15 @@ Authorization: Bearer <per-node feed token, issued at provisioning>
 ```
 
 Note what is absent: no domains, no client identifiers, no query counts per
-client. A support engineer can act on every field here, and none of it describes
-a person.
+client. A support engineer can act on every field here, and **none of it
+describes what anyone did on the network.**
+
+> Wording note (2026-08-14): this previously read "none of it describes a
+> person". That overclaims. A `nodeId` is linked to a purchaser in Ionity's
+> own sales records, so the payload is best treated as low-risk personal
+> information rather than none. This changes nothing about the controls —
+> all of them are already built — but it changes what the documentation
+> should assert. See `docs/POPIA-REVIEW.md` §3.3.
 
 ## 5. Distribution — getting the APK onto the phone
 

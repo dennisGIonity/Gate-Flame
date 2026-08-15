@@ -1,10 +1,16 @@
-import { StrictMode, useState } from 'react';
+import { StrictMode, Suspense, lazy, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { DeviceOnboardingSimulator } from './components/DeviceOnboardingSimulator';
-import { KioskPairingScreen } from './components/KioskPairingScreen';
+import { PanelFallback } from './components/LazyFallback';
 import { useGateFlameEngine } from './hooks/useGateFlameEngine';
 import { useAppStore } from './store/useAppStore';
+
+// DeviceOnboardingSimulator *is* the kiosk, so it stays eager. Pairing sits
+// behind a button most kiosk sessions never press.
+const KioskPairingScreen = lazy(() =>
+  import('./components/KioskPairingScreen').then((m) => ({ default: m.KioskPairingScreen })),
+);
 
 function KioskStandalone() {
   useGateFlameEngine();
@@ -24,7 +30,13 @@ function KioskStandalone() {
       >
         {showPairing ? 'Back to dashboard' : 'Pair a phone'}
       </button>
-      {showPairing ? <KioskPairingScreen /> : <DeviceOnboardingSimulator />}
+      {showPairing ? (
+        <Suspense fallback={<PanelFallback label="Loading pairing" className="min-h-screen" />}>
+          <KioskPairingScreen />
+        </Suspense>
+      ) : (
+        <DeviceOnboardingSimulator />
+      )}
     </div>
   );
 }
