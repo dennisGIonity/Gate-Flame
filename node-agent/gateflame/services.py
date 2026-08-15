@@ -17,10 +17,15 @@ import shutil
 import threading
 import time
 
+from . import firewall as firewall_mod
 from . import pihole
 
 _lock = threading.Lock()
 _enabled: dict[str, bool] = {}
+
+# One controller for the process, so the ruleset is installed once and the
+# "already installed" latch inside it means something.
+firewall = firewall_mod.Firewall()
 
 
 def _has(binary: str) -> bool:
@@ -44,7 +49,15 @@ MODULE_DEFS = {
     },
     "module_firewall_bounce": {
         "label": "Firewall Bounce",
-        "check": lambda: (False, "nftables bouncer not implemented in this build — needs CAP_NET_ADMIN and real-hardware validation"),
+        # Implemented 2026-08-14. Reports the REAL nftables capability: a Pi
+        # without CAP_NET_ADMIN gets `degraded` plus the exact remedy, never a
+        # green light over a bouncer that cannot drop a packet.
+        "check": lambda: firewall.capability(),
+        "on_start": lambda: firewall.ensure_installed(),
+        # Stopping tears the table down, releasing every bounce. A stopped
+        # bouncer must not keep silently dropping traffic — that is the
+        # failure mode a customer cannot diagnose.
+        "on_stop": lambda: firewall.teardown(),
     },
     "module_dpi_flow": {
         "label": "Deep Packet Inspection (headers only)",
@@ -106,14 +119,43 @@ def start_module(module_id: str) -> ToggleResult:
     ok, gap = definition["check"]()
     if not ok:
         return ToggleResult(ok=False, error="capability_unavailable", advisory=gap)
+
+    # Run the module's real start work BEFORE flipping the flag. Flipping
+    # first and hoping would mean a module that failed to start still reads
+    # `running` — the exact dishonesty this agent exists to avoid.
+    hook = definition.get("on_start")
+    if hook is not None:
+        try:
+            hook()
+        except Exception as exc:  # noqa: BLE001 — surfaced, not swallowed
+            return ToggleResult(
+                ok=False,
+                error="start_failed",
+                advisory=getattr(exc, "gap", None) or str(exc)[:200],
+            )
+
     with _lock:
         _enabled[module_id] = True
     return ToggleResult(ok=True, status="running")
 
 
 def stop_module(module_id: str) -> ToggleResult:
-    if module_id not in MODULE_DEFS:
+    definition = MODULE_DEFS.get(module_id)
+    if definition is None:
         return ToggleResult(ok=False, error="unknown_module")
+
+    # The flag goes down first here — the opposite order from start, and
+    # deliberately so. If teardown half-succeeds, "stopped" is the safer lie
+    # than "running": it tells the operator to check, rather than implying
+    # enforcement that may no longer exist.
     with _lock:
         _enabled[module_id] = False
-    return ToggleResult(ok=True, status="stopped")
+
+    hook = definition.get("on_stop")
+    advisory = None
+    if hook is not None:
+        try:
+            hook()
+        except Exception as exc:  # noqa: BLE001
+            advisory = f"stopped, but cleanup reported: {str(exc)[:160]}"
+    return ToggleResult(ok=True, status="stopped", advisory=advisory)

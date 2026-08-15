@@ -30,13 +30,39 @@ This rebuild implements, for real:
 - A module registry that reports `not_implemented` with a named gap rather
   than a faked `running` for anything not yet wired up.
 
+### `module_firewall_bounce` — implemented 2026-08-14
+
+`gateflame/firewall.py`, with the adversarial review the previous attempt's
+critical defect earned. That build put an unvalidated IP straight into an
+`nft` argv, so a crafted path parameter could reach `nft flush ruleset` and
+take down the firewall of a device sold as a security appliance.
+
+The rebuild makes that class of bug unreachable rather than merely filtered:
+
+- argv lists only, `shell=False`, one `subprocess.run` in the whole module;
+- the ruleset is a **constant** — no f-string, no `%`, no `.format()` — and
+  nothing at runtime ever writes a *rule*, only set elements;
+- validation parses with `ipaddress.ip_address()` and forwards
+  `str(parsed)`, a stdlib-generated value, so caller text stops existing at
+  the boundary;
+- deny-by-default on the target: loopback, multicast, unspecified, public
+  addresses, the node itself and the default gateway are all refused with a
+  named reason, because each of those bounces is a self-inflicted outage;
+- every bounce carries an nftables `timeout` (30 s – 24 h), so it self-heals
+  even if the agent dies; there is no way to express a permanent bounce;
+- the table is `policy accept`, so the worst-case failure is "the bouncer
+  does nothing", never "the LAN goes dark".
+
+93 tests, including the historical injection payload as an explicit
+regression case. Endpoints: `POST /api/v1/firewall/bounce`,
+`DELETE /api/v1/firewall/bounce/{address}`, `GET /api/v1/firewall/bounced`.
+
+**Still needs real-hardware validation** — run `./validate-on-pi.sh` on the
+Pi. Without `CAP_NET_ADMIN` the capability probe reports `degraded` and the
+exact remedy, never a green light over a bouncer that cannot drop a packet.
+
 It deliberately does **not** yet implement, and says so at `/api/v1/services`:
 
-- `module_firewall_bounce` — the nftables/iptables bouncer. Needs
-  `CAP_NET_ADMIN` and validation against a real kernel netfilter stack; the
-  previous build's critical defect (unvalidated IP straight into an `nft`
-  argv, allowing `nft flush ruleset` via a crafted path parameter) is the
-  reason this isn't rushed back in without the same adversarial review.
 - `module_dpi_flow` — AF_PACKET SNI/Host parsing. Needs raw-socket capability
   and real traffic to test against; a sandbox container has neither.
 - `module_wan_audit` — persisted monthly data budget, jitter/loss measurement.

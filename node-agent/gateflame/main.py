@@ -183,6 +183,68 @@ def stop_service(module_id: str, _=Depends(kiosk_only)):
     return services.stop_module(module_id).to_dict()
 
 
+# ---- Firewall bounce (module_firewall_bounce) -------------------------------
+#
+# Scope choice, stated because it is not obvious: bouncing takes `control`,
+# the same as starting a module. Bouncing ADDS enforcement, it is visible in
+# the UI, it expires on its own, and cutting a misbehaving device off from
+# the phone in your hand is the entire point of the feature.
+#
+# Releasing also takes `control`, not `kiosk`. A stolen-but-still-paired
+# phone could use it, but the blast radius is one host un-bounced —
+# recoverable, visible and self-limiting. Tearing the bouncer down wholesale
+# is the dangerous action, and that goes through /services/{id}/stop, which
+# stays kiosk-only (physical presence).
+
+
+@app.post("/api/v1/firewall/bounce")
+def firewall_bounce(body: dict, _=Depends(control_scope)):
+    from fastapi import HTTPException
+
+    from .firewall import FirewallRefusal, FirewallUnavailable
+
+    try:
+        result = services.firewall.bounce(body.get("address"), body.get("seconds", 900))
+    except FirewallRefusal as exc:
+        # 422, not 400: the request was well-formed, the target was refused.
+        raise HTTPException(
+            status_code=422, detail={"error": exc.reason, "advisory": exc.advisory}
+        ) from None
+    except FirewallUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "capability_unavailable", "advisory": exc.gap},
+        ) from None
+    return {"ok": True, **result}
+
+
+@app.delete("/api/v1/firewall/bounce/{address}")
+def firewall_release(address: str, _=Depends(control_scope)):
+    from fastapi import HTTPException
+
+    from .firewall import FirewallRefusal, FirewallUnavailable
+
+    try:
+        result = services.firewall.release(address)
+    except FirewallRefusal as exc:
+        raise HTTPException(
+            status_code=422, detail={"error": exc.reason, "advisory": exc.advisory}
+        ) from None
+    except FirewallUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "capability_unavailable", "advisory": exc.gap},
+        ) from None
+    return {"ok": True, **result}
+
+
+@app.get("/api/v1/firewall/bounced")
+def firewall_bounced(_=Depends(read_scope)):
+    # Read straight from the kernel — elements expire there, so any cached
+    # copy starts lying the moment a timeout fires.
+    return {"bounced": services.firewall.bounced()}
+
+
 def _iso(epoch: float) -> str:
     import time
 
