@@ -26,15 +26,24 @@
  * on the deployed node's subnet. The agent has no Wi-Fi scanning endpoint and
  * never had one, so that screen could not have been real.
  *
- * GateFlameKiosk talks only to the twenty routes the agent actually serves, and
- * renders `—` plus the API's own `gap` string wherever a value is unknown.
+ * GateFlameKiosk (2026-08-16) replaced it with one honest page: four regions,
+ * no invented values, and no controls at all.
+ *
+ * KioskApp (2026-08-17) keeps that rule and adds back the reach the simulator
+ * only pretended to have - a lock screen, then one tab per capability the agent
+ * really has, each with its own telemetry, charts and controls. Every panel is
+ * wired to a route in node-agent/gateflame/main.py; nothing is wired to
+ * Math.random(). Unknown still renders as `-` plus the API's own `gap` string.
+ *
+ * GateFlameKiosk.tsx is retained until this has run on real hardware. Delete it
+ * once GATE 1 in the end-game plan is passed.
  */
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import './index.css';
-import GateFlameKiosk from './components/kiosk/GateFlameKiosk';
+import KioskApp from './components/kiosk/KioskApp';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {
@@ -47,6 +56,6 @@ document.documentElement.classList.add('dark');
 
 createRoot(rootEl).render(
   <StrictMode>
-    <GateFlameKiosk />
+    <KioskApp />
   </StrictMode>,
 );

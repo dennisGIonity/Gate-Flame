@@ -3,7 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gate^Flame Device Onboarding Kiosk</title>
+    <title>Gate^Flame Node Console</title>
+    <!--
+      NO REMOTE FONT LINK HERE, DELIBERATELY.
+
+      index.html pulls Outfit / Plus Jakarta Sans / JetBrains Mono from
+      fonts.googleapis.com. That is fine for a phone. It is wrong for this
+      surface: the console runs on the appliance, whose own DNS is the thing
+      being filtered, and which may have no WAN at all. A blocking stylesheet
+      request to a third party would give a wall panel a multi-second flash of
+      unstyled text on every boot - and would quietly send a request off the LAN
+      from a product whose promise is that almost nothing leaves it.
+
+      The proper fix is to self-host the three families under public/fonts and
+      declare @font-face locally (END-GAME PLAN Phase 4.11). Until then the
+      stack below degrades to the Pi OS system faces, which are perfectly
+      legible at two metres.
+    -->
+    <style>
+      /* Painted before React mounts so the panel never flashes white in a dark
+         hallway. Matches COLORS.bg in src/components/kiosk/kioskUi.tsx. */
+      html, body { margin: 0; background: #080D16; color: #E2E8F0; }
+      body {
+        font-family: "Plus Jakarta Sans", "DejaVu Sans", system-ui, -apple-system, sans-serif;
+        /* The console is a fixed 1920x1080 panel with no pointer most of the
+           time. Nothing here should ever rubber-band or show a scrollbar
+           chrome that a finger cannot use. */
+        overscroll-behavior: none;
+      }
+      code, kbd, samp, pre { font-family: "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

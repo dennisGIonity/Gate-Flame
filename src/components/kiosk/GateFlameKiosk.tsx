@@ -331,7 +331,7 @@ export default function GateFlameKiosk() {
             <h3 className="text-sm font-semibold tracking-widest text-[#475569] uppercase">Security Modules</h3>
             <div className="grid grid-cols-2 gap-4">
               {/* Null case: Empty array implies services endpoint returned no modules yet. Handled via map intentionally rendering nothing, or waiting on undefined. */}
-              {(!services ? Array.from({length: 4}) : services.modules).map((mod, i) => {
+              {(!services ? (Array.from({ length: 4 }) as (ServiceModule | undefined)[]) : services.modules).map((mod, i) => {
                 // Skeleton loading state
                 if (!mod || !('id' in mod)) {
                   return <div key={i} className="h-24 bg-[#111A28]/50 border border-[#1E293B] rounded-2xl animate-pulse" />;
