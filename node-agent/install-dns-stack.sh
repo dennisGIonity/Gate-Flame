@@ -73,6 +73,65 @@ command -v docker >/dev/null || die "docker not installed"
 docker compose version >/dev/null 2>&1 || die "docker compose plugin not available"
 ok "docker $(docker --version | awk '{print $3}' | tr -d ,)"
 
+# ---------------------------------------------------------------------------
+# ARCHITECTURE GATE
+#
+# mvance/unbound:latest is amd64-ONLY - every published tag. It pulls without
+# complaint on ARM64, starts, and dies in a restart loop with
+# "exec /unbound.sh: exec format error". Pi-hole is then left with no upstream,
+# so blocked domains still resolve from the local list while every clean lookup
+# times out. That reads like a network fault and is not one; it cost an evening.
+#
+# This product runs on ARM64 by definition - Raspberry Pi 5 today, Orange Pi
+# Zero 2W (Allwinner H618) for the base model. A silently-amd64 image is a
+# recurring hazard, not a one-off, so every image is checked against THIS host's
+# architecture before anything is started.
+# ---------------------------------------------------------------------------
+say "Checking image architectures against this host"
+
+HOST_ARCH="$(docker version --format '{{.Server.Arch}}' 2>/dev/null || uname -m)"
+case "$HOST_ARCH" in
+  aarch64) HOST_ARCH="arm64" ;;
+  x86_64)  HOST_ARCH="amd64" ;;
+esac
+ok "host architecture: $HOST_ARCH"
+
+assert_image_arch() {
+  local image="$1" arches
+  # --verbose is REQUIRED, not optional.
+  #
+  # Plain `docker manifest inspect` on a SINGLE-architecture image returns the
+  # bare v2 manifest, which has no "platform" block at all - so the arch list
+  # comes back empty and the check skips. That is precisely backwards: the
+  # single-arch images are the dangerous ones, and the first version of this
+  # gate waved mvance/unbound straight through.
+  #
+  # --verbose wraps the manifest in a Descriptor that always carries platform,
+  # for both single images and manifest lists. Reads the registry only - no pull.
+  arches="$(docker manifest inspect --verbose "$image" 2>/dev/null \
+            | grep -oE '"architecture"[[:space:]]*:[[:space:]]*"[a-z0-9]+"' \
+            | sed -E 's/.*"([a-z0-9]+)"$/\1/' | sort -u | tr '\n' ' ')"
+
+  if [[ -z "$arches" ]]; then
+    # Fail closed. An unreadable manifest is exactly the state the amd64-only
+    # image produced, and continuing on "probably fine" is how it got in.
+    die "$image - cannot read its manifest, so its architecture is unknown. Refusing to deploy an image that may not run on $HOST_ARCH."
+  fi
+  if grep -qw "$HOST_ARCH" <<<"$arches"; then
+    ok "$image supports $HOST_ARCH (has: ${arches% })"
+  else
+    warn "$image publishes ONLY: ${arches% }"
+    die "$image has no $HOST_ARCH build. It would start and then die with 'exec format error'. Find a multi-arch replacement before continuing."
+  fi
+}
+
+# Read the images straight out of the compose file so this can never drift from
+# what is actually deployed.
+while read -r img; do
+  [[ -n "$img" ]] && assert_image_arch "$img"
+done < <(grep -oP '(?<=^\s{4}image:\s).*' "$STACK/docker-compose.yml" 2>/dev/null | tr -d "'\"")
+
+
 # Port 53 is the one that can break the box's own name resolution. Refuse rather than
 # fight whatever is already there - UNLESS it is our own stack from a previous run,
 # which is the normal case on a re-run and must not look like a conflict.
