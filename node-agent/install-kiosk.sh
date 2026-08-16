@@ -39,27 +39,53 @@ DROPIN_DIR="/etc/systemd/system/gateflame-node-agent.service.d"
 KIOSK_USER="${KIOSK_USER:-${SUDO_USER:-pi}}"
 PORT="${GATEFLAME_PORT:-8080}"
 DISPLAY_VAL=""   # empty => auto-detect
+SESSION_KIND=""  # wayland | x11
 
 
-detect_display() {
-    # 1. VNC ports that are actually listening. RFB display :N is port 5900+N,
-    #    so a listener on 5900 means :0 - which is exactly the case this
-    #    function exists for.
-    local n port
+# Detect the graphical session: Wayland or X11.
+#
+# HISTORY, BECAUSE THIS HAS BEEN WRONG TWICE.
+#
+# v1 hardcoded DISPLAY=:1. Wrong: this Pi's VNC is on port 5900, i.e. :0.
+#
+# v2 detected the display from X sockets and VNC ports. Also wrong, and more
+# subtly: Raspberry Pi OS 13 (Trixie) runs WAYLAND via labwc, and Xwayland
+# still publishes /tmp/.X11-unix/X0. So the socket existed, the detection
+# concluded X11, and the unit launched Chromium with DISPLAY=:0 and no
+# XDG_RUNTIME_DIR, WAYLAND_DISPLAY or DBUS_SESSION_BUS_ADDRESS. Chromium came
+# up, grabbed the whole output fullscreen and rendered BLACK - on both the
+# HDMI console and the VNC session - while the journal filled with
+# "Failed to connect to the bus: Could not parse server address".
+#
+# The lesson: an Xwayland socket proves Xwayland is running, NOT that the
+# session is X11. Check for a Wayland socket FIRST, because on a Wayland
+# session both exist.
+detect_session() {
+    local uid runtime sock
+    uid="$(id -u "$KIOSK_USER" 2>/dev/null || echo "")"
+    [ -n "$uid" ] || return 1
+    runtime="/run/user/${uid}"
+
+    # 1. Wayland first - on Trixie both sockets exist and Wayland is the truth.
+    if [ -d "$runtime" ]; then
+        for sock in "$runtime"/wayland-*; do
+            case "$sock" in *.lock) continue ;; esac
+            [ -S "$sock" ] || continue
+            SESSION_KIND="wayland"
+            WAYLAND_SOCK="${sock##*/}"
+            XDG_RUNTIME="$runtime"
+            return 0
+        done
+    fi
+
+    # 2. Genuine X11: an X socket with no Wayland socket beside it.
+    local n
     for n in 0 1 2 3 4; do
-        port=$((5900 + n))
-        if ss -ltn 2>/dev/null | grep -qE "[:.]${port}\b"; then
-            if [ -e "/tmp/.X11-unix/X${n}" ]; then
-                echo ":${n}"; return 0
-            fi
+        if [ -e "/tmp/.X11-unix/X${n}" ]; then
+            SESSION_KIND="x11"
+            DISPLAY_VAL=":${n}"
+            return 0
         fi
-    done
-
-    # 2. Any X socket at all - covers a plain HDMI desktop with no VNC.
-    local s
-    for s in /tmp/.X11-unix/X*; do
-        [ -e "$s" ] || continue
-        echo ":${s##*/X}"; return 0
     done
 
     return 1
@@ -95,7 +121,7 @@ for arg in "${@:2}"; do
     :[0-9]*) DISPLAY_VAL="$arg" ;;
     --vnc)
       # Kept so the old instruction does not silently do the wrong thing.
-      die "--vnc is gone: it hardcoded :1, which was wrong on this very Pi (VNC on 5900 = :0). Omit it to auto-detect, or pass --display :0" ;;
+      die "--vnc is gone. The session type is detected now (Wayland vs X11). Omit it, or pass --display :N to force bare X11" ;;
     *) die "Unknown option: $arg" ;;
   esac
 done
@@ -163,22 +189,53 @@ fi
 ok "browser: $BROWSER"
 
 if [[ -n "$DISPLAY_VAL" ]]; then
-  ok "display: $DISPLAY_VAL (forced with --display)"
+  SESSION_KIND="x11"
+  ok "session: X11 on $DISPLAY_VAL (forced with --display)"
 else
-  if DISPLAY_VAL="$(detect_display)"; then
-    ok "display: $DISPLAY_VAL (detected)"
+  if detect_session; then
+    case "$SESSION_KIND" in
+      wayland) ok "session: Wayland ($WAYLAND_SOCK, XDG_RUNTIME_DIR=$XDG_RUNTIME)" ;;
+      x11)     ok "session: X11 on $DISPLAY_VAL" ;;
+    esac
   else
-    die "No X display found. Start the desktop or a VNC session first, then re-run - or pass --display :0 explicitly."
+    die "No graphical session found for user $KIOSK_USER. Log in at the console or start a VNC session, then re-run - or pass --display :0 for a bare X11 setup."
   fi
 fi
 
-# :0 is normally the seat-0 console, which systemd orders after graphical.target.
-# A VNC-only display is started by a user session and has no such target, so
-# ordering after it would hang the unit forever.
-if [[ "$DISPLAY_VAL" == ":0" ]] && systemctl list-unit-files graphical.target >/dev/null 2>&1; then
+# Order after graphical.target only when it exists. A VNC-only or Wayland user
+# session is brought up by the user's own session manager and may not be
+# ordered by that target at all, so waiting on it can hang the unit.
+if systemctl list-unit-files graphical.target >/dev/null 2>&1; then
   EXTRA_AFTER="graphical.target"
 else
   EXTRA_AFTER=""
+fi
+
+# Build the environment and browser flags for the session we actually found.
+#
+# Wayland needs XDG_RUNTIME_DIR, WAYLAND_DISPLAY and DBUS_SESSION_BUS_ADDRESS.
+# Omitting the last one is what produced the black screen: Chromium started,
+# could not reach the session bus, and never painted.
+if [[ "$SESSION_KIND" == "wayland" ]]; then
+  UID_VAL="$(id -u "$KIOSK_USER")"
+  SESSION_ENV=$(cat <<ENVEOF
+Environment=XDG_RUNTIME_DIR=$XDG_RUNTIME
+Environment=WAYLAND_DISPLAY=$WAYLAND_SOCK
+Environment=XDG_SESSION_TYPE=wayland
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME/bus
+ENVEOF
+)
+  # --ozone-platform=wayland makes Chromium a native Wayland client instead of
+  # routing through Xwayland, which is what a labwc session expects.
+  PLATFORM_FLAGS="--ozone-platform=wayland"
+else
+  SESSION_ENV=$(cat <<ENVEOF
+Environment=DISPLAY=$DISPLAY_VAL
+Environment=XAUTHORITY=/home/$KIOSK_USER/.Xauthority
+Environment=XDG_SESSION_TYPE=x11
+ENVEOF
+)
+  PLATFORM_FLAGS="--ozone-platform=x11"
 fi
 
 cat > "/etc/systemd/system/$UNIT" <<EOF
@@ -190,10 +247,10 @@ Wants=gateflame-node-agent.service
 [Service]
 Type=simple
 User=$KIOSK_USER
-Environment=DISPLAY=$DISPLAY_VAL
-Environment=XAUTHORITY=/home/$KIOSK_USER/.Xauthority
+$SESSION_ENV
 ExecStartPre=/bin/sh -c 'until curl -fsS http://127.0.0.1:$PORT/api/v1/system/status >/dev/null; do sleep 2; done'
 ExecStart=$BROWSER \\
+  $PLATFORM_FLAGS \\
   --kiosk --incognito --noerrdialogs --disable-infobars \\
   --disable-session-crashed-bubble --disable-features=TranslateUI \\
   --check-for-update-interval=31536000 \\
@@ -220,7 +277,7 @@ cat <<EOF
 
   Kiosk ......... http://localhost:$PORT/device-kiosk/
   From a desk ... http://${LAN:-<pi-ip>}:$PORT/device-kiosk/
-  Display ....... $DISPLAY_VAL
+  Session ....... $SESSION_KIND ${DISPLAY_VAL}${WAYLAND_SOCK:-}
 
   PAIR A PHONE
       curl -s -X POST http://127.0.0.1:$PORT/api/v1/pair/request
