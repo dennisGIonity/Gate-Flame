@@ -48,6 +48,34 @@ mkdir -p "$STATE_DIR" 2>/dev/null || true
 
 log() { logger -t gateflame-dns-watchdog "$*"; echo "$*"; }
 
+# Every compose invocation goes through this.
+#
+# dns-stack/.env holds the Pi-hole admin password at mode 600, owned by root -
+# correct, it is a credential. But `docker compose` READS .env to interpolate
+# ${PIHOLE_PASSWORD}, so any invocation that is not root fails with
+#
+#     open .../dns-stack/.env: permission denied
+#
+# and, because compose exits non-zero without starting anything, does so
+# silently from the caller's point of view.
+#
+# The watchdog runs as root under systemd so it would not have hit this. It was
+# found by running the bypass test by hand as wabapi: bypass engaged correctly,
+# and then leave_bypass() could not bring filtering back - the box would have
+# sat unfiltered forever, retrying every ten minutes and failing identically
+# each time. The most dangerous kind of bug: only reachable on the recovery
+# path, so it stays invisible until the day it matters.
+#
+# Using sudo -n explicitly means the script behaves the same whether systemd or
+# a human started it, and fails loudly rather than quietly if it cannot.
+compose() {
+  if [[ $EUID -eq 0 ]]; then
+    docker compose "$@"
+  else
+    sudo -n docker compose "$@"
+  fi
+}
+
 # A real DNS query. No dig/nslookup dependency - neither Trixie nor Armbian ship them,
 # and a watchdog that depends on an absent binary reports a healthy service as dead.
 dns_answers() {
@@ -84,8 +112,8 @@ enter_bypass() {
   # Take the filtered stack fully down first. Bypass binds the same port 53, so both
   # cannot run at once - which is deliberate: it makes it structurally impossible for
   # queries to leak past the filter while things are healthy.
-  docker compose down >/dev/null 2>&1
-  docker compose -f docker-compose.bypass.yml up -d >/dev/null 2>&1
+  compose down >/dev/null 2>&1
+  compose -f docker-compose.bypass.yml up -d >/dev/null 2>&1
   sleep 5
   if dns_answers; then
     date -Iseconds > "$BYPASS_FLAG"
@@ -93,15 +121,15 @@ enter_bypass() {
     return 0
   fi
   log "FATAL: bypass resolver also failed to answer. The box cannot serve DNS at all."
-  docker compose -f docker-compose.bypass.yml down >/dev/null 2>&1
+  compose -f docker-compose.bypass.yml down >/dev/null 2>&1
   return 1
 }
 
 leave_bypass() {
   log "attempting to restore filtered DNS"
   cd "$STACK" || return 1
-  docker compose -f docker-compose.bypass.yml down >/dev/null 2>&1
-  docker compose up -d >/dev/null 2>&1
+  compose -f docker-compose.bypass.yml down >/dev/null 2>&1
+  compose up -d >/dev/null 2>&1
   for _ in $(seq 1 20); do
     sleep 3
     if dns_answers; then
@@ -114,8 +142,8 @@ leave_bypass() {
   # Could not get the filtered stack back. Put bypass back rather than leaving the
   # house with nothing - a degraded product beats a broken one, every time.
   log "could not restore filtering - returning to bypass"
-  docker compose down >/dev/null 2>&1
-  docker compose -f docker-compose.bypass.yml up -d >/dev/null 2>&1
+  compose down >/dev/null 2>&1
+  compose -f docker-compose.bypass.yml up -d >/dev/null 2>&1
   return 1
 }
 
@@ -165,11 +193,11 @@ cd "$STACK" 2>/dev/null || { log "FATAL: stack directory $STACK not found"; exit
 # is wedged in a way restart cannot clear.
 if (( fails == 2 )); then
   log "restarting the DNS containers"
-  docker compose restart >/dev/null 2>&1
+  compose restart >/dev/null 2>&1
 else
   log "restart did not help ($fails failures) - recreating the stack"
-  docker compose down >/dev/null 2>&1
-  docker compose up -d >/dev/null 2>&1
+  compose down >/dev/null 2>&1
+  compose up -d >/dev/null 2>&1
 fi
 
 # Give it time to bind and answer before declaring the outcome.

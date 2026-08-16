@@ -85,5 +85,28 @@ EOF
 systemctl daemon-reload
 systemctl enable --now gateflame-node-agent
 
+# `enable --now` STARTS a stopped service and does nothing at all to a running
+# one. On every re-install - which is the normal case, since this script is how
+# code gets deployed - it copied the new source into /opt and left the old
+# process serving the old code.
+#
+# It failed silently and looked like a success: the installer printed "started",
+# the service was active, the journal showed healthy traffic, and the new routes
+# 404'd. Diagnosing it took a round trip through openapi.json to notice the
+# running app knew 20 routes while the file on disk defined 25.
+#
+# An explicit restart is the whole fix. It is idempotent and costs a second.
+systemctl restart gateflame-node-agent
+
+# Prove the process actually picked up this code rather than trusting that it
+# did. A deploy that reports success while running the previous build is worse
+# than one that fails loudly.
+sleep 3
+if systemctl is-active --quiet gateflame-node-agent; then
+  echo "node-agent restarted (PID $(systemctl show gateflame-node-agent -p MainPID --value))"
+else
+  echo "WARNING: node-agent is not active after restart - check: journalctl -u gateflame-node-agent -n 30" >&2
+fi
+
 echo "node-agent installed and started. Check: systemctl status gateflame-node-agent"
 echo "Logs: journalctl -u gateflame-node-agent -f"
