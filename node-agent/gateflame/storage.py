@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import os
 import secrets
 import sqlite3
@@ -49,6 +50,28 @@ CREATE TABLE IF NOT EXISTS devices (
     scopes TEXT NOT NULL,
     paired_at REAL NOT NULL,
     revoked INTEGER NOT NULL DEFAULT 0
+);
+
+-- Owner-chosen filtering settings.
+--
+-- One row, id=1. A settings TABLE rather than a column on node_identity
+-- because identity is generated once at first boot and must never be rewritten
+-- - the revoke_all/provisioned defect was exactly that class of mistake, and
+-- keeping mutable preferences away from immutable identity is how it stays
+-- fixed.
+--
+-- Defaults here mirror the module defaults deliberately: threat filtering on
+-- at its safest level, no content categories, not paused. A fresh box protects
+-- without blocking anything legal, and without anyone having chosen anything.
+CREATE TABLE IF NOT EXISTS filter_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    threat_level TEXT NOT NULL DEFAULT 'low',
+    categories TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    pause_duration TEXT,
+    pause_resume_at REAL,
+    pause_reason TEXT,
+    updated_at REAL NOT NULL DEFAULT 0
 );
 """
 
@@ -252,3 +275,132 @@ class Store:
         with self._cursor() as cur:
             cur.execute("UPDATE devices SET revoked = 1 WHERE revoked = 0")
             return cur.rowcount
+
+    # ------------------------------------------------------------------
+    # Filtering settings
+    #
+    # The owner's three choices: how much danger to block, what content to
+    # block, and whether filtering is on right now. Persisted so a reboot,
+    # a container restart or an agent upgrade cannot quietly reset someone's
+    # preferences - or, worse, silently re-enable something they turned off.
+    # ------------------------------------------------------------------
+
+    def get_filter_settings(self) -> dict:
+        """Current settings, creating the default row on first read.
+
+        Never raises on missing or corrupt data. This is on the path that
+        decides whether the household is protected, so it degrades to the safe
+        default rather than propagating an error: filtering ON, safest level,
+        no content categories.
+        """
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT threat_level, categories, enabled, pause_duration, "
+                "pause_resume_at, pause_reason FROM filter_settings WHERE id = 1"
+            )
+            row = cur.fetchone()
+            if row is None:
+                cur.execute(
+                    "INSERT OR IGNORE INTO filter_settings (id, updated_at) VALUES (1, ?)",
+                    (time.time(),),
+                )
+                return {
+                    "threat_level": "low",
+                    "categories": [],
+                    "enabled": True,
+                    "pause_duration": None,
+                    "pause_resume_at": None,
+                    "pause_reason": None,
+                }
+
+        try:
+            categories = json.loads(row[1]) if row[1] else []
+            if not isinstance(categories, list):
+                categories = []
+        except (ValueError, TypeError):
+            # A corrupt categories blob must not take filtering down with it.
+            # Falling back to [] means no CONTENT blocking, which is the
+            # permissive direction - the safe failure here, because wrongly
+            # blocking legal sites is the outcome the owner cannot diagnose.
+            categories = []
+
+        return {
+            "threat_level": row[0] or "low",
+            "categories": categories,
+            "enabled": bool(row[2]),
+            "pause_duration": row[3],
+            "pause_resume_at": row[4],
+            "pause_reason": row[5],
+        }
+
+    def set_threat_level(self, level: str) -> None:
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO filter_settings (id, threat_level, updated_at) VALUES (1, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET threat_level = ?, updated_at = ?",
+                (level, time.time(), level, time.time()),
+            )
+
+    def set_categories(self, categories: list[str]) -> None:
+        blob = json.dumps(list(categories))
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO filter_settings (id, categories, updated_at) VALUES (1, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET categories = ?, updated_at = ?",
+                (blob, time.time(), blob, time.time()),
+            )
+
+    def pause_filtering(
+        self, duration: str, resume_at: float | None, reason: str | None = None
+    ) -> None:
+        """Record that the OWNER switched filtering off.
+
+        `resume_at` of None means no timer - either 'indefinite' or
+        'until_reboot'. They are distinguished by duration, not by this field.
+        """
+        now = time.time()
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO filter_settings "
+                "(id, enabled, pause_duration, pause_resume_at, pause_reason, updated_at) "
+                "VALUES (1, 0, ?, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET enabled = 0, pause_duration = ?, "
+                "pause_resume_at = ?, pause_reason = ?, updated_at = ?",
+                (duration, resume_at, reason, now, duration, resume_at, reason, now),
+            )
+
+    def resume_filtering(self) -> None:
+        """Filtering back on, and every trace of the pause cleared.
+
+        Leaving a stale resume_at behind would let a later read believe a pause
+        is still scheduled and switch protection off again on its own.
+        """
+        now = time.time()
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO filter_settings (id, enabled, updated_at) VALUES (1, 1, ?) "
+                "ON CONFLICT(id) DO UPDATE SET enabled = 1, pause_duration = NULL, "
+                "pause_resume_at = NULL, pause_reason = NULL, updated_at = ?",
+                (now, now),
+            )
+
+    def clear_reboot_pause(self) -> bool:
+        """Called once at startup: an 'until_reboot' pause ends at reboot.
+
+        Returns True if a pause was cleared. Without this the phrase would be a
+        lie - the box would come back up still unprotected, and the owner would
+        have no indication that the thing they asked for had not happened.
+        """
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT pause_duration FROM filter_settings WHERE id = 1 AND enabled = 0"
+            )
+            row = cur.fetchone()
+            if row and row[0] == "until_reboot":
+                cur.execute(
+                    "UPDATE filter_settings SET enabled = 1, pause_duration = NULL, "
+                    "pause_resume_at = NULL, pause_reason = NULL, updated_at = ? WHERE id = 1",
+                    (time.time(),),
+                )
+                return True
+            return False
