@@ -103,7 +103,7 @@ command -v vcgencmd >/dev/null 2>&1 || warn "vcgencmd not available — throttle
 
 # ── 2. the agent itself ──────────────────────────────────────────────────────
 say "2/4  Installing node-agent"
-cd "$HERE/node-agent"
+cd "$HERE"
 bash install.sh
 
 # ── 3. capabilities ──────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ else
 fi
 
 set +e
-bash "$HERE/node-agent/validate-on-pi.sh"
+bash "$HERE/validate-on-pi.sh"
 VALIDATE_RC=$?
 set -e
 
@@ -286,7 +286,7 @@ REPORT="/tmp/gateflame-deploy-report.txt"
   curl -s --max-time 5 "http://127.0.0.1:${PORT}/api/v1/clients" 2>&1; echo
   echo
   echo "== validate-on-pi.sh (re-run, captured) =="
-  bash "$HERE/node-agent/validate-on-pi.sh" 2>&1 || true
+  bash "$HERE/validate-on-pi.sh" 2>&1 || true
   echo
   echo "== last 120 log lines =="
   journalctl -u gateflame-node-agent --no-pager --lines=120 2>&1 || true
