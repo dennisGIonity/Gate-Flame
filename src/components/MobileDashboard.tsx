@@ -481,7 +481,11 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                                 {/* Gravity Animation Canvas */}
                                 <div className="flex-1 w-full relative mb-4">
                                     <Suspense fallback={<InlineFallback label="Loading gravity field" />}>
-                                        <GravityParticleCanvas isPaused={telemetry.protectionStatus !== 'active'} />
+                                        <GravityParticleCanvas
+                                            isPaused={telemetry.protectionStatus !== 'active'}
+                                            threatFeed={threatLogs.map((t) => t.domain).filter(Boolean)}
+                                            blockPercentage={telemetry.blockPercentage}
+                                        />
                                     </Suspense>
                                 </div>
                                 
