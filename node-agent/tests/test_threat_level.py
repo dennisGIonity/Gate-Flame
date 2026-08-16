@@ -62,9 +62,24 @@ def test_none_is_handled():
     assert tl.lists_for(None) == tl.lists_for(tl.DEFAULT_LEVEL)
 
 
-def test_there_is_no_way_to_disable_filtering():
-    """No level, valid or invalid, may produce an empty blocklist set."""
-    for level in ("low", "medium", "high", "off", "", None, "disabled"):
+def test_no_threat_level_is_secretly_an_off_switch():
+    """Filtering CAN be turned off - but not here, and never by accident.
+
+    An earlier version of this test asserted filtering could not be disabled at
+    all. That was the product deciding for its owner, and it was wrong: it is
+    their network, and wanting DNS filtering off for ten minutes to find out
+    whether the box broke a website is entirely reasonable.
+
+    Disabling now lives in filtering_state, as an explicit, loudly-reported,
+    auto-expiring pause. What must remain true HERE is narrower: choosing a
+    threat LEVEL is choosing how much to block, and none of those choices - or
+    any malformed value that lands in this function - may quietly mean 'none'.
+
+    The distinction is between an owner deciding to stop filtering, which is
+    theirs to make, and a stored value silently degrading into no protection,
+    which is a bug.
+    """
+    for level in ("low", "medium", "high", "off", "", None, "disabled", "none"):
         assert len(tl.lists_for(level)) > 0, f"{level!r} produced no blocklists"
 
 
