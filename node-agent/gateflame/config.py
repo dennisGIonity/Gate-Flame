@@ -17,6 +17,12 @@ class Config:
     feed_enabled: bool = os.environ.get("GATEFLAME_FEED_ENABLED", "false").lower() == "true"
     feed_interval_seconds: int = int(os.environ.get("GATEFLAME_FEED_INTERVAL_SECONDS", "900"))
     pihole_api_url: str | None = os.environ.get("GATEFLAME_PIHOLE_URL")
+    # Pi-hole v6 replaced the open /admin/api.php endpoints with an
+    # authenticated REST API, so reading query counts now needs the admin
+    # password. Supplied via a systemd drop-in with mode 600, never committed.
+    # Absent means the DNS filter module reports an honest gap rather than
+    # silently showing zeros.
+    pihole_password: str | None = os.environ.get("GATEFLAME_PIHOLE_PASSWORD")
     # Directory holding the built kiosk bundle (dist-kiosk). When it contains an
     # index.html the bundle is served at /device-kiosk. When it does not, the
     # route is not mounted AT ALL rather than mounted-and-empty, so a 404 means
