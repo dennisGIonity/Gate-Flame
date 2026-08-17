@@ -128,17 +128,37 @@ export interface ServiceModule {
   gap?: string | null;
 }
 
-/** threats.py — the real shape. Not the one the old kiosk rendered. */
+/**
+ * threats.py, ported to the Pi-hole v6 authenticated query API 2026-08-17.
+ *
+ * Field names read off the live node, not from documentation. `timestamp` is
+ * unix seconds as a float; `status` is FTL's own verdict passed through
+ * verbatim (GRAVITY, DENYLIST_CNAME, REGEX, EXTERNAL_BLOCKED_*) so the screen
+ * can say WHY something was blocked rather than just that it was.
+ *
+ * The route returns blocked queries only — a cached lookup of google.com is not
+ * a threat, and a wall display has no business holding the household's whole
+ * browsing history.
+ */
 export interface ThreatEntry {
-  timestamp: string | number;
-  domain: string;
-  clientIp: string;
-  action: 'Blocked' | 'Allowed' | string;
+  timestamp: number | string | null;
+  domain: string | null;
+  clientIp: string | null;
+  /** Usually null. Never inferred — a guessed device name on a security log is worse than none. */
+  clientName: string | null;
+  queryType: string | null;
+  status: string;
+  action: 'Blocked' | string;
+  blocked: boolean;
 }
 
 export interface ThreatsResponse {
   entries: ThreatEntry[];
   source: 'pihole' | 'none' | string;
+  /** How many recent queries were examined to find these. */
+  scanned?: number;
+  /** How many were blocked in that window — may exceed entries.length. */
+  blockedInWindow?: number;
   gap?: string | null;
 }
 

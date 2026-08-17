@@ -398,18 +398,24 @@ export function ThreatsPanel({ active }: PanelContext) {
 
   const topDomains = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const e of entries) counts.set(e.domain, (counts.get(e.domain) ?? 0) + 1);
+    for (const e of entries) {
+      if (!e.domain) continue;
+      counts.set(e.domain, (counts.get(e.domain) ?? 0) + 1);
+    }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [entries]);
 
-  const blockedCount = entries.filter((e) => e.action === 'Blocked').length;
   const peak = topDomains[0]?.[1] ?? 1;
 
   return (
     <div className="grid grid-cols-12 gap-6">
       <div className="col-span-12 grid grid-cols-3 gap-6">
-        <StatTile label="Entries in window" value={num(entries.length)} />
-        <StatTile label="Blocked" value={num(blockedCount)} tone={blockedCount ? 'good' : 'default'} />
+        <StatTile
+          label="Blocked in window"
+          value={num(threats.data?.blockedInWindow ?? null)}
+          tone={(threats.data?.blockedInWindow ?? 0) > 0 ? 'good' : 'default'}
+        />
+        <StatTile label="Queries examined" value={num(threats.data?.scanned ?? null)} />
         <StatTile
           label="Source"
           value={threats.data?.source === 'none' ? DASH : (threats.data?.source ?? DASH)}
@@ -449,15 +455,15 @@ export function ThreatsPanel({ active }: PanelContext) {
 
       <Card
         className="col-span-7"
-        title="Recent queries"
-        subtitle="Newest first. Domain, the device that asked, and what the node did about it."
+        title="Blocked queries"
+        subtitle="Newest first. What was refused, which device asked, and which list refused it."
       >
         {entries.length === 0 ? (
           <EmptyState
-            title="No threat entries recorded"
+            title="Nothing has been blocked in this window"
             detail={
               threats.data?.gap ??
-              'The node is reachable and reporting an empty log. That is the normal state of a fresh box.'
+              `The node examined the last ${threats.data?.scanned ?? 0} queries and refused none of them. That is a real answer, not a missing one.`
             }
           />
         ) : (
@@ -468,31 +474,29 @@ export function ThreatsPanel({ active }: PanelContext) {
                   <th className="py-2 font-medium">Time</th>
                   <th className="py-2 font-medium">Domain</th>
                   <th className="py-2 font-medium">Client</th>
-                  <th className="py-2 text-right font-medium">Action</th>
+                  <th className="py-2 text-right font-medium">Refused by</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1E293B]">
                 {/*
-                  Fields are timestamp / domain / clientIp / action — read from
-                  threats.py. The previous console rendered `severity` and
-                  `sourceIp`, which the node has never emitted: every row would
-                  have shown an amber badge reading "undefined" the first time a
-                  customer configured Pi-hole.
+                  Fields read from threats.py, which now speaks Pi-hole v6.
+                  The previous console rendered `severity` and `sourceIp`,
+                  which the node has never emitted at any API version: every row
+                  would have shown an amber badge reading "undefined" the first
+                  time a customer configured Pi-hole. `status` is FTL's own
+                  verdict, shown rather than flattened to "Blocked".
                 */}
                 {entries.map((e, i) => (
-                  <tr key={`${e.timestamp}-${e.domain}-${i}`} className="text-sm">
+                  <tr key={`${e.timestamp}-${e.domain ?? 'null'}-${i}`} className="text-sm">
                     <td className="py-2.5 font-mono text-slate-500">{clockTime(e.timestamp)}</td>
-                    <td className="py-2.5 font-mono text-slate-200">{e.domain}</td>
-                    <td className="py-2.5 font-mono text-slate-400">{e.clientIp}</td>
+                    <td className="py-2.5 font-mono text-slate-200">{e.domain ?? DASH}</td>
+                    <td className="py-2.5 font-mono text-slate-400">
+                      {e.clientIp ?? DASH}
+                      {e.clientName && <span className="ml-2 text-slate-500">{e.clientName}</span>}
+                    </td>
                     <td className="py-2.5 text-right">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${
-                          e.action === 'Blocked'
-                            ? 'bg-[#FF8700]/15 text-[#FF8700]'
-                            : 'bg-[#1E293B] text-slate-400'
-                        }`}
-                      >
-                        {e.action}
+                      <span className="rounded-full bg-[#FF8700]/15 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#FF8700]">
+                        {e.status.replace(/_/g, ' ').toLowerCase()}
                       </span>
                     </td>
                   </tr>

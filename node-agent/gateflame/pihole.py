@@ -131,6 +131,17 @@ def _get(path: str) -> dict | None:
     return None
 
 
+def api_get(path: str) -> dict | None:
+    """The v6 authenticated GET, shared with other modules.
+
+    Public on purpose. `threats.py` needs exactly this — a session-cached,
+    401-retrying, authenticated read — and the alternative was a second
+    authentication path with its own cache and its own expiry bug. One session
+    table on the Pi-hole side means one session holder on ours.
+    """
+    return _get(path)
+
+
 def reachable() -> bool:
     """True only when Pi-hole answers an AUTHENTICATED request.
 
