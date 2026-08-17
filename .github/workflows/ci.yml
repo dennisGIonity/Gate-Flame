@@ -192,6 +192,25 @@ jobs:
 
       - name: Pytest
         working-directory: node-agent
+        # GATEFLAME_DB_PATH must be set, and the reason is a real defect rather
+        # than a CI quirk: `main.py:41` does `store = Store(config.db_path)` at
+        # MODULE SCOPE, so merely importing gateflame.main opens SQLite at the
+        # default /var/lib/gateflame/state.db. Root can create that directory,
+        # an unprivileged CI user cannot, and collection dies with
+        # "attempt to write a readonly database" before a single test runs.
+        #
+        # That is why the suite passed for every developer and failed here: it
+        # was only ever run as root or on a box where /var/lib/gateflame already
+        # existed. tests/test_wan.py already pins this exact hazard for
+        # services.py ("must not create /var/lib/gateflame ... as an import side
+        # effect"); main.py never got the same treatment.
+        #
+        # The env var makes CI honest today. The real fix is to build the store
+        # in a lifespan handler instead of at import - which would also retire
+        # the deprecated @app.on_event handlers on lines 44 and 49 - and is left
+        # as its own change because it touches application startup.
+        env:
+          GATEFLAME_DB_PATH: ${{ runner.temp }}/gateflame-test-state.db
         run: python -m pytest tests/ -q
 
       - name: Boot the agent and answer /system/status
@@ -199,6 +218,8 @@ jobs:
         # or a route that no longer resolves. The agent starting is the minimum
         # claim the product makes.
         working-directory: node-agent
+        env:
+          GATEFLAME_DB_PATH: ${{ runner.temp }}/gateflame-boot-state.db
         run: |
           python -m uvicorn gateflame.main:app --host 127.0.0.1 --port 8080 &
           for i in $(seq 1 20); do
