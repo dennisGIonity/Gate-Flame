@@ -10,11 +10,39 @@
 
 import React, { useEffect, useRef } from 'react';
 
+import { useConnection } from '../hooks/useConnection';
+
 interface GravityParticleCanvasProps {
   isPaused?: boolean;
+  /**
+   * Real blocked-domain names observed by the node. When non-empty these are
+   * the ONLY labels drawn.
+   */
+  threatFeed?: string[];
+  /** Real allowed-domain names observed by the node. */
+  cleanFeed?: string[];
+  /**
+   * Real block rate, 0-100, used for the threat/clean particle mix. Omitted
+   * means unknown, and the mix carries no meaning.
+   */
+  blockPercentage?: number | null;
+  /**
+   * Overrides the live connection state. Normally omitted - the component
+   * reads the real one from useConnection(), so a caller cannot accidentally
+   * tell it that a live node is a demo.
+   */
+  dataSource?: 'live' | 'demo' | 'connecting' | 'error';
 }
 
-export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React.memo(({ isPaused = false }) => {
+export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React.memo(({
+  isPaused = false,
+  threatFeed,
+  cleanFeed,
+  blockPercentage = null,
+  dataSource: dataSourceOverride,
+}) => {
+  const connection = useConnection();
+  const dataSource = dataSourceOverride ?? connection.dataSource;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const parentRef = useRef<HTMLElement | null>(null);
   const [isVisible, setIsVisible] = React.useState(true);
@@ -78,15 +106,51 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
     const threatLabels = ['Telemetry', 'Ad-Tracker', 'Ransomware', 'Phishing', 'Malware', 'Spyware', 'SmartTV-Log'];
     const cleanLabels = ['Root-DNS', 'Unbound', 'HTTPS', 'TLS-Safe'];
 
+    // Labels are only ever drawn from REAL data.
+    //
+    // This canvas used to invent them: a 70% "threat" rate with names picked
+    // at random from the lists above - Ransomware, Phishing, Malware - drawn
+    // streaming into the core. On the first hardware deployment the node's
+    // threat log was EMPTY and Pi-hole was not installed, and the kiosk still
+    // showed a steady flow of blocked malware. That is not a placeholder, it
+    // is a fabricated security event on a security product's own display.
+    //
+    // The motion stays: it is decoration and reads as decoration. The words do
+    // not, because a domain name on a threat dashboard is a claim. With no
+    // real feed the particles fly unlabelled.
+    const liveThreats = threatFeed ?? [];
+    const liveClean = cleanFeed ?? [];
+    const hasRealFeed = liveThreats.length > 0 || liveClean.length > 0;
+    const allowFabricated = dataSource === 'demo';
+
+    const pickLabel = (isThreat: boolean): string => {
+      if (hasRealFeed) {
+        const pool = isThreat ? liveThreats : liveClean;
+        if (pool.length === 0) return '';
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+      if (allowFabricated) {
+        const pool = isThreat ? threatLabels : cleanLabels;
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+      return ''; // live node, nothing observed yet - say nothing
+    };
+
     const particles: Particle[] = [];
     const maxParticles = 30;
 
     const createParticle = (): Particle => {
-      const isThreat = Math.random() < 0.7; // 70% blocked threat noise
+      // Ratio comes from the real block rate when we have one. Falling back to
+      // a fixed 70% "threat" mix made an idle network look besieged.
+      const threatRatio =
+        typeof blockPercentage === 'number' && blockPercentage >= 0 && blockPercentage <= 100
+          ? blockPercentage / 100
+          : hasRealFeed || !allowFabricated
+            ? 0.5 // no rate known: an even, meaningless mix, and no labels anyway
+            : 0.7;
+      const isThreat = Math.random() < threatRatio;
       const type = isThreat ? 'threat' : 'clean';
-      const label = isThreat 
-        ? threatLabels[Math.floor(Math.random() * threatLabels.length)] 
-        : cleanLabels[Math.floor(Math.random() * cleanLabels.length)];
+      const label = pickLabel(isThreat);
 
       const color = isThreat 
         ? (Math.random() > 0.5 ? '#E11D48' : '#F59E0B') // Rose or Amber
@@ -247,7 +311,7 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
       resizeObserver.disconnect();
       
     };
-  }, [isPaused, isVisible]);
+  }, [isPaused, isVisible, threatFeed, cleanFeed, blockPercentage, dataSource]);
 
   return (
     <div className="relative w-full h-full bg-slate-950 rounded-[24px] border border-slate-800 overflow-hidden shadow-sm font-sans">

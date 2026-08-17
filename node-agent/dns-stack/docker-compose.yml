@@ -1,0 +1,113 @@
+# ========================================================================================
+# GATE^FLAME — DNS FILTERING STACK
+# Author: Johan Wilhelm van Antwerp | Ionity (Pty) Ltd | AEDI
+# Governance: Policy 986 AED | (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - TM2
+# ========================================================================================
+#
+# WHY DOCKER RATHER THAN THE PI-HOLE INSTALLER
+#
+# The curl|bash installer keeps a hardcoded allow-list of supported OS releases and
+# rejects Debian 13 (Trixie) with "Unsupported OS detected". That is a policy check,
+# not a real incompatibility - Pi-hole runs fine on Trixie. The container image ships
+# its own userland, so the check never applies.
+#
+# It also makes the base model easier: the same compose file runs on Armbian on an
+# Orange Pi Zero 2W, where the installer would be equally unhappy. One artefact,
+# every board.
+#
+# PORTS
+#   53   DNS. Verified free before deploy.
+#   8081 Pi-hole web admin. NOT 80 - leave 80 alone on an appliance.
+#
+# THIS FILE DOES NOT CHANGE YOUR NETWORK.
+# Bringing this up makes the box CAPABLE of filtering. Nothing on the LAN uses it
+# until a device is pointed at 192.168.0.10 for DNS. That is a separate, deliberate
+# step.
+# ========================================================================================
+
+services:
+  unbound:
+    # Recursive resolver. Queries go to the DNS root servers directly rather than to
+    # Google or Cloudflare, so no third party sees the household's browsing. This is
+    # the privacy half of the product, and it is why upstream is not just 1.1.1.1.
+    #
+    # ARCHITECTURE - this bit them once already.
+    # mvance/unbound:latest is amd64 ONLY. On an ARM64 Pi it pulls, starts, and then
+    # dies in a restart loop with "exec /unbound.sh: exec format error", which is
+    # docker's way of saying wrong-architecture binary. Pi-hole then had no working
+    # upstream, so blocked lookups still worked (answered locally) while clean
+    # lookups timed out - a confusing half-failure.
+    #
+    # klutchell/unbound is genuinely multi-arch: amd64, arm64 and arm. The base model
+    # is an Orange Pi Zero 2W (ARM64 Allwinner H618), so multi-arch is not optional
+    # here, it is the whole point.
+    image: klutchell/unbound:main
+    container_name: gateflame-unbound
+    hostname: unbound
+    restart: unless-stopped
+    networks:
+      gateflame:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      # This image is distroless - no sh, no unbound-control, nothing to exec. Any
+      # shell-based healthcheck reports unhealthy forever and trains you to ignore
+      # healthchecks, which is worse than having none.
+      #
+      # Pi-hole's own healthcheck already proves the whole chain end to end: if
+      # unbound were down, Pi-hole could not resolve a clean domain. So unbound is
+      # left without one rather than carrying a check that always lies.
+      disable: true
+
+  pihole:
+    image: pihole/pihole:latest
+    container_name: gateflame-pihole
+    hostname: gateflame
+    restart: unless-stopped
+    depends_on:
+      - unbound
+    networks:
+      gateflame:
+        ipv4_address: 172.28.0.11
+    ports:
+      # Bound to specific addresses. Binding 0.0.0.0:53 on a box with two default
+      # routes (eth0 and wlan0 are both up here) invites answering on interfaces
+      # nobody expected.
+      - "192.168.0.10:53:53/tcp"
+      - "192.168.0.10:53:53/udp"
+      - "127.0.0.1:53:53/tcp"
+      - "127.0.0.1:53:53/udp"
+      - "8081:80/tcp"
+    environment:
+      TZ: 'Africa/Johannesburg'
+      FTLCONF_webserver_api_password: '${PIHOLE_PASSWORD:-changeme}'
+      # Point at unbound over the internal docker network, not at a public resolver.
+      #
+      # PORT 5335 IS A PI-HOLE CONVENTION, NOT A UNBOUND ONE.
+      # The widely-copied Pi-hole + Unbound guides run unbound on the SAME host as
+      # Pi-hole, so unbound is moved to 5335 to stay off the occupied port 53.
+      # In this compose file unbound has its own container and its own IP, so nothing
+      # is competing for 53 and the image listens there by default.
+      # Verified on the running stack: 172.28.0.10:53 answers, :5335 times out.
+      FTLCONF_dns_upstreams: '172.28.0.10#53'
+      FTLCONF_dns_listeningMode: 'all'
+      # Do NOT let Pi-hole become a DHCP server. Two DHCP servers on one LAN is a
+      # worse failure than no filtering, and it is the mistake this product must
+      # never make in a customer's house.
+      FTLCONF_dhcp_active: 'false'
+    volumes:
+      - ./data/pihole:/etc/pihole
+    cap_add:
+      - NET_ADMIN
+    healthcheck:
+      test: ["CMD-SHELL", "dig +short +norecurse +retry=0 @127.0.0.1 pi.hole || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  gateflame:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

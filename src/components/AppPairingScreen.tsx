@@ -7,8 +7,8 @@
  * gateflameApi.connect() so useConnection picks up the new `live` state.
  */
 
-import { useState } from 'react';
-import { discoverNode } from '../services/nodeDiscovery';
+import { useCallback, useEffect, useState } from 'react';
+import { discoverNode, probeNodeAt } from '../services/nodeDiscovery';
 import { gateflameApi } from '../services/gateflameApi';
 import { ApiRequestError } from '../services/apiClient';
 
@@ -23,13 +23,14 @@ export function AppPairingScreen({ onPaired }: Props) {
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const [nodeName, setNodeName] = useState<string | null>(null);
   const [code, setCode] = useState('');
+  const [manualAddress, setManualAddress] = useState('');
   const [deviceName, setDeviceName] = useState(() =>
     typeof navigator !== 'undefined' ? navigator.userAgent.split('(')[1]?.split(';')[0] ?? 'My phone' : 'My phone',
   );
   const [error, setError] = useState<string | null>(null);
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
 
-  const runDiscovery = async () => {
+  const runDiscovery = useCallback(async () => {
     setStep('discover');
     setError(null);
     try {
@@ -40,9 +41,44 @@ export function AppPairingScreen({ onPaired }: Props) {
     } catch (err) {
       setError(
         err instanceof ApiRequestError
-          ? 'No Gate^Flame node found on this network. Make sure your phone is on the same Wi-Fi as the appliance.'
+          ? 'No Gate^Flame node found on this network. Make sure your phone is on the same Wi-Fi as the appliance — or enter its address below.'
           : 'Discovery failed.',
       );
+      setStep('error');
+    }
+  }, []);
+
+  // Discovery has to start by itself. Without this the screen said "Looking for
+  // a Gate^Flame node…" while doing nothing at all, and the only thing that ever
+  // probed the network was the customer pressing "Search again".
+  useEffect(() => {
+    void runDiscovery();
+  }, [runDiscovery]);
+
+  /**
+   * Manual fallback. Discovery covers the addresses of the routers we sell; a
+   * customer on any other subnet has no other route to their own appliance, and
+   * an appliance you cannot reach is an appliance you cannot support.
+   */
+  const tryManualAddress = async () => {
+    const raw = manualAddress.trim();
+    if (!raw) return;
+    // Accept "192.168.4.20", "192.168.4.20:8080" or a full URL. Default the
+    // scheme to http and the port to 8080, which is what the agent binds.
+    let candidate = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+    candidate = candidate.replace(/\/+$/, '');
+    if (!/:\d+$/.test(candidate.replace(/^https?:\/\//i, ''))) {
+      candidate = `${candidate}:8080`;
+    }
+    setStep('discover');
+    setError(null);
+    try {
+      const result = await probeNodeAt(candidate);
+      setBaseUrl(result.baseUrl);
+      setNodeName(result.status.nodeName ?? result.status.nodeId);
+      setStep('enter-code');
+    } catch {
+      setError(`Nothing that looks like a Gate^Flame node answered at ${candidate}.`);
       setStep('error');
     }
   };
@@ -138,6 +174,31 @@ export function AppPairingScreen({ onPaired }: Props) {
           >
             Try again
           </button>
+
+          <div className="mt-2 flex flex-col gap-2 border-t border-slate-700 pt-3">
+            <label htmlFor="gf-manual-address" className="text-sm opacity-70">
+              Know the node&rsquo;s address? Enter it here.
+            </label>
+            <input
+              id="gf-manual-address"
+              value={manualAddress}
+              onChange={(e) => setManualAddress(e.target.value)}
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="192.168.4.20"
+              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 font-mono text-white"
+            />
+            <p className="text-xs opacity-50">Port 8080 is assumed unless you type a different one.</p>
+            <button
+              onClick={tryManualAddress}
+              disabled={manualAddress.trim().length === 0}
+              className="rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
+            >
+              Connect
+            </button>
+          </div>
         </div>
       )}
     </div>

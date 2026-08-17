@@ -11,9 +11,14 @@ or via the systemd unit in install.sh on the Pi.
 
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+import os
 
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from . import blocklists, content_categories, filtering_state, threat_level
 from . import clients as clients_mod
 from . import services, telemetry, threats
 from .config import config
@@ -44,6 +49,12 @@ control_scope = ScopeChecker(store, ("control", "kiosk"))
 @app.on_event("startup")
 def _startup() -> None:
     feed_loop.start()
+
+    # An "until_reboot" pause has to actually END at reboot, or the phrase is a
+    # lie: the box would come back up still unprotected with no indication that
+    # what the owner asked for had not happened.
+    if store.clear_reboot_pause():
+        blocklists.apply_async(store)
 
 
 @app.on_event("shutdown")
@@ -281,3 +292,202 @@ def _iso(epoch: float) -> str:
     import time
 
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+# ---------------------------------------------------------------------------
+# Device kiosk
+#
+# The kiosk is NOT an Android app - it is Chromium in --kiosk mode ON the Pi,
+# pointed at http://localhost:8080/device-kiosk. `npm run build:html-kiosk`
+# produced the bundle every release and NOTHING SERVED IT: node-agent had no
+# static route, so /device-kiosk always 404'd and the built HTML was dead
+# weight on disk. The kiosk has never rendered, on any device.
+# ---------------------------------------------------------------------------
+
+
+def mount_device_kiosk(target_app: FastAPI, kiosk_dir: str) -> bool:
+    """Mount the kiosk bundle on `target_app` and record the result in state.
+
+    Factored out of module scope so it is testable WITHOUT reloading this
+    module. Reloading re-runs `store = Store(...)` and rebuilds every
+    ScopeChecker, which leaks into any test module imported afterwards - that
+    silently broke three pairing tests while this was being written.
+
+    Returns True when a bundle was found and mounted.
+    """
+    mounted = os.path.isfile(os.path.join(kiosk_dir, "index.html"))
+
+    if mounted:
+        target_app.mount(
+            "/device-kiosk",
+            StaticFiles(directory=kiosk_dir, html=True),
+            name="device-kiosk",
+        )
+
+        # The bundle is built with base "/", so its <script src> is
+        # "/assets/kiosk.<hash>.js" - an ABSOLUTE path from the server root,
+        # not relative to /device-kiosk/. Mounting only /device-kiosk serves
+        # index.html with a 200 and then 404s every script it asks for: a blank
+        # screen that looks exactly like a frontend bug and is not one.
+        #
+        # Fixed here rather than by setting `base` in the Vite config, because
+        # that config is SHARED with the mobile build, where Capacitor serves
+        # from the webview root and a relative base would break the APK.
+        assets = os.path.join(kiosk_dir, "assets")
+        if os.path.isdir(assets):
+            target_app.mount("/assets", StaticFiles(directory=assets), name="kiosk-assets")
+
+    target_app.state.kiosk = {
+        "mounted": mounted,
+        "path": "/device-kiosk" if mounted else None,
+        "directory": kiosk_dir,
+        "gap": None if mounted else f"no index.html in {kiosk_dir}",
+    }
+    return mounted
+
+
+mount_device_kiosk(app, config.kiosk_dir)
+
+
+@app.get("/api/v1/system/kiosk")
+def kiosk_status(request: Request):
+    """Whether a kiosk bundle is installed, and where it is served from.
+
+    Exists so install-kiosk.sh and the Pi validator can ASSERT the kiosk is
+    reachable instead of assuming it - which is how it stayed broken while the
+    bundle was rebuilt every release and served by nothing.
+    """
+    require_lan(request)
+    return request.app.state.kiosk
+
+
+# ---------------------------------------------------------------------------
+# Filtering settings
+#
+# The owner's three choices, and the only writable surface the app exposes:
+#
+#   GET  /api/v1/filtering                what is on, what is off, and why
+#   PUT  /api/v1/filtering/threat-level   how much DANGER to block
+#   PUT  /api/v1/filtering/categories     what CONTENT to block
+#   POST /api/v1/filtering/pause          switch protection off, temporarily
+#   POST /api/v1/filtering/resume         switch it back on
+#
+# Reads need `read`. Writes need `control` - a paired phone can change these,
+# because it is the owner's box and the whole point of the app is that they
+# never need a terminal.
+#
+# Applying a change means rewriting Pi-hole's blocklists and rebuilding gravity,
+# which takes tens of seconds on a Pi. The routes return immediately and the
+# rebuild runs in the background: an app that hung for 40 seconds on a toggle
+# would be assumed broken and tapped again.
+# ---------------------------------------------------------------------------
+
+
+class ThreatLevelBody(BaseModel):
+    level: str
+
+
+class CategoriesBody(BaseModel):
+    categories: list[str]
+
+
+class PauseBody(BaseModel):
+    duration: str = filtering_state.DEFAULT_DURATION
+    reason: str | None = None
+
+
+def _filtering_state_payload() -> dict:
+    """Everything a surface needs to render the filtering controls honestly."""
+    settings = store.get_filter_settings()
+
+    # An expired timed pause resumes itself the moment anyone looks. Doing it
+    # here rather than on a timer means there is no window in which the API
+    # reports "paused" for a pause that has already run out.
+    if not settings["enabled"] and filtering_state.is_expired(settings["pause_resume_at"]):
+        store.resume_filtering()
+        settings = store.get_filter_settings()
+
+    state = filtering_state.describe(
+        enabled=settings["enabled"],
+        duration=settings["pause_duration"],
+        resume_time=settings["pause_resume_at"],
+        reason=settings["pause_reason"],
+    )
+
+    # Bypass outranks everything. If the watchdog has fallen back to an
+    # unfiltered resolver, the household is unprotected because the box FAILED,
+    # not because anyone chose it - and saying "active" here would be the
+    # single most misleading thing this API could do.
+    if pihole_bypass_active():
+        state["protectionStatus"] = "bypass"
+        state["enabled"] = False
+
+    state["threatLevel"] = threat_level.describe(settings["threat_level"])
+    state["availableLevels"] = threat_level.all_levels()
+    state["categories"] = content_categories.describe_all(settings["categories"])
+    state["pauseDurations"] = filtering_state.all_durations()
+    return state
+
+
+def pihole_bypass_active() -> bool:
+    """True when the watchdog has fallen back to the unfiltered resolver."""
+    return os.path.isfile("/var/lib/gateflame/bypass")
+
+
+@app.get("/api/v1/filtering")
+def get_filtering(request: Request, _=Depends(read_scope)):
+    return _filtering_state_payload()
+
+
+@app.put("/api/v1/filtering/threat-level")
+def put_threat_level(
+    body: ThreatLevelBody, request: Request, _=Depends(control_scope)
+):
+    if body.level not in ("low", "medium", "high"):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_level", "allowed": ["low", "medium", "high"]},
+        )
+    store.set_threat_level(body.level)
+    blocklists.apply_async(store)
+    return _filtering_state_payload()
+
+
+@app.put("/api/v1/filtering/categories")
+def put_categories(
+    body: CategoriesBody, request: Request, _=Depends(control_scope)
+):
+    unknown = [c for c in body.categories if not content_categories.known(c)]
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "unknown_categories", "unknown": unknown,
+                    "allowed": list(content_categories.CATEGORIES)},
+        )
+    store.set_categories(content_categories.sanitise(body.categories))
+    blocklists.apply_async(store)
+    return _filtering_state_payload()
+
+
+@app.post("/api/v1/filtering/pause")
+def pause_filtering(
+    body: PauseBody, request: Request, _=Depends(control_scope)
+):
+    """Switch protection off. The owner's call - see filtering_state."""
+    if not filtering_state.valid_duration(body.duration):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_duration",
+                    "allowed": filtering_state.DURATION_ORDER},
+        )
+    resume_at = filtering_state.resume_at(body.duration)
+    store.pause_filtering(body.duration, resume_at, body.reason)
+    blocklists.apply_async(store)
+    return _filtering_state_payload()
+
+
+@app.post("/api/v1/filtering/resume")
+def resume_filtering(request: Request, _=Depends(control_scope)):
+    store.resume_filtering()
+    blocklists.apply_async(store)
+    return _filtering_state_payload()

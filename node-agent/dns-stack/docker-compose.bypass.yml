@@ -1,0 +1,60 @@
+# ========================================================================================
+# GATE^FLAME - BYPASS RESOLVER
+# Author: Johan Wilhelm van Antwerp | Ionity (Pty) Ltd | AEDI
+# Governance: Policy 986 AED | (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - TM2
+# ========================================================================================
+#
+# LAST-RESORT UNFILTERED RESOLVER
+#
+# Started ONLY by the watchdog, after five consecutive minutes in which Pi-hole failed
+# to answer and restarting and recreating it both failed.
+#
+# WHY THIS EXISTS
+#
+# Once the router hands this box out as the network's only DNS server, the box failing
+# means the house has no internet - not degraded, none. Nothing resolves. For a retail
+# product that is a support call, probably a return, and certainly a family that cannot
+# work.
+#
+# The obvious fix - a public resolver as DHCP secondary - does not work: clients query
+# primary and secondary in arbitrary order, so a share of queries would bypass filtering
+# in NORMAL operation. Protection would be intermittent, which is worse than honest.
+#
+# So the box stays the sole resolver, and when it genuinely cannot filter it degrades to
+# forwarding instead of going dark. Unfiltered internet is a degraded product. No
+# internet is a broken one.
+#
+# WHAT IT DELIBERATELY IS NOT
+#
+# Not a fallback that runs alongside Pi-hole. It binds the same port, so only one can be
+# up at a time - by construction, queries cannot silently leak past the filter while
+# things are healthy.
+#
+# The image is klutchell/unbound, the same one the main stack uses: already proven
+# multi-arch and already passed the architecture gate. Introducing a second image here
+# would mean a second thing that can turn out to be amd64-only at the worst moment.
+#
+# HONESTY
+#
+# Bypass is a loud state, not a quiet one. The watchdog writes /var/lib/gateflame/bypass
+# and the agent reports protection as OFF, so the app and the display say plainly that
+# the household is unprotected. A security product must never appear to be working when
+# it is not.
+# ========================================================================================
+
+services:
+  bypass:
+    image: klutchell/unbound:main
+    container_name: gateflame-bypass
+    hostname: bypass
+    # NOT unless-stopped. Bypass must never survive a reboot on its own - a box that
+    # comes back up already in bypass would sit there unprotected indefinitely. The
+    # watchdog decides, every time.
+    restart: "no"
+    ports:
+      - "192.168.0.10:53:53/tcp"
+      - "192.168.0.10:53:53/udp"
+      - "127.0.0.1:53:53/tcp"
+      - "127.0.0.1:53:53/udp"
+    volumes:
+      - ./forward.conf:/etc/unbound/unbound.conf.d/forward.conf:ro

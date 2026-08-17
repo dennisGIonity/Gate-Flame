@@ -22,7 +22,7 @@ export const IonicrobesGame: React.FC<{ embedded?: boolean }> = ({ embedded = fa
   const [score, setScore] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const particlesRef = useRef<Particle[]>([]);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
   const [gameOver, setGameOver] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
 

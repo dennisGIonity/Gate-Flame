@@ -1,48 +1,61 @@
-import { StrictMode, Suspense, lazy, useState } from 'react';
+/**
+ * @license
+ * SPDX-License-Identifier: LicenseRef-AED-900
+ * Ionity Global (Pty) Ltd — Gate^Flame on-device display entry point
+ *
+ * (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - All Rights Reserved - TM2
+ * Governance: Policy 986 AED | Licence: AED 900 - see LICENSE at the repo root.
+ */
+
+/**
+ * The on-device display.
+ *
+ * This is the screen on the appliance itself: Chromium in --kiosk mode on the
+ * Pi, pointed at http://localhost:8080/device-kiosk/ and served by node-agent's
+ * static mount. It is NOT the thing doing the work - node-agent filters, meters
+ * and enforces whether or not a screen is attached. Unplug the display and the
+ * network stays protected. Keep it that way: nothing here may become
+ * load-bearing, or a cracked screen becomes an unprotected house.
+ *
+ * WHAT THIS REPLACED
+ *
+ * Until 2026-08-16 this entry rendered DeviceOnboardingSimulator - 722 lines of
+ * AI-Studio-era demo furniture that showed a "Select Network Uplink Source"
+ * screen listing invented Wi-Fi networks (Home_Fiber_Optics_WiFi,
+ * Grand_Hotel_Guest_WiFi) and a hardcoded `IP: 192.168.1.105` that was not even
+ * on the deployed node's subnet. The agent has no Wi-Fi scanning endpoint and
+ * never had one, so that screen could not have been real.
+ *
+ * GateFlameKiosk (2026-08-16) replaced it with one honest page: four regions,
+ * no invented values, and no controls at all.
+ *
+ * KioskApp (2026-08-17) keeps that rule and adds back the reach the simulator
+ * only pretended to have - a lock screen, then one tab per capability the agent
+ * really has, each with its own telemetry, charts and controls. Every panel is
+ * wired to a route in node-agent/gateflame/main.py; nothing is wired to
+ * Math.random(). Unknown still renders as `-` plus the API's own `gap` string.
+ *
+ * GateFlameKiosk.tsx is retained until this has run on real hardware. Delete it
+ * once GATE 1 in the end-game plan is passed.
+ */
+
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+
 import './index.css';
-import { DeviceOnboardingSimulator } from './components/DeviceOnboardingSimulator';
-import { PanelFallback } from './components/LazyFallback';
-import { useGateFlameEngine } from './hooks/useGateFlameEngine';
-import { useAppStore } from './store/useAppStore';
+import KioskApp from './components/kiosk/KioskApp';
 
-// DeviceOnboardingSimulator *is* the kiosk, so it stays eager. Pairing sits
-// behind a button most kiosk sessions never press.
-const KioskPairingScreen = lazy(() =>
-  import('./components/KioskPairingScreen').then((m) => ({ default: m.KioskPairingScreen })),
-);
-
-function KioskStandalone() {
-  useGateFlameEngine();
-  const { telemetry } = useAppStore();
-  const [showPairing, setShowPairing] = useState(false);
-
-  if (typeof document !== 'undefined') {
-    document.body.setAttribute('data-filter-level', telemetry.filterLevel);
-    document.documentElement.classList.add('dark');
-  }
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setShowPairing((v) => !v)}
-        className="fixed right-4 top-4 z-50 rounded-lg bg-slate-800/80 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-slate-700"
-      >
-        {showPairing ? 'Back to dashboard' : 'Pair a phone'}
-      </button>
-      {showPairing ? (
-        <Suspense fallback={<PanelFallback label="Loading pairing" className="min-h-screen" />}>
-          <KioskPairingScreen />
-        </Suspense>
-      ) : (
-        <DeviceOnboardingSimulator />
-      )}
-    </div>
-  );
+const rootEl = document.getElementById('root');
+if (!rootEl) {
+  throw new Error('kiosk: #root not found in kiosk.html');
 }
 
-createRoot(document.getElementById('root')!).render(
+// The display is dark-only. It lives in a hallway or a cupboard, and a light
+// theme on a wall-mounted panel at night is a lamp.
+document.documentElement.classList.add('dark');
+
+createRoot(rootEl).render(
   <StrictMode>
-    <KioskStandalone />
-  </StrictMode>
+    <KioskApp />
+  </StrictMode>,
 );

@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiRequestError,
   apiRequest,
+  assertPrivateHost,
   clearToken,
   hasToken,
   storeToken,
@@ -315,5 +316,38 @@ describe('apiRequest', () => {
 
       await expect(apiRequest(BASE, '/pair/devices/abc', { method: 'DELETE' })).resolves.toBeUndefined();
     });
+  });
+});
+
+describe('assertPrivateHost — the RFC1918 guard the Android manifest cannot express', () => {
+  const allowed = [
+    'http://192.168.1.105:8080',
+    'http://192.168.0.7',
+    'http://10.4.19.200:8080',
+    'http://172.16.0.5:8080',
+    'http://172.31.255.254',
+    'http://169.254.10.1:8080',
+    'http://127.0.0.1:8080',
+    'http://localhost:8080',
+    'http://gateflame.local:8080',
+    'https://feeds.ionity.today',
+  ];
+
+  const refused = [
+    'http://8.8.8.8:8080',
+    'http://172.32.0.1:8080',
+    'http://172.15.255.255:8080',
+    'http://11.0.0.1:8080',
+    'http://192.169.1.1:8080',
+    'http://feeds.ionity.today',
+    'http://evil.example.com',
+  ];
+
+  it.each(allowed)('permits %s', (url) => {
+    expect(() => assertPrivateHost(url)).not.toThrow();
+  });
+
+  it.each(refused)('refuses %s', (url) => {
+    expect(() => assertPrivateHost(url)).toThrow(ApiRequestError);
   });
 });

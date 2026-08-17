@@ -65,6 +65,21 @@ const probe = async (baseUrl: string, signal?: AbortSignal): Promise<DiscoveryRe
 };
 
 /**
+ * Probe one operator-supplied address, and remember it if it answers.
+ *
+ * Exposed so the pairing screen can offer a manual address when discovery finds
+ * nothing. The candidate list only covers the routers we ship against; a
+ * customer on any other subnet would otherwise have no route at all to their own
+ * appliance. Same identity guard as automatic discovery — something merely
+ * returning 200 is not accepted as a node.
+ */
+export async function probeNodeAt(baseUrl: string, signal?: AbortSignal): Promise<DiscoveryResult> {
+  const hit = await probe(baseUrl.trim().replace(/\/+$/, ''), signal);
+  rememberNode(hit.baseUrl);
+  return hit;
+}
+
+/**
  * Resolve a reachable node, or throw if none answers.
  *
  * Rejects only when *every* candidate fails, so the caller can treat a

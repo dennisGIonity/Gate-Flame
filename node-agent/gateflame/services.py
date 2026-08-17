@@ -41,19 +41,26 @@ def _has(binary: str) -> bool:
 
 
 MODULE_DEFS = {
+    # `passive: True` marks a module that observes rather than acts. It has no
+    # start/stop hooks and nothing to enable, so once its requirement is met it
+    # IS running — the data is already being served. Only modules that change
+    # the system (firewall, DPI capture) wait to be switched on.
     "module_telemetry": {
         "label": "System Telemetry",
         "check": lambda: (True, None),
+        "passive": True,
     },
     "module_passive_discovery": {
         "label": "Passive Client Discovery",
         "check": lambda: (_has("ip"), "requires `ip` (iproute2) on PATH"),
+        "passive": True,
     },
     "module_dns_filter": {
         "label": "DNS Filtering",
         "check": lambda: (
             (True, None) if pihole.reachable() else (False, "Pi-hole not configured or unreachable")
         ),
+        "passive": True,
     },
     "module_firewall_bounce": {
         "label": "Firewall Bounce",
@@ -96,13 +103,29 @@ def module_status(module_id: str) -> dict:
     if definition is None:
         return {"id": module_id, "status": "unknown"}
     ok, gap = definition["check"]()
-    running = _enabled.get(module_id, False)
+
+    # Passive modules are always on once their requirement is met. They observe
+    # and report; there is nothing to switch. Reporting them as `stopped`
+    # because no one called /start was a lie in the opposite direction to the
+    # one this registry exists to prevent: telemetry and client discovery were
+    # both serving real data on hardware while the UI was told they were off,
+    # which is exactly what makes a dashboard fall back to demo values.
+    passive = definition.get("passive", False)
+    running = True if passive else _enabled.get(module_id, False)
+
     if not ok:
         status = "not_implemented" if gap and "not implemented" in gap else "degraded"
     else:
         status = "running" if running else "stopped"
+
     result = {"id": module_id, "label": definition["label"], "status": status}
-    if gap:
+
+    # A gap describes an UNMET requirement. The check lambdas return their gap
+    # string unconditionally, so attaching it whenever it is truthy reported
+    # "requires `ip` (iproute2) on PATH" on a node where `ip` was present at
+    # /usr/bin/ip and the module was returning real ARP entries. A satisfied
+    # requirement has no gap.
+    if gap and not ok:
         result["gap"] = gap
     return result
 
