@@ -36,6 +36,15 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      - name: Frontend tests
+        # 109 vitest cases that CI has never run. NODE_ENV is pinned because a
+        # machine-level NODE_ENV=production makes react-dom load its production
+        # bundle, where React.act is stripped, and 23 of these fail for a reason
+        # that has nothing to do with the code under test.
+        env:
+          NODE_ENV: test
+        run: npm run test:run
+
       - name: Build (web)
         run: npm run build
 
@@ -150,6 +159,55 @@ jobs:
           else
             echo "✓ versionCode bumped $base → $head"
           fi
+
+  backend:
+    name: Node-agent tests and lint
+    runs-on: ubuntu-latest
+    # 439 pytest cases covering pairing, filtering, WAN, posture and the threat
+    # log. Until now the entire Python agent - the part that actually filters a
+    # customer's network - was outside CI, while the React app had four gates.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install
+        working-directory: node-agent
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Ruff (reported, not yet enforced)
+        # 51 violations exist on the tree today, most of them the deprecated
+        # datetime.utcfromtimestamp() in wan.py. Making this blocking now would
+        # turn CI red on arrival and teach everyone to ignore it, so it reports
+        # a number instead. Turn `continue-on-error` off once the count is zero -
+        # that is the commit that makes this a real gate.
+        continue-on-error: true
+        working-directory: node-agent
+        run: ruff check gateflame
+
+      - name: Pytest
+        working-directory: node-agent
+        run: python -m pytest tests/ -q
+
+      - name: Boot the agent and answer /system/status
+        # Catches what unit tests cannot: an import error, a missing dependency,
+        # or a route that no longer resolves. The agent starting is the minimum
+        # claim the product makes.
+        working-directory: node-agent
+        run: |
+          python -m uvicorn gateflame.main:app --host 127.0.0.1 --port 8080 &
+          for i in $(seq 1 20); do
+            sleep 1
+            if curl -fsS http://127.0.0.1:8080/api/v1/system/status > /tmp/status.json; then
+              cat /tmp/status.json; echo; echo "✓ agent booted and answered"; exit 0
+            fi
+          done
+          echo "::error::agent did not answer /api/v1/system/status within 20s"; exit 1
 
   audit:
     name: Dependency advisories
