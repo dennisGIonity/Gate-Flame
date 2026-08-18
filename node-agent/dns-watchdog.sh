@@ -190,6 +190,58 @@ leave_bypass() {
   return 1
 }
 
+# ------------------------------------------------------------- network self-heal
+#
+# THE BOX FIXES THE NETWORK. THE CUSTOMER IS NOT ASKED TO.
+#
+# A household lost mobile connectivity for days because the router advertised
+# IPv6 with itself as DNS server on a LAN with no IPv6 route to the internet.
+# Phones prefer IPv6: they asked the router instead of us, then stalled on every
+# AAAA lookup until the handset decided the Wi-Fi was broken and left.
+#
+# The support-desk answer is "turn IPv6 off on your router". That is not a
+# product. A customer who can be told to reconfigure their router did not need
+# us. So the box corrects it, silently, and says afterwards what it did.
+#
+# Suppressing AAAA is normally something to be uneasy about - we are withholding
+# a true record. Here the record is true and useless: there is no route to any
+# address in it. Answering it is the DISHONEST option, because it implies a path
+# that does not exist.
+#
+# Strictly conditional and self-reversing: the moment the network grows a
+# working IPv6 route, the line comes back out and full IPv6 is served again.
+# Idempotent by construction - the .env file is the state, so a 60s timer cannot
+# thrash the stack.
+autoheal_ipv6() {
+  local envfile="$STACK/.env"
+  [[ -f "$envfile" ]] || return 0
+
+  local has_v6 has_route applied
+  has_v6=0; has_route=0
+  ip -6 addr show scope global 2>/dev/null | grep -q 'inet6' && has_v6=1
+  ip -6 route show default 2>/dev/null | grep -q . && has_route=1
+  grep -q '^GATEFLAME_DNSMASQ_LINES=.*filter-AAAA' "$envfile" 2>/dev/null && applied=1 || applied=0
+
+  if (( has_v6 == 1 && has_route == 0 && applied == 0 )); then
+    log "SELF-HEAL: IPv6 is advertised on this network with no route to the internet."
+    log "SELF-HEAL: handsets prefer IPv6 and will drop the Wi-Fi. Steering devices to IPv4."
+    if grep -q '^GATEFLAME_DNSMASQ_LINES=' "$envfile"; then
+      sed -i 's|^GATEFLAME_DNSMASQ_LINES=.*|GATEFLAME_DNSMASQ_LINES=filter-AAAA|' "$envfile"
+    else
+      printf 'GATEFLAME_DNSMASQ_LINES=filter-AAAA\n' >> "$envfile"
+    fi
+    ( cd "$STACK" && compose up -d >/dev/null 2>&1 )
+    log "SELF-HEAL APPLIED: phones will stay connected. Reverts automatically if IPv6 starts working."
+    return 0
+  fi
+
+  if (( has_route == 1 && applied == 1 )); then
+    log "SELF-HEAL REVERTING: this network now has working IPv6 - restoring full IPv6 answers"
+    sed -i 's|^GATEFLAME_DNSMASQ_LINES=.*|GATEFLAME_DNSMASQ_LINES=|' "$envfile"
+    ( cd "$STACK" && compose up -d >/dev/null 2>&1 )
+  fi
+}
+
 # ---------------------------------------------------------------- library mode
 #
 # Everything above this line is definitions; everything below it acts on the box.
@@ -225,6 +277,11 @@ if dns_answers; then
     log "DNS recovered after $prev consecutive failure(s)"
   fi
   write_fails 0
+  # Resolving is not the same as the household being well served. The network
+  # can be quietly hostile while every one of our own sockets answers - that is
+  # exactly the state that cost a household its phones for days. Only run this
+  # on the healthy path: if DNS is actually down, fixing it comes first.
+  autoheal_ipv6
   exit 0
 fi
 
