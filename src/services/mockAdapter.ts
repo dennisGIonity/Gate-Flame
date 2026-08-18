@@ -20,7 +20,8 @@
  * identical to real telemetry is the difference between a demo and a lie.
  */
 
-import { SECURITY_MODULES } from './serviceManager';
+// From the leaf module, NOT serviceManager — see securityModules.ts for why.
+import { SECURITY_MODULES } from './securityModules';
 import {
   INITIAL_TELEMETRY,
   MOCK_THREAT_LOGS,
