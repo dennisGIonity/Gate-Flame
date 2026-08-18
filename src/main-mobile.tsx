@@ -1,11 +1,11 @@
-import { StrictMode, useState } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { MobileDashboard } from './components/MobileDashboard';
 import { AppPairingScreen } from './components/AppPairingScreen';
 import { useGateFlameEngine } from './hooks/useGateFlameEngine';
 import { useAppStore } from './store/useAppStore';
-import { hasToken } from './services/apiClient';
+import { hasToken, onTokenRejected } from './services/apiClient';
 import { gateflameApi } from './services/gateflameApi';
 
 function MobileStandalone() {
@@ -13,6 +13,16 @@ function MobileStandalone() {
   // Re-checked on every render via state rather than once at module load, so
   // completing pairing swaps straight to the dashboard without a reload.
   const [paired, setPaired] = useState(() => hasToken());
+
+  // The owner can revoke this handset from the kiosk. When that happens the
+  // node starts answering 401, apiClient drops the dead token, and this puts
+  // the user back on the pairing screen.
+  //
+  // Without it, revocation was invisible on the device: `paired` was read once
+  // at mount, so the dashboard stayed up showing whatever it last had and
+  // retried a dead credential every 4 seconds forever. A revoke that the
+  // handset ignores is not a revoke.
+  useEffect(() => onTokenRejected(() => setPaired(false)), []);
 
   useGateFlameEngine();
   const { telemetry } = useAppStore();

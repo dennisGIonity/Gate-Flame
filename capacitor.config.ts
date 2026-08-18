@@ -44,11 +44,46 @@ const config: CapacitorConfig = {
   appName: 'Gate^Flame',
   webDir: 'dist-mobile',
   android: {
-    // The node is reached over plain HTTP on the LAN (RFC1918 only).
-    // Scoped in android/app/src/main/res/xml/network_security_config.xml —
-    // NOT via a blanket allowMixedContent, which would permit cleartext to
-    // any host on the internet.
-    allowMixedContent: false,
+    /**
+     * MUST stay true. This was `false` from 2026-08-14 to 2026-08-18, and in
+     * that window the app could not reach a node at all — every request died
+     * inside the WebView before a socket was opened:
+     *
+     *   Mixed Content: The page at 'https://localhost/' was loaded over HTTPS,
+     *   but requested an insecure resource 'http://192.168.0.13:8080/...'.
+     *   This request has been blocked.
+     *
+     * The comment that used to sit here claimed network_security_config.xml
+     * scoped this more narrowly. That was a category error, and it survived
+     * review because both things say "cleartext":
+     *
+     *   - network_security_config governs the PLATFORM's policy — may this app
+     *     open an http:// socket at all.
+     *   - mixed-content mode governs the WEBVIEW's policy — may a page that
+     *     was itself loaded over https:// fetch an http:// subresource.
+     *
+     * Capacitor serves the app from https://localhost, so every node call is
+     * by definition a mixed-content request. No network security config can
+     * permit that; only WebSettings.setMixedContentMode can, which is what
+     * this flag sets. Setting it false did not narrow the policy — it removed
+     * the product's only function.
+     *
+     * What actually keeps this narrow, given that Android's own config cannot
+     * express "RFC1918 only" (see the note in network_security_config.xml on
+     * <domain> being a hostname match with no CIDR support):
+     *
+     *   1. assertPrivateHost() in src/services/apiClient.ts refuses any
+     *      cleartext request whose host is not RFC1918, link-local, loopback
+     *      or *.local. It runs on EVERY request, before the fetch, and is
+     *      covered by the test suite.
+     *   2. The node refuses independently: security.py gates every route on an
+     *      RFC1918/loopback/link-local SOURCE address, so an off-LAN request
+     *      is rejected whatever the handset believes.
+     *
+     * Two enforcement points, neither of which is this flag. Found by running
+     * the APK against a live node, not by reading the docs.
+     */
+    allowMixedContent: true,
     captureInput: true,
   },
 };

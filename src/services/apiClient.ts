@@ -68,6 +68,45 @@ export const clearToken = (): void => {
 export const hasToken = (): boolean => readToken() !== null;
 
 /**
+ * Notified when the node REJECTS a token we actually sent (an authenticated
+ * 401). The token is cleared before listeners run, so `hasToken()` is already
+ * false by the time anyone reacts.
+ *
+ * Why this exists: the owner can revoke a handset from the kiosk — that is a
+ * headline feature of the pairing contract, and the point of it is a lost or
+ * stolen phone. Before this, a revoked phone kept its dead token forever:
+ * `main-mobile` read `hasToken()` once at mount, so the dashboard stayed up,
+ * polled every 4s, logged `401` to a console nobody can see, and offered the
+ * user no route back to pairing. Revocation worked on the node and was
+ * invisible on the device.
+ *
+ * Deliberately narrow — a 401 only counts when a token was attached to that
+ * request. `pair/claim` answers 401 for a wrong code, and treating that as
+ * "your token is dead" would wipe a good token every time someone fat-fingers
+ * a digit while pairing a second handset.
+ */
+type TokenRejectedListener = () => void;
+const tokenRejectedListeners = new Set<TokenRejectedListener>();
+
+export const onTokenRejected = (listener: TokenRejectedListener): (() => void) => {
+  tokenRejectedListeners.add(listener);
+  return () => {
+    tokenRejectedListeners.delete(listener);
+  };
+};
+
+const notifyTokenRejected = (): void => {
+  // Snapshot: a listener may unsubscribe itself while we iterate.
+  for (const listener of [...tokenRejectedListeners]) {
+    try {
+      listener();
+    } catch {
+      /* a broken listener must not break the request path */
+    }
+  }
+};
+
+/**
  * Refuse cleartext to anything that is not the customer's own LAN.
  *
  * This lives here rather than in android/app/src/main/res/xml/
@@ -166,9 +205,15 @@ export async function apiRequest<T>(
 
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // Tracked so an authenticated 401 can be told apart from a 401 on a request
+  // that carried no credentials at all (pair/claim with a wrong code).
+  let tokenWasSent = false;
   if (!anonymous) {
     const token = readToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      tokenWasSent = true;
+    }
   }
 
   try {
@@ -190,6 +235,17 @@ export async function apiRequest<T>(
       } catch {
         /* non-JSON error body */
       }
+
+      // The node says the token we sent is no good — it was revoked at the
+      // kiosk, or the node was factory reset. Drop it and say so, so the UI
+      // can return to pairing instead of retrying a dead credential forever.
+      // Only when we actually sent one: a 401 from pair/claim means "wrong
+      // code", not "your token is dead".
+      if (response.status === 401 && tokenWasSent) {
+        clearToken();
+        notifyTokenRejected();
+      }
+
       throw new ApiRequestError(
         parsed?.message ?? parsed?.error ?? `${method} ${path} failed with ${response.status}`,
         { status: response.status, body: parsed },

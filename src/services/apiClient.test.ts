@@ -13,14 +13,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ApiRequestError,
-  apiRequest,
-  assertPrivateHost,
-  clearToken,
-  hasToken,
-  storeToken,
-} from './apiClient';
+import { ApiRequestError, apiRequest, assertPrivateHost, clearToken, hasToken, storeToken, onTokenRejected } from './apiClient';
 import { config } from '../config/env';
 
 const BASE = 'http://gateflame.local';
@@ -349,5 +342,129 @@ describe('assertPrivateHost — the RFC1918 guard the Android manifest cannot ex
 
   it.each(refused)('refuses %s', (url) => {
     expect(() => assertPrivateHost(url)).toThrow(ApiRequestError);
+  });
+});
+
+// ── Revocation: an authenticated 401 must drop the token and say so ─────────
+//
+// The owner revoking a handset at the kiosk is a headline feature of the
+// pairing contract, and its whole purpose is a lost or stolen phone. Before
+// this behaviour existed, revocation worked on the node and was completely
+// invisible on the device: the dashboard stayed up and retried a dead
+// credential every 4 seconds, forever.
+
+describe('token rejection', () => {
+  const BEARER = 'gf-token-abcdef';
+
+  it('clears the token and notifies when a request that SENT a token gets 401', async () => {
+    localStorage.setItem(config.tokenStorageKey, BEARER);
+    let notified = 0;
+    const off = onTokenRejected(() => {
+      notified += 1;
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ error: 'invalid_token' }), { status: 401 })),
+    );
+
+    await expect(apiRequest(BASE, '/telemetry/summary')).rejects.toThrow();
+
+    expect(hasToken()).toBe(false);
+    expect(notified).toBe(1);
+    off();
+  });
+
+  it('does NOT clear the token on a 401 from an anonymous request', async () => {
+    // pair/claim answers 401 for a wrong code. Wiping a good token because
+    // someone mistyped a digit while pairing a second handset would be its own
+    // bug — and a maddening one.
+    localStorage.setItem(config.tokenStorageKey, BEARER);
+    let notified = 0;
+    const off = onTokenRejected(() => {
+      notified += 1;
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ error: 'invalid_code' }), { status: 401 })),
+    );
+
+    await expect(
+      apiRequest(BASE, '/pair/claim', { method: 'POST', body: { code: '000000' }, anonymous: true }),
+    ).rejects.toThrow();
+
+    expect(hasToken()).toBe(true);
+    expect(notified).toBe(0);
+    off();
+  });
+
+  it('does not notify when no token was stored to begin with', async () => {
+    localStorage.removeItem(config.tokenStorageKey);
+    let notified = 0;
+    const off = onTokenRejected(() => {
+      notified += 1;
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 401 })),
+    );
+
+    await expect(apiRequest(BASE, '/telemetry/summary')).rejects.toThrow();
+    expect(notified).toBe(0);
+    off();
+  });
+
+  it('leaves the token alone on other error statuses', async () => {
+    // 403 means "not enough scope for THIS action" — the token is still valid,
+    // and stopping a module without kiosk scope must not sign the user out.
+    for (const status of [403, 429, 500, 503]) {
+      localStorage.setItem(config.tokenStorageKey, BEARER);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('{}', { status })),
+      );
+      await expect(apiRequest(BASE, '/telemetry/summary')).rejects.toThrow();
+      expect(hasToken(), `status ${status} must not clear the token`).toBe(true);
+    }
+  });
+
+  it('unsubscribes cleanly', async () => {
+    localStorage.setItem(config.tokenStorageKey, BEARER);
+    let notified = 0;
+    const off = onTokenRejected(() => {
+      notified += 1;
+    });
+    off();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 401 })),
+    );
+    await expect(apiRequest(BASE, '/telemetry/summary')).rejects.toThrow();
+    expect(notified).toBe(0);
+  });
+
+  it('survives a listener that throws', async () => {
+    localStorage.setItem(config.tokenStorageKey, BEARER);
+    const offBad = onTokenRejected(() => {
+      throw new Error('listener is broken');
+    });
+    let good = 0;
+    const offGood = onTokenRejected(() => {
+      good += 1;
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 401 })),
+    );
+    await expect(apiRequest(BASE, '/telemetry/summary')).rejects.toThrow();
+
+    expect(good).toBe(1);
+    expect(hasToken()).toBe(false);
+    offBad();
+    offGood();
   });
 });
