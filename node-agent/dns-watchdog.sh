@@ -35,6 +35,25 @@ set -uo pipefail   # deliberately NOT -e: a failing check must be handled, not f
 STACK="${GATEFLAME_DNS_STACK:-/home/wabapi/node-agent/dns-stack}"
 PROBE_DOMAIN="${GATEFLAME_PROBE_DOMAIN:-dns.google}"
 STATE_DIR="/var/lib/gateflame"
+
+# THE ADDRESS THE HOUSEHOLD ACTUALLY USES.
+#
+# Every version of this watchdog before 2026-08-18 probed 127.0.0.1:53 and nothing
+# else. Loopback is not the product. docker-compose.yml publishes port 53 on TWO
+# sockets - 127.0.0.1:53 and <LAN_IP>:53 - and they fail independently:
+#
+#   * the interface holding LAN_IP goes down, is renumbered by DHCP, or loses the
+#     address on a NetworkManager reconnect;
+#   * this box is dual-homed on one subnet (eth0 AND wlan0 on 192.168.0.0/24), so a
+#     client can ARP for LAN_IP and be answered with the OTHER interface's MAC;
+#   * a firewall or docker-proxy restart drops the LAN publish but not the loopback one.
+#
+# In every one of those states loopback answers perfectly, the watchdog reports
+# healthy, no restart is attempted, bypass is never entered - and the entire
+# household has no DNS. That is the exact shape of the "devices keep losing
+# connection and nothing is in the logs" report. The customer-facing listener is the
+# one that must be healthy, so it is the one that is now tested.
+LAN_IP="${GATEFLAME_LAN_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}"
 FAIL_COUNT_FILE="$STATE_DIR/dns-watchdog-fails"
 BYPASS_FLAG="$STATE_DIR/bypass"
 
@@ -76,12 +95,13 @@ compose() {
   fi
 }
 
-# A real DNS query. No dig/nslookup dependency - neither Trixie nor Armbian ship them,
-# and a watchdog that depends on an absent binary reports a healthy service as dead.
-dns_answers() {
-  python3 - "$PROBE_DOMAIN" <<'PYEOF' 2>/dev/null
+# A real DNS query against ONE server. No dig/nslookup dependency - neither Trixie nor
+# Armbian ship them, and a watchdog that depends on an absent binary reports a healthy
+# service as dead.
+dns_answers_on() {
+  python3 - "$1" "$PROBE_DOMAIN" <<'PYEOF' 2>/dev/null
 import socket, struct, random, sys
-name = sys.argv[1]
+server, name = sys.argv[1], sys.argv[2]
 q = struct.pack('>HHHHHH', random.randint(0, 65535), 0x0100, 1, 0, 0, 0)
 for part in name.split('.'):
     q += bytes([len(part)]) + part.encode()
@@ -89,7 +109,7 @@ q += b'\x00' + struct.pack('>HH', 1, 1)
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.settimeout(5)
 try:
-    s.sendto(q, ('127.0.0.1', 53))
+    s.sendto(q, (server, 53))
     data, _ = s.recvfrom(512)
 except Exception:
     sys.exit(1)
@@ -99,6 +119,29 @@ finally:
 # is still a healthy resolver, so answer COUNT is not the test - a response is.
 sys.exit(0 if len(data) > 12 else 1)
 PYEOF
+}
+
+# HEALTHY MEANS HEALTHY FOR THE HOUSEHOLD, NOT FOR THIS BOX.
+#
+# Both sockets must answer. Loopback proves Pi-hole and unbound are alive; the LAN
+# address proves the household can actually reach them. A pass on loopback and a fail
+# on the LAN address is the silent-outage case this watchdog exists to catch, and it
+# is logged distinctly because the remedy is different: a restart fixes a dead
+# container, but a missing LAN publish usually means the interface lost its address
+# and the compose stack has to be recreated so docker rebinds.
+dns_answers() {
+  if ! dns_answers_on 127.0.0.1; then
+    return 1
+  fi
+  if [[ -z "$LAN_IP" ]]; then
+    log "WARNING: no LAN address could be determined - only loopback was verified"
+    return 0
+  fi
+  if ! dns_answers_on "$LAN_IP"; then
+    log "SILENT OUTAGE: 127.0.0.1:53 answers but ${LAN_IP}:53 does not. Pi-hole is alive and the household still has no DNS."
+    return 1
+  fi
+  return 0
 }
 
 read_fails() { cat "$FAIL_COUNT_FILE" 2>/dev/null || echo 0; }
@@ -147,6 +190,17 @@ leave_bypass() {
   return 1
 }
 
+# ---------------------------------------------------------------- library mode
+#
+# Everything above this line is definitions; everything below it acts on the box.
+# Sourcing with GATEFLAME_WATCHDOG_LIB=1 gets the functions and stops, so the
+# health logic can be tested with stubbed probes instead of being trusted by
+# inspection. The loopback-only bug this guard exists to pin was invisible for
+# weeks precisely because nothing could exercise dns_answers() in isolation.
+if [[ "${GATEFLAME_WATCHDOG_LIB:-0}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 # ------------------------------------------------------------------ bypass path
 # While in bypass, DNS is answering (that is the point), so the healthy check below
 # would report all-clear and never try to restore filtering. Handle it first.
@@ -177,7 +231,7 @@ fi
 # ---------------------------------------------------------------- unhealthy path
 fails=$(( $(read_fails) + 1 ))
 write_fails "$fails"
-log "DNS did not answer on 127.0.0.1:53 (consecutive failures: $fails)"
+log "DNS did not answer on 127.0.0.1:53 and/or ${LAN_IP:-<no-lan-ip>}:53 (consecutive failures: $fails)"
 
 # One failure can be a container mid-restart or a momentary stall. Two in a row at
 # 60s apart is a real outage. Acting on the first tick would mean restarting the

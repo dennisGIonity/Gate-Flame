@@ -57,7 +57,7 @@ import fnmatch
 import os
 import stat as stat_module
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 
@@ -905,7 +905,18 @@ def collect(
     """Gather everything `evaluate` needs. Read-only, one seam."""
     reader = reader if reader is not None else FilesystemReader()
     db = db_path or os.environ.get("GATEFLAME_DB_PATH", "/var/lib/gateflame/state.db")
-    state_targets = [db, f"{db}-wal", f"{db}-shm", str(Path(db).parent)]
+    # PurePosixPath, not Path.
+    #
+    # These are paths ON THE APPLIANCE - always POSIX, whatever machine the code
+    # happens to be executing on. `Path` is platform-dependent, so on a Windows
+    # developer box str(Path("/var/lib/gateflame/state.db").parent) yields
+    # "\\var\\lib\\gateflame". Nothing ever matches that, so the containing
+    # directory is silently dropped from the audit: a world-readable
+    # /var/lib/gateflame passes clean, and test_the_containing_directory_is_checked_too
+    # fails on Windows while passing in CI. A check that quietly stops checking is
+    # worse than one that is absent, and "green in CI, red on my machine" is the
+    # exact pattern that has cost this project days.
+    state_targets = [db, f"{db}-wal", f"{db}-shm", str(PurePosixPath(db).parent)]
     listening, listening_gap = collect_listeners(reader)
     return HostFacts(
         euid=reader.euid(),

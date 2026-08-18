@@ -52,8 +52,17 @@ services:
     # watchdog decides, every time.
     restart: "no"
     ports:
-      - "192.168.0.10:53:53/tcp"
-      - "192.168.0.10:53:53/udp"
+      # Same variable as the filtered stack, and for a sharper reason.
+      #
+      # Bypass is the recovery path. It runs precisely when things are already
+      # broken - and "the interface lost its address" is one of the ways they get
+      # broken. A hardcoded 192.168.0.10 here means that in exactly that scenario
+      # docker cannot bind, bypass fails to start, the watchdog logs "bypass failed
+      # too - manual recovery required", and the household is left with no internet
+      # at all. The recovery path must be the LEAST brittle thing in the system,
+      # not the most.
+      - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/tcp"
+      - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/udp"
       - "127.0.0.1:53:53/tcp"
       - "127.0.0.1:53:53/udp"
     volumes:

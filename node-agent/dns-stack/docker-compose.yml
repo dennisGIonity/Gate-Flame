@@ -72,8 +72,21 @@ services:
       # Bound to specific addresses. Binding 0.0.0.0:53 on a box with two default
       # routes (eth0 and wlan0 are both up here) invites answering on interfaces
       # nobody expected.
-      - "192.168.0.10:53:53/tcp"
-      - "192.168.0.10:53:53/udp"
+      #
+      # NOW A VARIABLE, NOT A LITERAL. It was hardcoded to 192.168.0.10 in every
+      # copy of this file. Docker cannot publish on an address the host does not
+      # have: the moment DHCP renumbers this box, or the interface holding .10 is
+      # the one that drops, `docker compose up` fails with
+      #
+      #     Error starting userland proxy: listen tcp4 192.168.0.10:53: bind:
+      #     cannot assign requested address
+      #
+      # and the container never starts. The household then has NO DNS at all, on
+      # every subsequent boot, until a human edits this file. An appliance must not
+      # have a LAN address baked into it. Set GATEFLAME_LAN_IP in dns-stack/.env;
+      # install-dns-stack.sh now writes it there from the live routing table.
+      - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/tcp"
+      - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/udp"
       - "127.0.0.1:53:53/tcp"
       - "127.0.0.1:53:53/udp"
       - "8081:80/tcp"
@@ -94,6 +107,56 @@ services:
       # worse failure than no filtering, and it is the mistake this product must
       # never make in a customer's house.
       FTLCONF_dhcp_active: 'false'
+
+      # ------------------------------------------------------------------------
+      # RATE LIMITING OFF. THIS IS NOT A TUNING PREFERENCE - IT IS REQUIRED.
+      #
+      # Pi-hole's default is 1000 queries per 60 seconds PER CLIENT. When a single
+      # device is pointed at the box that ceiling is generous and invisible.
+      #
+      # The moment the ROUTER is pointed at the box - which is the shipping
+      # configuration, the whole point of the product - every query in the house
+      # arrives from ONE source address: the router's. Phones, TVs, laptops,
+      # consoles and every background app are summed into that one counter. A
+      # normal household passes 1000 queries a minute easily.
+      #
+      # When it trips, FTL does not slow the client down. It REFUSES every further
+      # query from that address until the window rolls - so the entire household
+      # loses DNS, in roughly one-minute blocks, repeatedly, with no error anyone
+      # can see. Browsers stall. Phones fail their connectivity check, mark the
+      # Wi-Fi "no internet", and drop to mobile data.
+      #
+      # Rate limiting exists to stop one misbehaving client on a large network. A
+      # home appliance behind a forwarding router has exactly one client and it is
+      # the router, so the feature can only ever misfire here.
+      #
+      # 0 = disabled.
+      FTLCONF_dns_rateLimit_count: '0'
+      FTLCONF_dns_rateLimit_interval: '0'
+
+      # ------------------------------------------------------------------------
+      # OPTIONAL RAW DNSMASQ LINES - empty by default, set in dns-stack/.env
+      #
+      # The one line this exists for today is `filter-AAAA`.
+      #
+      # If a customer's router advertises IPv6 (an RA with a prefix and RDNSS) but
+      # has no working IPv6 route to the internet - very common on ISP-supplied
+      # kit where IPv6 is half-enabled - then every AAAA record this box honestly
+      # returns sends the phone down a path that cannot complete. Android and iOS
+      # prefer IPv6, so they try the AAAA first, stall until Happy Eyeballs gives
+      # up, and their connectivity validator fails often enough that the OS
+      # declares the network broken and leaves it. Desktops are unaffected because
+      # Windows ranks ULA below IPv4 in its RFC 6724 policy table; phones do not.
+      #
+      # Suppressing AAAA makes those clients use IPv4, which works. It is a
+      # mitigation for someone else's broken network, NOT a default - on a LAN with
+      # real IPv6 it would be actively harmful, and silently degrading a working
+      # protocol is exactly the kind of dishonesty this product does not do.
+      #
+      # Turn it on deliberately, and only after gateflame-netcheck.sh has confirmed
+      # IPv6 is advertised and non-functional:
+      #     echo "GATEFLAME_DNSMASQ_LINES=filter-AAAA" >> dns-stack/.env
+      FTLCONF_misc_dnsmasq_lines: '${GATEFLAME_DNSMASQ_LINES:-}'
     volumes:
       - ./data/pihole:/etc/pihole
     cap_add:
