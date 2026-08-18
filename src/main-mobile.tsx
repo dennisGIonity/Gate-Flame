@@ -5,7 +5,7 @@ import { MobileDashboard } from './components/MobileDashboard';
 import { AppPairingScreen } from './components/AppPairingScreen';
 import { useGateFlameEngine } from './hooks/useGateFlameEngine';
 import { useAppStore } from './store/useAppStore';
-import { getToken, hasToken } from './services/apiClient';
+import { getToken, hasToken, onTokenRejected } from './services/apiClient';
 import { gateflameApi } from './services/gateflameApi';
 import { forgetNode } from './services/nodeDiscovery';
 import Ionibot, { defaultDeps } from './ionibot';
@@ -21,6 +21,16 @@ function MobileStandalone() {
   // every router-instruction screen renders with the handset offline. Learned
   // opportunistically and silently — see services/ionibotContext.ts.
   const [gateway, setGateway] = useState<string | null>(null);
+
+  // The owner can revoke this handset from the kiosk. When that happens the
+  // node starts answering 401, apiClient drops the dead token, and this puts
+  // the user back on the pairing screen.
+  //
+  // Without it, revocation was invisible on the device: `paired` was read once
+  // at mount, so the dashboard stayed up showing whatever it last had and
+  // retried a dead credential every 4 seconds forever. A revoke that the
+  // handset ignores is not a revoke.
+  useEffect(() => onTokenRejected(() => setPaired(false)), []);
 
   useGateFlameEngine();
   const { telemetry } = useAppStore();
