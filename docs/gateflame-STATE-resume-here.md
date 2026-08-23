@@ -2,7 +2,7 @@
 ========================================================================================
 GATE^FLAME — 📌 PINNED STATE / RESUME HERE
 Author: Johan Wilhelm van Antwerp | Ionity (Pty) Ltd | AEDI
-Document ID: DOC-2026-08-013-STATE | Version: 7.0 | Updated: 2026-08-19 00:45 SAST
+Document ID: DOC-2026-08-013-STATE | Version: 7.1 | Updated: 2026-08-19 01:30 SAST
 Governance: Policy 986 AED | License: AED 900 | CC BY-NC-SA 4.0 where stated
 (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - All Rights Reserved - TM2
 Web: https://www.ionity.today | https://www.ionity.world | Ref: https://www.ionity.co.za
@@ -74,24 +74,82 @@ authenticates as `dennisGIonity`.
 > deliberately; any override with a space in it fails with
 > `C:/Program: No such file or directory`.
 
-**Tests: 494/494 pass** — 446 node-agent + 21 netclaim + 6 autoheal + 21 handshake,
-plus 83 feed-receiver and 109 frontend, `tsc` clean.
+**Tests: 519/519 pass** — 446 node-agent + 21 netclaim + 6 autoheal + 21 handshake
++ 12 netapply + 13 router-adapters, plus 83 feed-receiver and 109 frontend,
+`tsc` clean. All four shell scripts syntax-clean; compose parses.
+
+## What landed after v7.0
+
+- **`netapply.py`** — the actuator. netclaim decided and nothing applied; that gap
+  is the difference between a diagnosis and a product. Four rules, all tested: a
+  **blocked remedy never becomes an action** (otherwise the `single_home` refusal
+  is decoration), an **unknown remedy is reported not dropped**, **weakest tier
+  first**, and **a failure stops the sequence**. Dry run is the default — an
+  actuator whose default is to act is one that acts by accident.
+- **IPv6 is served** — `[${GATEFLAME_LAN_IP6}]:53`, defaulting to `::1` rather than
+  a guessed address, because docker refuses to start a container bound to an
+  address the host lacks and a total DNS outage beats unserved IPv6. The installer
+  records the real address **only** when the LAN has a working IPv6 route.
+- **`gateflame-ra-advertiser.sh`** — announces this box as a DNS server via RDNSS
+  with `AdvDefaultLifetime 0`, the standards-defined "I am not a router". Get that
+  wrong and every device sends us its internet traffic — a black hole on a
+  side-car. Refuses to advertise an address the box does not hold, refuses
+  docker/bridge interfaces, self-removes if radvd will not start.
+  ⚠️ **Written and syntax-checked, deliberately NOT deployed** — it changes what
+  other devices see and should not first run unattended on a live household.
+- **`gateflame-env-set.sh`** — isolates the one privileged `.env` edit so the agent
+  never needs write access to a credential file.
+
+> **Honest limit, and it drives the roadmap:** advertising ourselves does **not**
+> remove the router's RDNSS. RDNSS has no preference field, so clients keep every
+> server they are told about. This narrows the gap; it does not close it, and the
+> kiosk must not claim otherwise.
 
 ---
 
-# 4 — WHAT I NEED FROM YOU
+# 4 — THE ROUTER: IDENTIFIED, NOT YET DRIVEABLE
 
-**Your router's exact model and firmware version.** One glance at its status page
-or the sticker underneath.
+**No longer blocked on you.** The Pi asked the router what it is, over
+unauthenticated UPnP:
 
-Fingerprinted so far, unauthenticated: **TP-Link Aginet CPE** — `tpEncrypt.js`,
-`cryptoJS.min.js`, `oid_str.js`, `JSESSIONID`, `com.tplink.aginet` app links.
-Encrypted JSON API, not HTML scraping, so a real adapter is very buildable. But
-Archer/EX/HX generations use different API dialects and I will not guess on your
-gateway.
+```
+http://192.168.0.1:1900/jubzkc/gatedesc.xml
+  manufacturer      TP-Link
+  modelName         EX511
+  modelNumber       2.0
+  modelDescription  AX3000 Dual-Band Wi-Fi 6 Router
+  SERVER            Linux/4.4.60, Portable SDK for UPnP devices/1.6.19
+```
 
-**Do not paste the router password into chat.** The adapter runs on your hardware
-and prompts locally.
+That real document is now the test fixture in `test_router_adapters.py`, verbatim.
+Identification is **done and passing**.
+
+**The credentialed login is deliberately NOT built.** The EX511 returns `406 Not
+Acceptable` to every path unless the `Accept` header matches what its own
+JavaScript sends, and the scripts the login page references (`../js/tpEncrypt.js`)
+are not served at the paths it names. Building it means reverse-engineering
+TP-Link's private RSA/AES handshake by probing a live gateway — which
+`perform_handshake` refuses to do to strangers, and doing it in development does
+not make it safer.
+
+It would also be a **treadmill**: TP-Link changes the login crypto between
+firmware revisions, so the adapter breaks on an overnight auto-update, in a
+customer's house, silently, while the box still reports itself healthy. That is
+the worst failure shape this product has.
+
+`LOGIN_SUPPORTED_MODELS` is empty and a test asserts that is correct. Keyed on the
+exact model, never the vendor.
+
+**Decision needed from you** (this is a product call, not a technical one):
+
+| Option | Trade |
+|---|---|
+| Build the EX511 adapter anyway | Works on your unit now; needs a re-test every firmware release, per model |
+| Guided one-screen flow instead | Works on every router immediately, no credentials ever touch our hardware, ~30 s of customer effort |
+| Premium in-path only | No router interaction at all, but the standard box then cannot filter phones on a network like yours |
+
+**Do not paste the router password into chat.** Whatever we build runs on your
+hardware and prompts locally.
 
 ---
 
@@ -118,9 +176,11 @@ during pairing, and forgets the password.
 
 # 6 — STILL OPEN
 
-- 🟡 `serve_dns_on_ipv6` and `advertise_self_as_dns` — the plan emits both remedies,
-  nothing applies them yet
-- 🟡 TP-Link adapter — blocked on §4
+- 🟢 ~~`serve_dns_on_ipv6` and `advertise_self_as_dns` have no actuator~~ — **done**,
+  see §3. RA advertiser staged but not deployed, on purpose
+- 🟡 TP-Link EX511 credentialed login — **a product decision, see §4**, not a blocker
+- 🟡 `claim_gateway` has no actuator — correct for now; premium in-path is a later
+  sprint and netapply reports it as unsupported rather than pretending
 - 🔴 Wabakipi `NODE_ENV=production` + npm `omit=dev`; raspberrypi `NODE_ENV=development`
 - 🔴 **Windows OpenSSH is broken** — every binary exits 255 with no output despite
   being present and correctly sized. Only Git's copy works. Repair via
@@ -144,6 +204,12 @@ C:\Users\DGMic\GATEFLAME-load-ssh-key.cmd     (double-click, type passphrase bli
 ```
 
 Then Claude can reach both the Pi (`wabapi@192.168.0.10`) and GitHub.
+
+> ⚠️ `~/.ssh/agent.sock` may be **either** a regular file containing the socket
+> path **or** the socket itself, depending on how the agent was started. `cat` on
+> the second case fails with `Operation not supported`, which looks exactly like a
+> missing agent and is not. `/c/Users/DGMic/gf-env.sh` handles both — source it and
+> call `gf_agent` rather than reinventing the check.
 
 ```
 © 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM2
