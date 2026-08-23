@@ -310,6 +310,30 @@ else
 fi
 ok "GATEFLAME_LAN_IP=$LAN_IP recorded in $ENV_FILE"
 
+# IPv6, but only when it is real.
+#
+# Phones prefer IPv6, so an IPv4-only resolver is one phones do not use. But
+# publishing an address the host does not hold makes docker refuse to start the
+# container at all, and a total DNS outage beats unserved IPv6 every time. So the
+# address is only recorded when this LAN has a working IPv6 route - otherwise the
+# compose default (::1, loopback) stands, which is the honest answer for a network
+# whose IPv6 goes nowhere.
+LAN_IP6=""
+if ip -6 route show default 2>/dev/null | grep -q .; then
+  LAN_IP6="$(ip -6 addr show scope global 2>/dev/null \
+             | awk '/inet6/{print $2}' | cut -d/ -f1 | grep -v '^fe80' | head -1)"
+fi
+if grep -q '^GATEFLAME_LAN_IP6=' "$ENV_FILE" 2>/dev/null; then
+  sed -i "s|^GATEFLAME_LAN_IP6=.*|GATEFLAME_LAN_IP6=${LAN_IP6:-::1}|" "$ENV_FILE"
+else
+  printf 'GATEFLAME_LAN_IP6=%s\n' "${LAN_IP6:-::1}" >> "$ENV_FILE"
+fi
+if [[ -n "$LAN_IP6" ]]; then
+  ok "GATEFLAME_LAN_IP6=$LAN_IP6 - the resolver will answer on IPv6 too"
+else
+  warn "no usable IPv6 on this LAN - resolver stays IPv4-only (GATEFLAME_LAN_IP6=::1)"
+fi
+
 # ------------------------------------------------------------------ 3. bring up
 say "Step 3/5 - starting Pi-hole and Unbound"
 mkdir -p "$STACK/data/pihole"

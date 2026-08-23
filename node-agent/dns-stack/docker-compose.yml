@@ -89,6 +89,17 @@ services:
       - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/udp"
       - "127.0.0.1:53:53/tcp"
       - "127.0.0.1:53:53/udp"
+      # IPv6. Phones PREFER it, so a resolver that only answers on IPv4 is a
+      # resolver phones do not use - which is how a household's handsets end up
+      # asking the router instead and never being filtered at all.
+      #
+      # Defaults to ::1 rather than to a guessed LAN address: publishing an
+      # address the host does not hold makes docker refuse to start the container,
+      # and a total DNS outage is a far worse failure than IPv6 going unserved.
+      # install-dns-stack.sh writes the real GATEFLAME_LAN_IP6 into .env when
+      # this LAN has usable IPv6; when it does not, loopback is the honest value.
+      - "[${GATEFLAME_LAN_IP6:-::1}]:53:53/tcp"
+      - "[${GATEFLAME_LAN_IP6:-::1}]:53:53/udp"
       - "8081:80/tcp"
     environment:
       TZ: 'Africa/Johannesburg'
