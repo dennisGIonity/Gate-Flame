@@ -34,7 +34,7 @@ import httpx
 
 from . import content_categories, threat_level
 from .config import config
-from .pihole import _get, _session, _base
+from .pihole import _get, _session, _base, summary
 
 _TIMEOUT = 30.0
 
@@ -121,10 +121,45 @@ def apply(settings: dict) -> bool:
         return False
     have = set(existing)
 
+    # EVERY WRITE IS CHECKED. The first version of this loop threw both return
+    # values away:
+    #
+    #     for url in wanted - have:
+    #         _post("/api/lists", {...})
+    #
+    # `_post` returns None on any non-2xx, so a rejected add was indistinguishable
+    # from a successful one. The gravity rebuild below then succeeded - rebuilding
+    # an EMPTY list works perfectly well - `_last_error` was cleared, and apply()
+    # returned True having written nothing.
+    #
+    # That is how GF-72TYTITQ ran from the day it was built to 2026-08-24 with an
+    # empty adlist, an empty gravity, 131,068 unfiltered queries, and every status
+    # in the product reading green.
+    failed: list[str] = []
     for url in have - wanted:
-        _delete(f"/api/lists/{url}?type=block")
+        if not _delete(f"/api/lists/{url}?type=block"):
+            failed.append(f"could not remove {url}")
     for url in wanted - have:
-        _post("/api/lists", {"address": url, "type": "block", "enabled": True})
+        if _post("/api/lists", {"address": url, "type": "block", "enabled": True}) is None:
+            failed.append(f"Pi-hole rejected {url}")
+
+    if failed:
+        _last_error = "; ".join(failed[:3])
+        return False
+
+    # READ BACK BEFORE CLAIMING ANYTHING. "Never claim success without a
+    # read-back" is a standing rule in this project, written after a router
+    # reported a setting saved that it had not saved. The same rule applies to
+    # our own writes: a 200 means Pi-hole accepted the request, not that the list
+    # is there.
+    confirmed = current_lists()
+    if confirmed is None:
+        _last_error = "Pi-hole stopped answering while the blocklist was being written"
+        return False
+    if not wanted.issubset(set(confirmed)):
+        missing = sorted(wanted - set(confirmed))
+        _last_error = f"the blocklist did not take - Pi-hole does not have {missing[0]}"
+        return False
 
     # Rebuild gravity so the changes are live. Without this the list table has
     # changed and the resolver has not.
@@ -132,8 +167,80 @@ def apply(settings: dict) -> bool:
         _last_error = "gravity rebuild failed"
         return False
 
+    # And read back ONE more time, because a gravity rebuild that runs cleanly
+    # over a list it could not download leaves zero domains and reports success -
+    # which is the exact shape of the original fault, one layer further in.
+    if wanted:
+        after = summary()
+        if after is not None and not after.get("domainsOnGravity"):
+            _last_error = (
+                "the blocklist is registered but downloaded no domains - "
+                "check the box can reach the internet"
+            )
+            return False
+
     _last_error = None
     return True
+
+
+def reconcile(store) -> bool:
+    """Make reality match intent, but only do work when they differ.
+
+    WHY THIS EXISTS. `apply()` ran only when a setting CHANGED. Nothing ever
+    compared Pi-hole's actual state against the owner's intent, so a box that
+    came up with an empty blocklist stayed empty forever - no error, no retry,
+    every local signal healthy, and the only route back was a human PUTting a
+    threat level it already had. A customer has no such command.
+
+    Cheap on the normal path: two reads and no rebuild when things already
+    agree. That matters on a household that loses power weekly - reboot must not
+    mean a full gravity download every time.
+    """
+    global _last_error
+
+    settings = store.get_filter_settings()
+    wanted = set(desired_lists(settings))
+
+    have = current_lists()
+    if have is None:
+        _last_error = "Pi-hole unreachable"
+        return False
+
+    if set(have) != wanted:
+        return apply(settings)
+
+    # The lists agree. That is not the same as being protected: the list can be
+    # registered and gravity still empty, which is precisely the state this box
+    # was found in.
+    if wanted:
+        stats = summary()
+        if stats is not None and not stats.get("domainsOnGravity"):
+            return apply(settings)
+
+    _last_error = None
+    return True
+
+
+def reconcile_async(store) -> None:
+    """Run reconcile() on a thread. Safe to call at startup."""
+    global _applying
+
+    if not config.pihole_api_url:
+        return
+
+    with _lock:
+        if _applying:
+            return
+        _applying = True
+
+    def _run() -> None:
+        global _applying
+        try:
+            reconcile(store)
+        finally:
+            _applying = False
+
+    threading.Thread(target=_run, daemon=True, name="gateflame-reconcile").start()
 
 
 def apply_async(store) -> None:

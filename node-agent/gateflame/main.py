@@ -55,6 +55,15 @@ def _startup() -> None:
     # what the owner asked for had not happened.
     if store.clear_reboot_pause():
         blocklists.apply_async(store)
+    else:
+        # RECONCILE ON EVERY OTHER BOOT. Without this, a box whose blocklist is
+        # empty stays empty indefinitely: apply() only ever ran on a settings
+        # CHANGE, so nothing re-checked reality against intent and the only way
+        # back was a human PUTting a threat level the box already had.
+        #
+        # Cheap when things already agree - two reads, no rebuild - which matters
+        # where load shedding makes a reboot a weekly event rather than a rare one.
+        blocklists.reconcile_async(store)
 
 
 @app.on_event("shutdown")
