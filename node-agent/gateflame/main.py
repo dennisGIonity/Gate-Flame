@@ -444,6 +444,42 @@ def _filtering_state_payload() -> dict:
         state["protectionStatus"] = "bypass"
         state["enabled"] = False
 
+    # The same rule, for the failure the bypass check cannot see.
+    #
+    # FOUND ON THE LIVE BOX 2026-08-24. GF-72TYTITQ reported
+    # `protectionStatus: "active", enabled: true, blocklistCount: 1` while
+    # Pi-hole held ZERO blocklists and resolved doubleclick.net to a real
+    # address. It had never filtered anything, from the day it was built.
+    #
+    # Nothing was in bypass, so the check above passed it as healthy. The agent
+    # had no environment at all (`systemctl show -p Environment` was empty), so
+    # `config.pihole_api_url` was None, every `blocklists.apply()` returned
+    # False with "Pi-hole unreachable", and the payload cheerfully rendered the
+    # owner's INTENT as though it were the state of the network.
+    #
+    # `unconfigured` is checked first and needs no history: with no Pi-hole URL
+    # the agent structurally CANNOT write a list, and that is knowable the
+    # instant the process starts. `degraded` covers the case where it could
+    # reach Pi-hole once and the last attempt failed.
+    #
+    # Deliberately NOT a call to `blocklists.current_lists()`. That asks
+    # Pi-hole, over the very API that is broken in this failure mode, on a
+    # request the kiosk polls - so it would hang the surface that exists to
+    # report the fault. Both signals used here are local and instant.
+    if state["protectionStatus"] == "active":
+        if not config.pihole_api_url:
+            state["protectionStatus"] = "unconfigured"
+            state["enabled"] = False
+        elif blocklists.last_error():
+            state["protectionStatus"] = "degraded"
+            state["enabled"] = False
+
+    # Surfaced unconditionally, not just on failure: a surface that has to infer
+    # "still working" from the absence of a field cannot tell it apart from an
+    # older agent that never sent one.
+    state["applying"] = blocklists.is_applying()
+    state["lastError"] = blocklists.last_error()
+
     state["threatLevel"] = threat_level.describe(settings["threat_level"])
     state["availableLevels"] = threat_level.all_levels()
     state["categories"] = content_categories.describe_all(settings["categories"])
