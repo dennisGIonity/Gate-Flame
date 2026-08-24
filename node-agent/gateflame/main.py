@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from . import blocklists, content_categories, filtering_state, threat_level
 from . import clients as clients_mod
-from . import services, telemetry, threats
+from . import pihole, services, telemetry, threats
 from .config import config
 from .health_feed import HealthFeedLoop
 from .security import ScopeChecker, is_loopback, require_lan
@@ -462,23 +462,51 @@ def _filtering_state_payload() -> dict:
     # instant the process starts. `degraded` covers the case where it could
     # reach Pi-hole once and the last attempt failed.
     #
-    # Deliberately NOT a call to `blocklists.current_lists()`. That asks
-    # Pi-hole, over the very API that is broken in this failure mode, on a
-    # request the kiosk polls - so it would hang the surface that exists to
-    # report the fault. Both signals used here are local and instant.
+    # This DOES call Pi-hole, and that is a deliberate reversal. The first cut
+    # used only local signals to keep a polled route cheap, and it was wrong:
+    # the one question that matters - is anything actually being blocked - can
+    # only be answered by the thing doing the blocking. `pihole.summary()` is a
+    # loopback call with a cached session and a 4s timeout, and `telemetry`
+    # already makes it on the same poll, so the added cost is one request.
+    # `summary()` returning None is itself a fault here, not a reason to guess.
+    fault: str | None = None
     if state["protectionStatus"] == "active":
         if not config.pihole_api_url:
             state["protectionStatus"] = "unconfigured"
-            state["enabled"] = False
-        elif blocklists.last_error():
-            state["protectionStatus"] = "degraded"
-            state["enabled"] = False
+            fault = "This box has no Pi-hole configured, so it cannot block anything."
+        else:
+            # ASK PI-HOLE WHAT IT ACTUALLY HAS. An earlier version of this check
+            # trusted `last_error()` alone and would have passed the live box on
+            # 2026-08-24 a second time: after the drop-in was written the agent
+            # could read Pi-hole fine, no apply had been attempted since, so
+            # last_error was None - and gravity was still empty. 131,068 queries,
+            # 0 blocked, reported as "active".
+            #
+            # `apply()` only runs on a settings CHANGE. Nothing reconciles wanted
+            # against loaded at boot, so an empty box stays empty indefinitely and
+            # every local signal looks healthy. Until that reconcile exists this
+            # comparison is the only thing standing between a customer and a
+            # green light over an unprotected network.
+            wanted = blocklists.desired_lists(settings)
+            loaded = pihole.summary()
+            if loaded is None:
+                fault = "Pi-hole is not answering, so what it is blocking cannot be confirmed."
+            elif wanted and not loaded.get("domainsOnGravity"):
+                fault = "Pi-hole has no blocklist loaded, so nothing is being blocked."
+            elif blocklists.last_error():
+                fault = blocklists.last_error()
+
+            if fault:
+                state["protectionStatus"] = "degraded"
+
+    if fault:
+        state["enabled"] = False
 
     # Surfaced unconditionally, not just on failure: a surface that has to infer
     # "still working" from the absence of a field cannot tell it apart from an
     # older agent that never sent one.
     state["applying"] = blocklists.is_applying()
-    state["lastError"] = blocklists.last_error()
+    state["lastError"] = fault or blocklists.last_error()
 
     state["threatLevel"] = threat_level.describe(settings["threat_level"])
     state["availableLevels"] = threat_level.all_levels()

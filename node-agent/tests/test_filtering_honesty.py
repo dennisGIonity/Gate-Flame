@@ -1,25 +1,27 @@
 """`protectionStatus` must never say "active" when nothing is being blocked.
 
-REGRESSION FIXTURE: the live box, 2026-08-24.
+REGRESSION FIXTURE: the live box, 2026-08-24. Two states, not one.
 
-GF-72TYTITQ answered /api/v1/filtering with:
+STATE A - before the systemd drop-in was written.
+GF-72TYTITQ answered /api/v1/filtering with protectionStatus "active",
+enabled true, blocklistCount 1, while gravity held 0 domains and the box
+resolved doubleclick.net to a real address. GATEFLAME_PIHOLE_URL was unset, so
+every blocklists.apply() had failed with "Pi-hole unreachable".
 
-    {"protectionStatus":"active","enabled":true,
-     "threatLevel":{"level":"low","blocklistCount":1}}
+STATE B - AFTER the drop-in was written, and this is the important one.
+The agent could now read Pi-hole perfectly: 131,068 queries today, 0 blocked,
+0 domains on gravity. No apply had been ATTEMPTED since the restart, so
+last_error was None. Every local signal said healthy. A first version of this
+check trusted last_error alone and would have called State B "active" too.
 
-while `pihole -q doubleclick.net` found 0 domains in 0 lists, gravity held 0
-domains, and the box resolved doubleclick.net to a real address. It had never
-filtered anything since it was built.
+The lesson those two states teach together: the only authority on whether
+anything is being blocked is the thing doing the blocking. Local intent,
+however carefully tracked, is not evidence.
 
-The cause was mundane - the agent had no environment, so GATEFLAME_PIHOLE_URL
-was unset and every blocklists.apply() failed with "Pi-hole unreachable". The
-DEFECT was that none of that reached the payload: the API rendered the owner's
-intent and called it the state of the network.
-
-main.py already carried the right instinct for the watchdog-bypass case, in a
-comment saying that reporting "active" there "would be the single most
-misleading thing this API could do". These tests extend that rule to the two
-failure modes the bypass check cannot see.
+Underneath both is a real gap, still open: blocklists.apply() runs only on a
+settings CHANGE. Nothing reconciles wanted-against-loaded at boot, so an empty
+box stays empty indefinitely. Until that exists, this comparison is the only
+thing between a customer and a green light over an unprotected network.
 """
 
 from __future__ import annotations
@@ -28,17 +30,36 @@ import dataclasses
 
 import pytest
 
-from gateflame import blocklists, main
+from gateflame import blocklists, main, pihole
 
 REACHABLE = "http://127.0.0.1:8081"
+
+# Pi-hole answering normally, with a real blocklist loaded.
+HEALTHY = {
+    "totalQueriesToday": 131068,
+    "queriesBlockedToday": 4127,
+    "blockPercentage": 3.1,
+    "domainsOnGravity": 151234,
+    "activeClientsCount": 3,
+}
+
+# The live box's State B, verbatim: answering, busy, blocking nothing.
+EMPTY_GRAVITY = {
+    "totalQueriesToday": 131068,
+    "queriesBlockedToday": 0,
+    "blockPercentage": 0.0,
+    "domainsOnGravity": 0,
+    "activeClientsCount": 3,
+}
 
 
 @pytest.fixture(autouse=True)
 def _clean_module_state(monkeypatch):
-    """No bypass flag, no leftover error. Each test states its own world."""
+    """No bypass, no leftover error, Pi-hole healthy. Tests state their own world."""
     monkeypatch.setattr(main, "pihole_bypass_active", lambda: False)
     monkeypatch.setattr(blocklists, "_last_error", None, raising=False)
     monkeypatch.setattr(blocklists, "_applying", False, raising=False)
+    monkeypatch.setattr(pihole, "summary", lambda: dict(HEALTHY))
     yield
 
 
@@ -54,37 +75,70 @@ def _set_pihole_url(monkeypatch, url):
     )
 
 
+def _summary(monkeypatch, value):
+    monkeypatch.setattr(pihole, "summary", lambda: value)
+
+
 def _payload():
     return main._filtering_state_payload()
 
 
-# ------------------------------------------------------- the live-box scenario
+# --------------------------------------------------- STATE A: no Pi-hole at all
 
 
 def test_no_pihole_url_is_never_reported_as_active(monkeypatch):
-    """The exact 2026-08-24 state: enabled intent, no way to act on it."""
     _set_pihole_url(monkeypatch, None)
 
     out = _payload()
 
     assert out["protectionStatus"] == "unconfigured"
-    # The load-bearing assertion. Everything else here is detail; this is the bug.
-    assert out["protectionStatus"] != "active"
     assert out["enabled"] is False
+    assert out["lastError"]
 
 
 def test_unconfigured_is_known_without_ever_having_tried(monkeypatch):
     """Survives an agent restart, which is why it is not based on last_error.
 
     `last_error` is module state and dies with the process. An agent that boots
-    and has not yet attempted an apply has no error to report - so a check that
-    relied on it alone would call a permanently-broken box healthy for as long
-    as nobody touched a toggle.
+    and has not yet attempted an apply has no error to report.
     """
     _set_pihole_url(monkeypatch, None)
     monkeypatch.setattr(blocklists, "_last_error", None, raising=False)
 
     assert _payload()["protectionStatus"] == "unconfigured"
+
+
+# ------------------------------------- STATE B: Pi-hole fine, blocking nothing
+
+
+def test_empty_gravity_is_degraded_even_with_no_recorded_error(monkeypatch):
+    """THE ONE THE FIRST VERSION OF THIS CHECK GOT WRONG.
+
+    Pi-hole is reachable and answering. No apply has failed, because none has
+    been attempted since the restart. Everything local says healthy. Gravity is
+    empty, so not one of those 131,068 queries was filtered.
+    """
+    _set_pihole_url(monkeypatch, REACHABLE)
+    _summary(monkeypatch, dict(EMPTY_GRAVITY))
+    monkeypatch.setattr(blocklists, "_last_error", None, raising=False)
+
+    out = _payload()
+
+    assert out["protectionStatus"] == "degraded"
+    assert out["enabled"] is False
+    assert "no blocklist" in out["lastError"]
+
+
+def test_pihole_not_answering_is_degraded_not_active(monkeypatch):
+    """A resolver we cannot question is not a resolver we can vouch for."""
+    _set_pihole_url(monkeypatch, REACHABLE)
+    _summary(monkeypatch, None)
+
+    out = _payload()
+
+    assert out["protectionStatus"] == "degraded"
+    assert out["enabled"] is False
+    assert "not answering" in out["lastError"]
 
 
 def test_a_failed_apply_is_reported_as_degraded(monkeypatch):
@@ -94,19 +148,34 @@ def test_a_failed_apply_is_reported_as_degraded(monkeypatch):
     out = _payload()
 
     assert out["protectionStatus"] == "degraded"
-    assert out["enabled"] is False
     assert out["lastError"] == "Pi-hole unreachable"
 
 
-def test_a_healthy_box_still_reports_active(monkeypatch):
-    """Non-vacuity: the checks above must not condemn a working box."""
+# ------------------------------------------------------------- non-vacuity
+
+
+def test_a_genuinely_filtering_box_still_reports_active(monkeypatch):
+    """The checks above must not condemn a box that is actually working."""
     _set_pihole_url(monkeypatch, REACHABLE)
+    _summary(monkeypatch, dict(HEALTHY))
 
     out = _payload()
 
     assert out["protectionStatus"] == "active"
     assert out["enabled"] is True
     assert out["lastError"] is None
+
+
+def test_zero_blocked_today_is_not_a_fault(monkeypatch):
+    """A quiet network is not a broken one.
+
+    Gravity is loaded; nothing blockable has been asked for yet. Treating that
+    as degraded would show a fault on every freshly-booted healthy box.
+    """
+    _set_pihole_url(monkeypatch, REACHABLE)
+    _summary(monkeypatch, {**HEALTHY, "queriesBlockedToday": 0, "blockPercentage": 0.0})
+
+    assert _payload()["protectionStatus"] == "active"
 
 
 # ------------------------------------------------------------- ordering rules
@@ -126,12 +195,13 @@ def test_a_deliberate_pause_is_not_called_a_fault(monkeypatch):
     Conflating the two would teach the customer to ignore the fault state,
     because they would meet it every time they used the pause button.
     """
-    _set_pihole_url(monkeypatch, None)
+    _set_pihole_url(monkeypatch, REACHABLE)
+    _summary(monkeypatch, dict(EMPTY_GRAVITY))
     main.store.pause_filtering("indefinite", None, "testing")
     try:
         out = _payload()
         assert out["protectionStatus"] == "paused"
-        assert out["protectionStatus"] != "unconfigured"
+        assert out["protectionStatus"] != "degraded"
     finally:
         main.store.resume_filtering()
 
