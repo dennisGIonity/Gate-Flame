@@ -84,6 +84,28 @@ const PROTECTION_FACE: Record<
     colour: 'text-[#E11D48]',
     glow: 'shadow-[0_0_80px_rgba(225,29,72,0.22)]',
   },
+  /*
+   * Added 2026-08-24 with the states themselves. The lock screen is the FIRST
+   * thing anyone sees on the box, and until now these two would have fallen
+   * through to whatever `protection` defaulted to — which is how GF-72TYTITQ
+   * showed a reassuring face over an empty blocklist for eight days.
+   *
+   * Both read as unprotected, because both are. They are separate entries only
+   * so the wording can point at the right remedy: one is a box that tried and
+   * failed, the other is a box that was never finished being set up.
+   */
+  degraded: {
+    icon: ShieldAlert,
+    text: 'Unprotected — not blocking',
+    colour: 'text-[#E11D48]',
+    glow: 'shadow-[0_0_80px_rgba(225,29,72,0.22)]',
+  },
+  unconfigured: {
+    icon: ShieldAlert,
+    text: 'Unprotected — setup incomplete',
+    colour: 'text-[#E11D48]',
+    glow: 'shadow-[0_0_80px_rgba(225,29,72,0.22)]',
+  },
 };
 
 export default function ConsoleLock({

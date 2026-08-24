@@ -26,16 +26,28 @@
 export type ThreatLevelId = 'low' | 'medium' | 'high';
 
 /**
- * Three values, and they are blunt on purpose:
- *   active  filtering, household protected
- *   paused  off because the OWNER asked — their choice, shown clearly
- *   bypass  off because the BOX FAILED — dns-watchdog.sh fell back
+ * Blunt on purpose. Only ONE of these means the household is protected.
  *
- * `paused` and `bypass` are both unprotected and must both look unprotected.
- * They are distinguished because the remedy differs completely: one is a button,
- * the other is a fault.
+ *   active        filtering, household protected
+ *   paused        off because the OWNER asked — their choice, shown clearly
+ *   bypass        off because the BOX FAILED — dns-watchdog.sh fell back
+ *   degraded      the box is up and NOT blocking — the apply never landed
+ *   unconfigured  the box has no Pi-hole to talk to, so it cannot block at all
+ *
+ * `degraded` and `unconfigured` were added 2026-08-24 after GF-72TYTITQ was
+ * found reporting `active` over an empty blocklist — 131,068 unfiltered queries
+ * with every status in the product reading green. They are separate values
+ * because the remedies differ, and both are as unprotected as `bypass`.
+ *
+ * EVERY UNPROTECTED STATE MUST LOOK UNPROTECTED. The four are distinguished so
+ * the explanation can differ, never so that one of them can look softer.
  */
-export type ProtectionStatus = 'active' | 'paused' | 'bypass';
+export type ProtectionStatus =
+  | 'active'
+  | 'paused'
+  | 'bypass'
+  | 'degraded'
+  | 'unconfigured';
 
 export type PauseDurationId = '5m' | '30m' | '2h' | 'until_reboot' | 'indefinite';
 
@@ -74,6 +86,23 @@ export interface FilteringState {
   availableLevels: ThreatLevelState[];
   categories: ContentCategory[];
   pauseDurations: PauseDuration[];
+
+  /**
+   * A blocklist rebuild is running. Show a spinner rather than implying the
+   * change has already taken hold — a gravity rebuild is tens of seconds on a
+   * Pi, and a customer who thinks a toggle did nothing taps it again.
+   */
+  applying: boolean;
+
+  /**
+   * Why the box is not doing what the settings say, in the node's own words.
+   * Null when there is nothing wrong.
+   *
+   * Always present, never omitted on success: a surface that has to infer
+   * "fine" from a missing field cannot tell that apart from an older agent that
+   * never sent one.
+   */
+  lastError: string | null;
 }
 
 export interface PauseRequest {

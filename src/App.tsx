@@ -1,7 +1,11 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { AppViewMode } from './types';
 import { AppLayout } from './components/layout/AppLayout';
-import { MobileDashboard } from './components/MobileDashboard';
+// The web preview renders the REAL phone app, not a copy of it. MobileDashboard
+// (deleted 2026-08-24) was a separate implementation that drifted from both the
+// phone and the console; a preview that shows something the customer will never
+// see is worse than no preview.
+import MobileApp from './mobile/MobileApp';
 import { PanelFallback } from './components/LazyFallback';
 import { useGateFlameEngine } from './hooks/useGateFlameEngine';
 import { useAppStore } from './store/useAppStore';
@@ -100,7 +104,7 @@ export default function App() {
       appTheme={userAccount.appTheme}
     >
       {currentView === 'mobile_apk' ? (
-        <MobileDashboard />
+        <MobileApp />
       ) : (
         /* One boundary, keyed on the view: switching views re-suspends rather
            than holding the previous panel on screen while the next downloads. */

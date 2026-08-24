@@ -36,14 +36,38 @@ import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types
 /**
  * The console is served BY the agent, from the agent's own static mount at
  * /device-kiosk. So the agent is always same-origin, and same-origin is the
- * only correct answer: hardcoding `localhost:8080` would break the moment the
- * port moves (GATEFLAME_PORT is configurable), and would silently talk to the
- * WRONG node if this page were ever opened against a different box.
+ * only correct answer for it: hardcoding `localhost:8080` would break the
+ * moment the port moves (GATEFLAME_PORT is configurable), and would silently
+ * talk to the WRONG node if that page were ever opened against a different box.
  *
  * The dev-server fallback exists because `npm run dev` serves on :3000 while
  * the agent stays on :8080.
+ *
+ * THE PHONE OVERRIDES THIS. The console is same-origin; the phone is not.
+ *
+ * The paired app talks to a node across the LAN and must send a bearer token,
+ * neither of which same-origin can express. Rather than give the phone a second
+ * copy of this client - which is precisely how the first mobile app drifted
+ * away from the console and had to be scrapped - the transport is injected and
+ * everything else here is shared verbatim.
+ *
+ * Unset by default, so the console's behaviour is byte-for-byte what it was.
  */
+interface NodeTransport {
+  /** Absolute base, e.g. `http://192.168.0.10:8080`. No trailing slash. */
+  baseUrl: string;
+  /** Bearer token for a paired device, or null while unpaired. */
+  authToken: () => string | null;
+}
+
+let transport: NodeTransport | null = null;
+
+export function configureNodeTransport(t: NodeTransport | null): void {
+  transport = t ? { ...t, baseUrl: t.baseUrl.replace(/\/+$/, '') } : null;
+}
+
 export function apiRoot(): string {
+  if (transport) return `${transport.baseUrl}/api/v1`;
   if (typeof window === 'undefined') return 'http://localhost:8080/api/v1';
   const { origin, port } = window.location;
   if (port === '3000' || port === '5173') return 'http://localhost:8080/api/v1';
@@ -280,9 +304,17 @@ export async function nodeRequest<T>(
   init.signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
+    // The console sends no Authorization header and must not start: its scope
+    // comes from the loopback socket, and a token would be both useless and a
+    // second source of truth about who is allowed to do what.
+    const headers: Record<string, string> = {};
+    if (init.body) headers['Content-Type'] = 'application/json';
+    const token = transport?.authToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
     const res = await fetch(`${apiRoot()}${path}`, {
       method: init.method ?? 'GET',
-      headers: init.body ? { 'Content-Type': 'application/json' } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body: init.body ? JSON.stringify(init.body) : undefined,
       signal: controller.signal,
     });
