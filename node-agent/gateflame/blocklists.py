@@ -53,6 +53,25 @@ def last_error() -> str | None:
     return _last_error
 
 
+def forget_error() -> None:
+    """Drop a recorded error that observation has since contradicted.
+
+    `_last_error` is sticky: it is cleared only by a successful apply. If the
+    underlying problem gets fixed by anything OTHER than this agent - an
+    engineer running `pihole -g`, a container restart, a manual list edit - the
+    error outlives the fault and the box reports degraded while it is visibly
+    filtering. Found exactly that way on 2026-08-24.
+
+    A false "degraded" is not harmless. It is the same class of error as a false
+    "active", just pointed the other way, and a customer who is told they are
+    unprotected while they are protected learns to ignore the status.
+
+    Only called after Pi-hole has been asked and has contradicted the error.
+    """
+    global _last_error
+    _last_error = None
+
+
 def desired_lists(settings: dict) -> list[str]:
     """Every blocklist URL implied by the owner's current settings.
 

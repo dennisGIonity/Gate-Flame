@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { SECURITY_MODULES, ApiService } from '../services/serviceManager';
 import { cn, getFilterBorderColor, getFilterColor } from '../lib/utils';
+import { count, decimal, percent, scaled } from '../lib/format';
 import { InlineFallback, PanelFallback } from './LazyFallback';
 
 /*
@@ -439,10 +440,12 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
 
                         <div className="grid grid-cols-2 gap-3">
                         {[
-                            { label: 'Total Queries', value: telemetry.totalQueriesToday.toLocaleString(), icon: Activity, color: 'text-sky-400' },
-                            { label: 'Neutralized', value: telemetry.queriesBlockedToday.toLocaleString(), icon: ShieldAlert, color: 'text-rose-400' },
-                            { label: 'Block Rate', value: `${telemetry.blockPercentage}%`, icon: Layers, color: 'text-emerald-400' },
-                            { label: 'Gravity Size', value: `${(telemetry.domainsOnGravity / 1000000).toFixed(1)}M`, icon: ShieldCheck, color: 'text-indigo-400' },
+                            // Every one of these is nullable. The agent returns null, never 0,
+                            // for anything Pi-hole did not supply — see src/lib/format.ts.
+                            { label: 'Total Queries', value: count(telemetry.totalQueriesToday), icon: Activity, color: 'text-sky-400' },
+                            { label: 'Neutralized', value: count(telemetry.queriesBlockedToday), icon: ShieldAlert, color: 'text-rose-400' },
+                            { label: 'Block Rate', value: percent(telemetry.blockPercentage, 1), icon: Layers, color: 'text-emerald-400' },
+                            { label: 'Gravity Size', value: (({ value, unit }) => `${value}${unit}`)(scaled(telemetry.domainsOnGravity)), icon: ShieldCheck, color: 'text-indigo-400' },
                         ].map((stat, i) => (
                             <GlassPanel filterLevel={telemetry.filterLevel} key={i} className="group rounded-2xl p-4 flex flex-col justify-between">
                                 <stat.icon className={cn("w-4 h-4 mb-3", stat.color)} />
@@ -496,9 +499,11 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                                         <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider mb-1 relative z-10">Index Size</span>
                                         <div className="flex items-baseline gap-1 relative z-10">
                                             <span className="text-xl font-mono font-bold text-slate-900 dark:text-white tracking-tight">
-                                                {(telemetry.domainsOnGravity / 1000000).toFixed(1)}
+                                                {scaled(telemetry.domainsOnGravity).value}
                                             </span>
-                                            <span className="text-[10px] font-mono text-slate-500 font-medium">M</span>
+                                            <span className="text-[10px] font-mono text-slate-500 font-medium">
+                                                {scaled(telemetry.domainsOnGravity).unit}
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="bg-slate-50 dark:bg-black/40 border border-slate-100 dark:border-white/5 rounded-xl p-3 flex flex-col justify-center relative overflow-hidden group">
@@ -506,7 +511,7 @@ const handleWhitelistSubmit = (e: React.FormEvent) => {
                                         <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider mb-1 relative z-10">Data Saved</span>
                                         <div className="flex items-baseline gap-1 relative z-10">
                                             <span className="text-xl font-mono font-bold text-slate-900 dark:text-white tracking-tight">
-                                                {telemetry.dataSavedMB.toFixed(1)}
+                                                {decimal(telemetry.dataSavedMB)}
                                             </span>
                                             <span className="text-[10px] font-mono text-slate-500 font-medium">MB</span>
                                         </div>

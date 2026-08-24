@@ -503,7 +503,18 @@ def _filtering_state_payload() -> dict:
             elif wanted and not loaded.get("domainsOnGravity"):
                 fault = "Pi-hole has no blocklist loaded, so nothing is being blocked."
             elif blocklists.last_error():
-                fault = blocklists.last_error()
+                # A recorded error and a healthy-looking Pi-hole disagree. Ask
+                # which one is current rather than trusting the memory: the
+                # error is sticky and survives anything that fixes the box
+                # WITHOUT going through this agent.
+                actual = blocklists.current_lists()
+                if actual is not None and set(wanted).issubset(set(actual)):
+                    blocklists.forget_error()
+                else:
+                    # The lists really are wrong, so the error still stands -
+                    # e.g. a threat-level change that failed to apply while the
+                    # PREVIOUS lists remain loaded and gravity looks fine.
+                    fault = blocklists.last_error()
 
             if fault:
                 state["protectionStatus"] = "degraded"

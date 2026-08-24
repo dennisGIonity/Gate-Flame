@@ -141,14 +141,43 @@ def test_pihole_not_answering_is_degraded_not_active(monkeypatch):
     assert "not answering" in out["lastError"]
 
 
+LIST_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+
+
 def test_a_failed_apply_is_reported_as_degraded(monkeypatch):
     _set_pihole_url(monkeypatch, REACHABLE)
     monkeypatch.setattr(blocklists, "_last_error", "Pi-hole unreachable", raising=False)
+    # Lists genuinely wrong: Pi-hole has none of what was asked for.
+    monkeypatch.setattr(blocklists, "current_lists", lambda: [])
 
     out = _payload()
 
     assert out["protectionStatus"] == "degraded"
     assert out["lastError"] == "Pi-hole unreachable"
+
+
+def test_a_stale_error_is_dropped_when_pihole_contradicts_it(monkeypatch):
+    """FOUND ON THE LIVE BOX 2026-08-24, after the fix.
+
+    Gravity was repaired from the CLI - outside the agent - so nothing cleared
+    `_last_error`. The box was demonstrably filtering (242 blocked, 82,562
+    domains loaded) and the API still said degraded / "gravity rebuild failed".
+
+    A false "degraded" is the same class of error as a false "active", pointed
+    the other way. A customer told they are unprotected while they ARE protected
+    learns to ignore the status, which costs exactly as much.
+    """
+    _set_pihole_url(monkeypatch, REACHABLE)
+    monkeypatch.setattr(blocklists, "_last_error", "gravity rebuild failed", raising=False)
+    # Pi-hole says otherwise: the wanted list is loaded and gravity is populated.
+    monkeypatch.setattr(blocklists, "current_lists", lambda: [LIST_URL])
+
+    out = _payload()
+
+    assert out["protectionStatus"] == "active"
+    assert out["enabled"] is True
+    assert out["lastError"] is None
+    assert blocklists.last_error() is None, "the stale error must be cleared, not just hidden"
 
 
 # ------------------------------------------------------------- non-vacuity
