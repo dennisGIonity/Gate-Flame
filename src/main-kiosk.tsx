@@ -35,8 +35,14 @@
  * wired to a route in node-agent/gateflame/main.py; nothing is wired to
  * Math.random(). Unknown still renders as `-` plus the API's own `gap` string.
  *
- * GateFlameKiosk.tsx is retained until this has run on real hardware. Delete it
- * once GATE 1 in the end-game plan is passed.
+ * GateFlameKiosk.tsx was deleted 2026-08-24, once KioskApp had run against the
+ * live node on real hardware. It is in git history if it is ever wanted.
+ *
+ * THE PHONE APP IS BUILT ON THIS, NOT ALONGSIDE IT. The panels take a plain
+ * PanelContext and know nothing about the surface they render on, so the phone
+ * shares this app's data client, formatters and honesty rules rather than
+ * carrying a second set that can drift. The first mobile app drifted exactly
+ * that way and had to be scrapped.
  */
 
 import { StrictMode } from 'react';

@@ -54,6 +54,12 @@ captures/
 # ── IDE / tooling ────────────────────────────────────
 .idea/
 .vscode/
+# A stray bare git repo left in the tree by an editor. Not ours, not tracked.
+VSCode/
+# Scratch drop-box for docs in progress. Anything worth keeping is promoted
+# into docs/ - the 2026-08-17 mobile plan sat here untracked for a week and
+# was invisible to everyone, which is how the mobile rebuild got missed.
+claude/
 .antigravity/
 *.iml
 .DS_Store
