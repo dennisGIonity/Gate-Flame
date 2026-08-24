@@ -11,9 +11,9 @@ import { manualChunks } from './vite.chunks.config';
  * dist/assets wholesale next to the renamed index.html. That is what makes
  * code-splitting safe here: a lazy chunk is just another file in assets/.
  *
- * The genuinely inlined single-file variants are vite.mobile.config.ts and
- * vite.kiosk.config.ts (vite-plugin-singlefile). They are not referenced by any
- * npm script and are left alone — see the note in vite.chunks.config.ts.
+ * vite.mobile.config.ts and vite.kiosk.config.ts were the inlined single-file
+ * variants. Deleted 2026-08-24: no npm script had ever referenced them, and
+ * vite-plugin-singlefile existed solely to serve them. They are in git history.
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
