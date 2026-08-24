@@ -71,6 +71,19 @@ export interface ProbeDeps {
    */
   networkStatus: () => Promise<{ connected: boolean; connectionType: string }>;
   now: () => number;
+  /**
+   * The paired device token, or null when this handset is not paired.
+   *
+   * `/api/v1/posture/netcheck` is `read`-scoped on the agent, deliberately: the
+   * payload names the gateway, the box's address and whether filtering is
+   * currently bypassed, and "already on the LAN" includes the guest network.
+   *
+   * Injected rather than read here so this folder keeps importing nothing but
+   * its own types. Returning null is a first-class answer — probe A5 then gets a
+   * 401, yields `unknown`, and resolveState refuses to turn that into the
+   * "your phone is bypassing the box" screen.
+   */
+  authToken: () => string | null;
 }
 
 export const defaultDeps: ProbeDeps = {
@@ -111,6 +124,11 @@ export const defaultDeps: ProbeDeps = {
   networkStatus: async () => ({ connected: true, connectionType: 'unknown' }),
 
   now: () => Date.now(),
+
+  // Unpaired by default. Same reasoning as networkStatus above: the optionality
+  // lives at the integration boundary where it is visible, not inside a
+  // swallowed exception. The host app injects the real reader.
+  authToken: () => null,
 };
 
 /**
@@ -238,9 +256,18 @@ export async function probeNetcheck(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_NETCHECK_MS);
   try {
+    // The route is `read`-scoped. An unpaired handset sends no header, takes a
+    // 401, and lands on `unknown` — which is the truth, and is why this returns
+    // null rather than throwing.
+    const token = deps.authToken();
     const res = await deps.fetch(
       `http://${ctx.nodeIp}:8080/api/v1/posture/netcheck`,
-      { method: 'GET', cache: 'no-store', signal: controller.signal },
+      {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      },
     );
     if (!res.ok) return null;
     const json = (await res.json()) as NetcheckPayload;

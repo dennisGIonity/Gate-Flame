@@ -53,6 +53,7 @@ function deps(fetchImpl: typeof fetch, connectionType = 'wifi'): ProbeDeps {
     fetch: fetchImpl,
     networkStatus: async () => ({ connected: true, connectionType }),
     now: () => 0,
+    authToken: () => 'test-token',
   };
 }
 
@@ -243,8 +244,14 @@ describe('copy rules', () => {
    * it cannot quietly grow into a general exemption.
    */
   const ALLOWED_JARGON: Record<string, string[]> = {
-    'IB-110': ['DNS', 'DHCP'],
-    'IB-205': ['DNS', 'DHCP'],
+    // ADR-001: IB-110 now sends the customer to the router's Internet/WAN section,
+    // so it no longer needs "DHCP" — and must not use it, because naming DHCP is
+    // what would send them to the setting we deliberately leave alone. "DNS" stays
+    // because that is the literal label printed in the router's own menu.
+    'IB-110': ['DNS'],
+    // 'IB-205' was deleted by the ADR-001 rewrite. Do not re-add an entry here
+    // without the screen: an allow-list naming a screen that does not exist is how
+    // a jargon exemption outlives the copy it was granted for.
   };
 
   it('body copy carries no jargon', () => {
@@ -284,19 +291,73 @@ describe('copy rules', () => {
 
 /* =========================================== architecture-dependent copy is marked */
 
-describe('architecture-dependent copy is findable', () => {
+describe('ADR-001 - the box is an upstream, so a dead box is not an outage', () => {
   /**
-   * These screens exist ONLY because the box makes a permanent change to the router
-   * that only the living box can undo. Under DOC-2026-08-002 Part 5 Option 2 they
-   * change or disappear. If this list drifts, the Option 2 rewrite turns into an
-   * archaeology exercise.
+   * ADR-001 was accepted 2026-08-24. The router forwards to us as its upstream and
+   * devices are never pointed at us, so nothing is taken away from the router and a
+   * dead box costs filtering rather than internet.
+   *
+   * The five screens that used to carry architectureDependent have been rewritten,
+   * so the set is now empty. The flag itself is deliberately kept: it is the
+   * tripwire for a future feature reintroducing a dependency only the living box
+   * can undo. Flag it there and this test makes it visible.
    */
-  it('marks exactly the screens that Option 2 rewrites', () => {
+  it('no screen depends on the box being alive for the internet to work', () => {
     const marked = Object.values(TREE.screens)
       .filter((s) => s.architectureDependent)
       .map((s) => s.id)
       .sort();
-    expect(marked).toEqual(['IB-110', 'IB-204', 'IB-205', 'IB-602', 'IB-605']);
+    expect(marked).toEqual([]);
+  });
+
+  it('deleted the hand-revert emergency walkthrough', () => {
+    // IB-205 talked the customer through undoing the router change to get their
+    // internet back. There is no such emergency now, and a screen that invents one
+    // teaches the customer to distrust the box.
+    expect(TREE.screens['IB-205']).toBeUndefined();
+  });
+
+  /**
+   * The load-bearing copy assertion. IB-204 is what a customer reads when their box
+   * is off. Under the old model it told them their websites would not load until it
+   * came back. Saying that now is a false alarm that sends them to unplug things.
+   */
+  it('never tells the customer that a dead box takes their internet down', () => {
+    for (const [id, s] of Object.entries(TREE.screens)) {
+      const text = [...(s.body ?? []), ...(s.steps ?? []), s.title].join(' ').toLowerCase();
+      const claimsOutage =
+        text.includes('websites will not load until') ||
+        text.includes('websites will stop loading') ||
+        text.includes('your internet will be down');
+      expect(claimsOutage, `${id} claims a dead box is an internet outage`).toBe(false);
+    }
+  });
+
+  /**
+   * ADR-001 accepted, in terms, that filtering is not total, and said the copy must
+   * not imply otherwise. IB-112 is the end of setup — the single most likely place
+   * to overclaim, because it is the screen that wants to congratulate the customer.
+   */
+  it('does not promise total coverage at the end of setup', () => {
+    const done = TREE.screens['IB-112'];
+    expect(done).toBeDefined();
+    const text = (done.body ?? []).join(' ');
+    expect(text.toLowerCase()).not.toContain('every device');
+    // Must actively say coverage is imperfect, not merely avoid saying it is total.
+    expect(/hundred percent|100%|not.*perfect|go straight out/i.test(text)).toBe(true);
+  });
+
+  /**
+   * IB-110 is the one screen that changes the customer's router. Pointing it back at
+   * the DHCP/LAN section would silently restore the Class A outage the ADR removed,
+   * and would do it in a place nobody re-reads. This is the guard against that.
+   */
+  it('changes the router upstream, never the setting that hands addresses to devices', () => {
+    const s = TREE.screens['IB-110'];
+    const steps = (s.steps ?? []).join(' ');
+    expect(steps).toMatch(/Internet or WAN/i);
+    expect(steps).not.toMatch(/DHCP/i);
+    expect(steps).not.toMatch(/\bLAN settings\b/i);
   });
 });
 
@@ -366,6 +427,41 @@ describe('probe sweep', () => {
     expect(out.rawIp).toBe('pass');
     expect(out.dns).toBe('fail');
     expect(resolveState(out)).toBe('S2');
+  });
+
+  /**
+   * The netcheck route is read-scoped, so an unpaired handset gets a 401. That
+   * must degrade to "I could not read the report", never to a clean bill of
+   * health — a 401 body is not a report and must not be parsed as one.
+   */
+  it('an unpaired handset cannot read netcheck, and does not pretend otherwise', async () => {
+    const out = await runProbes(CTX, {
+      ...deps(stubFetch([
+        { match: '1.1.1.1', ok: true },
+        { match: 'dns.google', throws: true },
+        { match: 'one.one.one.one', throws: true },
+        { match: 'netcheck', ok: false },
+        { match: 'system/status', ok: true },
+      ])),
+      authToken: () => null,
+    });
+    expect(out.listener).toBe('unknown');
+    expect(resolveState(out)).toBe('S3');
+    expect(resolveState(out)).not.toBe('S4');
+  });
+
+  it('sends the paired token so the read-scoped route answers', async () => {
+    const headers: (HeadersInit | undefined)[] = [];
+    const f = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('netcheck')) headers.push(init?.headers);
+      if (String(input).includes('dns.google') || String(input).includes('one.one')) {
+        throw new TypeError('no dns');
+      }
+      return { ok: true, json: async () => NC([]) } as Response;
+    }) as unknown as typeof fetch;
+
+    await runProbes(CTX, { ...deps(f), authToken: () => 'abc123' });
+    expect(headers[0]).toEqual({ Authorization: 'Bearer abc123' });
   });
 
   it('reads the listener state from the box rather than deriving its own', async () => {

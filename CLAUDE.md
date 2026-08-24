@@ -118,6 +118,31 @@ done), and AAAA masking is a **fallback** — fix the router's IPv6 at install.
 box verifying by re-read. Not credentials — the credentialed login is
 deliberately unbuilt, see `router_adapters.py`.
 
+**Distribution: Google Play. Decided 2026-08-24 by Dennis.** He hooks the
+Play Console account up when the build is ready. Sideloading, a hosted APK on
+ionity.today and a QR sticker on the box are all **off the table** — do not
+design flows that assume them.
+
+What that makes blocking rather than optional:
+
+- **A signed release APK.** The keystore exists at
+  `C:\Users\DGMic\.gateflame-signing\gateflame-release.jks`; `android/keystore.properties`
+  (or `GATEFLAME_KEYSTORE_*`) has never been written, so `npm run build:apk`
+  cannot sign today. Debug builds need none of this.
+- **Play App Signing enrolment** — the only recovery path if the upload key is
+  ever lost. Enrol at first upload, not later.
+- **A public privacy-notice URL.** POPIA s18 needs one anyway; Play will not
+  accept a listing without one, which couples Sprint 8 to Sprint 2.
+- **A data-safety form that matches reality.** The honest answer here is
+  unusually strong — almost nothing leaves the LAN — so fill it truthfully and
+  let it be a selling point.
+- **`versionCode` discipline.** `android/version.properties` is the single
+  source of truth and must increase on every build that leaves this machine.
+  Play rejects a reused code, and the version disagreement (tag `v1.0.2` vs
+  `VERSION_NAME=1.0.1`) has to be settled before the first upload.
+- **Closed-testing tester count and duration.** Check the current rule early —
+  it has added weeks to other launches.
+
 ## Never do
 
 - Ask for, or accept in chat, a router password or any credential. It runs on his

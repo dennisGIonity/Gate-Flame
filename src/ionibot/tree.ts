@@ -22,15 +22,26 @@
  *   Never claim something is fixed before it is.
  *
  * architectureDependent: true marks copy that exists ONLY because the box makes a
- * permanent change to the router that only the living box can undo. If
- * DOC-2026-08-002 Part 5 Option 2 is adopted, filter on this flag - those screens
- * change or disappear, and nothing else does.
+ * permanent change to the router that only the living box can undo.
+ *
+ * ADR-001 WAS ACCEPTED 2026-08-24, so that rewrite has now HAPPENED. The router
+ * forwards to us as its upstream; devices are never pointed at us. Nothing is
+ * taken from the router, so a dead box costs filtering, not internet. Every screen
+ * that carried the flag was rewritten and the flag is now unused - a test asserts
+ * the set is empty. The flag stays in the type as a tripwire: if a future feature
+ * reintroduces a dependency only the living box can undo, flag it there and the
+ * test will make that visible instead of letting it land quietly in copy.
+ *
+ * Deleted by that rewrite: IB-205, the hand-revert emergency walkthrough. There is
+ * no emergency to walk out of any more.
  * ====================================================================================== */
 
 import type { Tree } from './types';
 
 export const TREE: Tree = {
-  version: '1.0.0',
+  // 2.0.0, not 1.0.1: ADR-001 changed what the customer is told to do to their
+  // router. Anyone holding a translation of 1.x must re-read it, not merge it.
+  version: '2.0.0',
   netcheckContract: '2026-08-18',
   root: 'IB-000',
 
@@ -173,15 +184,31 @@ export const TREE: Tree = {
       actions: [{ label: 'Show me', kind: 'goto', go: 'IB-110', weight: 'primary' }],
     },
 
+    /**
+     * ADR-001 (accepted 2026-08-24) rewrote this screen.
+     *
+     * It used to send the customer to the DHCP/LAN settings, which points every
+     * DEVICE at the box. That is the change that made a dead box a whole-house
+     * outage. We now change the router's own UPSTREAM setting instead: the router
+     * keeps answering its clients and asks us. Nothing is taken away from it, so
+     * when the box dies the router carries on by itself.
+     *
+     * The DHCP setting is deliberately LEFT ALONE. If a future edit moves this
+     * screen back to DHCP, it silently reintroduces the Class A outage — that is
+     * why the instruction to avoid the Wi-Fi/LAN section is a step, not a comment.
+     */
     'IB-110': {
       id: 'IB-110',
       title: 'Changing it yourself',
-      architectureDependent: true,
-      body: ['Open your router settings page in a browser: {{gateway}}'],
+      body: [
+        'One setting, about a minute. Open your router settings page in a browser: {{gateway}}',
+        'This is the setting that decides who your router asks when it looks up a website name. You are pointing it at your box.',
+      ],
       steps: [
-        'Find the DHCP or LAN settings.',
-        'Set the DNS server to {{nodeIp}}',
-        'Leave the second DNS box empty.',
+        'Find the Internet or WAN settings. Not the Wi-Fi settings.',
+        'Look for DNS. Your router may call it DNS Server or Static DNS.',
+        'Set the first box to {{nodeIp}}',
+        'Leave the second box empty.',
         'Save.',
       ],
       actions: [
@@ -217,9 +244,11 @@ export const TREE: Tree = {
       title: 'You are protected',
       tone: 'good',
       body: [
-        'Done. Every device on your Wi-Fi is now protected.',
+        'Done. Your router now asks your box about website names, so everything in the house is covered by the same filter.',
         'Protection starts on the lowest setting. It blocks ads and trackers and will not break anything. You can turn it up whenever you like.',
-        'Some devices only pick this up after reconnecting. Turning Wi-Fi off and on again on each one is enough.',
+        // ADR-001 accepted that filtering is not 100%, and said in terms: do not
+        // let the copy imply total coverage. This paragraph is that instruction.
+        'Your router still decides when to ask. Nearly everything comes to us, but a few lookups go straight out, so the numbers you see will never be a perfect hundred percent.',
       ],
       actions: [{ label: 'Finish', kind: 'close', weight: 'primary' }],
     },
@@ -264,13 +293,26 @@ export const TREE: Tree = {
       actions: [{ label: 'Check again', kind: 'rerunDiagnosis', weight: 'primary' }],
     },
 
+    /**
+     * ADR-001 turned this screen from an emergency into a notice.
+     *
+     * Under the old DHCP model a dead box was a whole-house outage, so this screen
+     * shouted and offered IB-205, a hand-revert walkthrough. As an upstream we take
+     * nothing away from the router, so it keeps resolving on its own the moment we
+     * stop answering. What the customer loses is the filtering, not the internet.
+     *
+     * NOTE this screen is now the UNCOMMON branch. S2 needs name lookups to be
+     * failing AND the box unreachable — i.e. the box is off and the router did not
+     * fall back. The ordinary "box is off" case now lands on S5/IB-209, because
+     * lookups keep working. Both were updated together; keep them consistent.
+     */
     'IB-204': {
       id: 'IB-204',
-      title: 'Your box is off or unplugged',
-      tone: 'bad',
-      architectureDependent: true,
+      title: 'Your box is off, and websites are not loading',
+      tone: 'warn',
       body: [
-        "Your Gate^Flame box is not answering. Your router sends all website name lookups to it, so websites will not load until it is back.",
+        'Your Gate^Flame box is not answering. Normally your router would carry on looking up website names by itself, but right now it is not doing that either.',
+        'Getting the box back on is the quickest fix. Nothing is being filtered while it is off.',
       ],
       steps: [
         "Check the box's power light is on.",
@@ -280,28 +322,7 @@ export const TREE: Tree = {
       ],
       actions: [
         { label: 'The box is on now', kind: 'rerunDiagnosis', weight: 'primary' },
-        { label: 'I need internet right now', kind: 'goto', go: 'IB-205', weight: 'danger' },
-      ],
-    },
-
-    'IB-205': {
-      id: 'IB-205',
-      title: 'Get my internet back now',
-      tone: 'warn',
-      architectureDependent: true,
-      body: [
-        'This switches protection off until your box is working again. Your internet will work straight away.',
-      ],
-      steps: [
-        'Open your router settings: {{gateway}}',
-        'Find the DHCP or LAN settings.',
-        'Set the DNS server back to Automatic, or clear the box.',
-        'Save.',
-        'On each device, turn Wi-Fi off and on.',
-      ],
-      actions: [
-        { label: 'I have done that', kind: 'goto', go: 'IB-000', weight: 'primary' },
-        { label: 'Go back', kind: 'back' },
+        { label: 'It will not switch on', kind: 'goto', go: 'IB-990' },
       ],
     },
 
@@ -362,8 +383,11 @@ export const TREE: Tree = {
       tone: 'warn',
       body: [
         'Your internet is working normally. I just cannot talk to your box from this phone, so I cannot show you its status.',
-        'Usually this is because this phone is on a guest network or a different Wi-Fi, or because the box got a new address after a restart.',
-        'Your protection is probably still working. I just cannot confirm it from here.',
+        'Usually this is because this phone is on a guest network or a different Wi-Fi, or because the box got a new address after a restart. It can also mean the box itself is off.',
+        // ADR-001: do not reassure here. Since the router falls back on its own,
+        // "internet fine, box unseen" is now the ORDINARY shape of a box that is
+        // switched off — the old copy called that "probably still working".
+        'I cannot tell from here which it is. If the box is off, nothing is being filtered right now, even though your internet is fine.',
       ],
       actions: [
         { label: 'Check again', kind: 'rerunDiagnosis', weight: 'primary' },
@@ -377,7 +401,7 @@ export const TREE: Tree = {
       tone: 'good',
       renderNetcheck: true,
       body: [
-        'I checked everything and it all looks right. Your internet is working, your box is answering, and this phone is protected.',
+        'I checked everything and it all looks right. Your internet is working, your box is answering, and your website name lookups are going through it.',
         'If one particular website is not loading, it may be blocked on purpose.',
       ],
       actions: [
@@ -517,11 +541,12 @@ export const TREE: Tree = {
     'IB-602': {
       id: 'IB-602',
       title: 'Moving the box',
-      architectureDependent: true,
       body: [
         'Unplug it, move it, plug it back in. Same router, any spare port.',
         'Nothing else to do. I will find it again by myself.',
-        'Your internet will be down for a minute or two while it starts up again.',
+        // ADR-001: this used to warn of a one-to-two minute internet outage. There
+        // is no outage — the router keeps resolving while we are away.
+        'Your internet keeps working the whole time. Filtering stops until the box is back on.',
       ],
       actions: [{ label: 'Got it', kind: 'close', weight: 'primary' }],
     },
@@ -552,18 +577,28 @@ export const TREE: Tree = {
       ],
     },
 
+    /**
+     * ADR-001 removed this screen's warning, and with it the reason it was scary.
+     *
+     * It used to say that unplugging without reverting stops websites loading for
+     * the whole house. That was true of the DHCP model and is not true of ours —
+     * the router only ever asked us, it never stopped answering its own clients.
+     *
+     * Reverting is now hygiene, not rescue: it stops the router keeping a dead
+     * address configured. Offered, not demanded, and "just unplug it" is a
+     * first-class answer rather than a way to break your house.
+     */
     'IB-605': {
       id: 'IB-605',
-      title: 'Do this BEFORE you unplug the box',
-      tone: 'bad',
-      architectureDependent: true,
+      title: 'Removing your box',
       body: [
-        'Your router is currently pointed at your box.',
-        'If you just unplug the box, your router keeps looking for it and websites will stop loading for everyone in the house.',
-        'Let me put your router back the way it was first. Then you can unplug it safely.',
+        'You can unplug it whenever you like. Your internet will keep working — your router goes straight back to looking up website names by itself.',
+        'Nothing on your network will be filtered after that.',
+        'If you like, I can clear your box out of your router settings first, so nothing is left pointing at a box that is gone.',
       ],
       actions: [
-        { label: 'Put my router back, then remove', kind: 'revertRouterAndRemove', go: 'IB-606', weight: 'primary' },
+        { label: 'Tidy up my router first', kind: 'revertRouterAndRemove', go: 'IB-606', weight: 'primary' },
+        { label: 'I will just unplug it', kind: 'close' },
         { label: 'Cancel', kind: 'back' },
       ],
     },

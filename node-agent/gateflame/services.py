@@ -19,6 +19,7 @@ import time
 
 from . import dpi as dpi_mod
 from . import firewall as firewall_mod
+from . import netcheck as netcheck_mod
 from . import pihole
 from . import posture as posture_mod
 from . import wan as wan_mod
@@ -34,6 +35,10 @@ firewall = firewall_mod.Firewall()
 wan = wan_mod.WanAudit()
 posture = posture_mod.PostureAudit()
 flows = dpi_mod.FlowTable()
+# Holds no state between calls — every run shells out fresh, because a cached
+# network check is a network check that can be wrong. Constructed here only so
+# the script path is resolved once.
+netcheck = netcheck_mod.NetcheckRunner()
 
 
 def _has(binary: str) -> bool:

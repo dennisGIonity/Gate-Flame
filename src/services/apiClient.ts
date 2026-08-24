@@ -68,6 +68,17 @@ export const clearToken = (): void => {
 export const hasToken = (): boolean => readToken() !== null;
 
 /**
+ * The paired device token, for callers that build their own request.
+ *
+ * Ionibot's probe layer is deliberately self-contained — it imports types and
+ * nothing else, so the folder stays droppable into another app. It therefore
+ * cannot reach `readToken`, and `/api/v1/posture/netcheck` is `read`-scoped.
+ * The host app injects this at the mount instead, which is the same seam the
+ * module already uses for the optional network plugin.
+ */
+export const getToken = (): string | null => readToken();
+
+/**
  * Refuse cleartext to anything that is not the customer's own LAN.
  *
  * This lives here rather than in android/app/src/main/res/xml/

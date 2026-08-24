@@ -117,26 +117,50 @@ Ionibot.tsx PLAIN. Imperfect but honest - better than hiding a real failure beca
 nobody wrote a customer sentence for it.
 
 ----------------------------------------------------------------------------------------
-WHAT THIS DOES NOT FIX
+ADR-001 - APPLIED 2026-08-24 (tree v2.0.0)
 ----------------------------------------------------------------------------------------
-Ionibot cannot resolve a single Class A dependency. It can only explain one.
+This section used to say Ionibot could explain a Class A dependency but never resolve
+one. That dependency is gone. ADR-001 was accepted and the architecture changed under
+Ionibot: the router forwards to us as its UPSTREAM, and devices are never pointed at
+this box. Nothing is taken away from the router, so it keeps answering its own clients
+and a dead box costs filtering, not internet. Load shedding stopped being an outage.
 
-Five screens are marked `architectureDependent: true` and exist ONLY because the box
-makes a permanent change to the router that only the living box can undo:
+All five architectureDependent screens were rewritten. The flag is now unused and a
+test asserts the set is empty - it stays in the type as a tripwire for any future
+feature that reintroduces a dependency only the living box can undo.
 
-    IB-110  the router instruction that creates the dependency
-    IB-204  "your box is off, so your internet is down"
-    IB-205  the emergency "revert my router by hand" walkthrough
-    IB-602  "moving it will take your internet down for a minute"
-    IB-605  "do NOT unplug before letting me revert your router"
+    IB-110  REWRITTEN  Internet/WAN DNS, not DHCP. This is the load-bearing one:
+                       sending the customer back to DHCP silently restores the
+                       outage. Two tests guard it, and the jargon allow-list for
+                       this screen was narrowed to DNS only so "DHCP" now fails.
+    IB-204  REWRITTEN  From "websites will not load until it is back" to a notice.
+                       Also now the UNCOMMON branch - see the state note below.
+    IB-205  DELETED    The hand-revert emergency. There is no emergency to leave.
+    IB-602  REWRITTEN  Lost the "internet down for a minute or two" caveat.
+    IB-605  REWRITTEN  From "do NOT unplug before I revert your router" to an
+                       offer. "I will just unplug it" is now a first-class answer.
 
-Under DOC-2026-08-002 Part 5 Option 2, IB-205 is DELETED, IB-204 becomes reassurance
-instead of an emergency, IB-605 loses its warning, and IB-602 loses its caveat. Filter
-the tree on that flag - the rewrite is a search, not an excavation.
+Two screens NOT flagged were also wrong under the ADR and were fixed:
 
-Under load-shedding the box loses power routinely, not exceptionally. Today every
-outage schedule is a household internet outage needing human recovery. Ionibot turns
-that phone call into a screen. Only the architecture turns it into a non-event.
+    IB-112  Said "every device on your Wi-Fi is now protected". ADR-001 accepted
+            that filtering is not 100% and said in terms not to imply total
+            coverage. A test now requires this screen to state the limit.
+    IB-209  Said protection was "probably still working". Under an upstream model
+            "internet fine, box unseen" is the ORDINARY shape of a box that is
+            switched off, so that reassurance was backwards.
+
+A STATE MEANING CHANGED WITHOUT ITS LOGIC CHANGING. resolveState is untouched, but
+S2 (names failing AND box unreachable) used to be every "box off" case and is now
+the rarer one where the router also failed to fall back. Ordinary "box off" now
+lands on S5/IB-209. IB-204 and IB-209 were rewritten as a pair - change one, read
+the other.
+
+STILL OPEN, AND IT IS A PRODUCT CALL, NOT A BUG: IB-110 step 4 says "leave the
+second box empty", per the standing "no secondary DNS, ever" rule. ADR-001's promise
+that the router falls back on its own assumes the router HAS a fallback. On a router
+that only ever uses its configured statics, an empty second box plus a dead first box
+is the outage the ADR says it removed. Worth confirming on the EX511 before this copy
+reaches a customer.
 
 ========================================================================================
 (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - All Rights Reserved - TM2

@@ -12,7 +12,7 @@
  * --  ----  -----  ----  ----  --------  ---------------------------------------------
  * S0  FAIL  -      -     -     -         Handset on mobile data, not the home Wi-Fi
  * S1  PASS  FAIL   -     -     -         No internet at all. Router or ISP. NOT US.
- * S2  PASS  PASS   FAIL  FAIL  -         Box off or unreachable. THE CLASS A OUTAGE.
+ * S2  PASS  PASS   FAIL  FAIL  -         Box unreachable AND names not resolving.
  * S3  PASS  PASS   FAIL  PASS  FAIL      Box alive, resolver down. Watchdog's job.
  * S4  PASS  PASS   FAIL  PASS  PASS      Box resolves; this phone isn't using it.
  * S5  PASS  PASS   PASS  FAIL  -         All fine, but we cannot see the box.
@@ -53,6 +53,14 @@ export function resolveState(r: ProbeReport): StateId {
   // From here: there is an internet path, but names do not resolve. This is ours.
   if (r.node !== 'pass') {
     // Cannot reach the agent either. The box is off, unplugged, or not on this LAN.
+    //
+    // ADR-001 CHANGED WHAT THIS MEANS, without changing the logic. When we were the
+    // DHCP-handed resolver, "box off" landed here every time and this was the Class A
+    // outage. As an upstream, a box going off normally leaves lookups working — the
+    // router just answers them itself — so the ordinary "box off" case now resolves
+    // to S5, not here. Reaching S2 means the box is unreachable AND the router did
+    // not fall back, which is the rarer and more serious pair. IB-204 and IB-209 were
+    // rewritten together to match; if you change one, read the other.
     return 'S2';
   }
 

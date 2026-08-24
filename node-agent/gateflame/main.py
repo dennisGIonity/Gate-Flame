@@ -276,6 +276,28 @@ def posture_audit(_=Depends(read_scope)):
     return services.posture.audit()
 
 
+@app.get("/api/v1/posture/netcheck")
+def posture_netcheck(_=Depends(read_scope)):
+    """The box's own outward-looking network check, as JSON.
+
+    Ionibot (`src/ionibot/probes.ts` probe A5) renders this verbatim rather than
+    deriving its own view, so the phone and the box can never disagree about
+    whether the household is protected.
+
+    SCOPE: `read`, deliberately — matching /posture/audit next door rather than
+    the unauthenticated /system/status. The payload names the gateway, this box's
+    address and whether filtering is currently bypassed. That last one is a
+    security-relevant disclosure, and "anyone already on the LAN" includes the
+    guest network. A paired phone has a token; an unpaired one gets a 401 and
+    Ionibot degrades to "I could not read the full report", which is true.
+
+    Never 500s and never raises: on any failure the body carries a named `gap`
+    and an empty `results`, so the customer's phone can say WHICH part could not
+    be read instead of showing a generic error.
+    """
+    return services.netcheck.run()
+
+
 @app.get("/api/v1/flows/recent")
 def flows_recent(limit: int = 200, _=Depends(read_scope)):
     """Hostnames observed on the LAN — SNI and HTTP Host only.
