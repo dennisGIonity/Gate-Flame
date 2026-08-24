@@ -484,28 +484,48 @@ cat <<EOF
   Watch the queries arrive at http://${LAN_IP}:8081/admin - that is the proof the
   device is really using it.
 
-  ONLY when one device works, consider the router:
+  ONLY when one device works, change the router - and change the RIGHT field:
 
-    Router DHCP > DNS servers > ${LAN_IP} AND NOTHING ELSE.
+    Router > Internet / WAN / Upstream DNS  =  ${LAN_IP}
+    Router > DHCP / LAN DNS handed to devices  =  LEAVE IT ALONE
 
-    DO NOT SET A SECONDARY DNS SERVER. This instruction used to say "secondary
-    1.1.1.1" and it was wrong - it contradicted the design of this product and
-    the watchdog that implements it.
+    Devices keep asking the ROUTER. The router asks us. That is the whole
+    design, and the field you do NOT touch matters as much as the one you do.
 
-    Clients do not treat a secondary as a failover. They query primary and
-    secondary in arbitrary order, often in parallel, and take whichever answers
-    first. A share of every household's queries would therefore bypass filtering
-    during NORMAL operation. An ad appears on one page load and not the next,
-    and nobody can explain why. Intermittent protection is worse than none,
-    because it is not honest about what it is doing.
+    WHY NOT POINT DEVICES STRAIGHT AT THIS BOX
 
-    What happens if this box dies is handled properly instead:
-    dns-watchdog.sh checks that DNS is genuinely answering - on loopback AND on
-    ${LAN_IP} - every 60 seconds, restarts the stack, recreates it if a restart
-    is not enough, and after five consecutive failed minutes drops into an
-    unfiltered bypass resolver on this same address so the household gets its
-    internet back. The box stays the only resolver; it just stops filtering, and
-    says so loudly.
+    Because then this box is a single point of failure for the entire household,
+    and in South Africa it loses power every week. Box off means no name lookups
+    at all, no automatic recovery, and DHCP keeps handing out the dead resolver
+    for hours afterwards. That is a support call per household per outage.
+
+    Pointed at as an UPSTREAM instead, the router falls back to its own resolver
+    the moment we stop answering - instantly, with no rule to fire and nothing
+    to reset, because nothing was taken away from it. Unplug this box and the
+    household loses its filtering and nothing else.
+
+    WHAT THAT COSTS, HONESTLY
+
+    A small leak. Most router resolvers learn their fastest upstream and use it,
+    falling back only on failure, so the leak is small but not zero - filtering
+    is not 100%. Per-client attribution is also lost: Pi-hole sees the router,
+    not each device, so the query log cannot say which phone asked for what.
+
+    Both were accepted deliberately. "Unplug it and nothing breaks" is worth
+    more to a household than the last few percent of coverage, and it is the
+    only version of this product that is structurally true rather than defended
+    by a watchdog that cannot run when the power is off.
+
+    STILL DO NOT SET A SECONDARY ON THE CLIENTS. A secondary handed to devices
+    is not a failover - they query both in arbitrary order and take whichever
+    answers first, so protection becomes intermittent during NORMAL operation.
+    The router's own fallback upstream is a different thing: it sits behind one
+    resolver the clients see, and only engages when we go quiet.
+
+    dns-watchdog.sh still checks that DNS answers on loopback AND on ${LAN_IP}
+    every 60 seconds, restarts, recreates, and drops to an unfiltered bypass
+    after five failed minutes. That covers software failure while the box is
+    alive. It was never able to cover the power being off, and no longer has to.
 
   ALSO CHECK ON THE ROUTER - these break phones specifically:
 

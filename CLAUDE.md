@@ -91,12 +91,32 @@ node-agent/gateflame-ra-advertiser.sh     RDNSS announce, AdvDefaultLifetime 0
 Shell tests find bash via a probe, never `shutil.which("bash")` — on Windows that
 returns the WSL stub, which prints a banner and exits 0.
 
-## Open decision awaiting Dennis
+## DECIDED — do not re-litigate
 
-How the standard box gets DNS authority: **per-model router adapter**,
-**guided one-screen flow**, or **premium in-path only**. Trades are in
-`docs/gateflame-STATE-resume-here.md` §4. Nothing should be built on this until
-he picks.
+**`docs/ADR-001-DNS-AUTHORITY-MODEL.md` — accepted 2026-08-24.**
+
+The **router forwards to us as its upstream DNS. Devices are never pointed at
+this box directly.** The field we change is the router's *upstream/WAN* DNS; the
+DHCP-handed DNS is deliberately left alone.
+
+Reason, in one line: **load shedding is weekly**, so any design that points
+devices at the box turns a power cut into a whole-house outage with no automatic
+recovery. As an upstream, the router falls back on its own instantly because
+nothing was taken away from it.
+
+Accepted costs, knowingly: **filtering is not 100%** (the router will sometimes
+use its own upstream) and **per-client attribution is lost** (Pi-hole sees the
+router, not each device). Do not design features that need per-device history on
+the standard box, and do not let kiosk copy imply total coverage.
+
+Consequences already true in code: CLAIM is dropped from the standard box,
+`claim_gateway` staying unsupported in `netapply` is the correct end state,
+firewall bounce and DPI are premium-only (code removal is a scheduled step, not
+done), and AAAA masking is a **fallback** — fix the router's IPv6 at install.
+
+**Who changes the setting:** the customer, once, guided by one screen, with the
+box verifying by re-read. Not credentials — the credentialed login is
+deliberately unbuilt, see `router_adapters.py`.
 
 ## Never do
 

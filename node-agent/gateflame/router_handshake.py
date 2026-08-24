@@ -104,9 +104,22 @@ class Secret:
 
 # The only two things we are ever allowed to touch. Anything outside this set is
 # a bug, and the handshake asserts it rather than trusting the adapter author.
-SETTING_LAN_DNS = "lan_dns"
+#
+# UPSTREAM, NOT LAN. This was `lan_dns` until the architecture decision of
+# 2026-08-24, and the old name described the wrong field.
+#
+# We change where the ROUTER forwards its queries. We deliberately do NOT change
+# what the router hands to devices over DHCP - devices keep asking the router,
+# and the router asks us. That one distinction is what makes "unplug the box and
+# nothing breaks" structurally true: the router falls back to its own resolver
+# the instant we stop answering, because nothing was taken away from it.
+#
+# Point devices straight at us instead and this box becomes a single point of
+# failure for the whole household - which, on a South African power grid, fails
+# weekly. See docs/ADR-001-DNS-AUTHORITY-MODEL.md.
+SETTING_UPSTREAM_DNS = "upstream_dns"
 SETTING_IPV6_RA_DNS = "ipv6_ra_dns"
-PERMITTED_SETTINGS = frozenset({SETTING_LAN_DNS, SETTING_IPV6_RA_DNS})
+PERMITTED_SETTINGS = frozenset({SETTING_UPSTREAM_DNS, SETTING_IPV6_RA_DNS})
 
 
 @dataclass(frozen=True)
@@ -203,8 +216,8 @@ def perform_handshake(
         before = adapter.read_settings(session)
 
         wanted: dict[str, str] = {}
-        if before.get(SETTING_LAN_DNS) != our_dns:
-            wanted[SETTING_LAN_DNS] = our_dns
+        if before.get(SETTING_UPSTREAM_DNS) != our_dns:
+            wanted[SETTING_UPSTREAM_DNS] = our_dns
         if disable_ipv6_ra_dns and before.get(SETTING_IPV6_RA_DNS) not in ("", "disabled", None):
             wanted[SETTING_IPV6_RA_DNS] = "disabled"
 

@@ -25,7 +25,7 @@ import pytest
 
 from gateflame.router_handshake import (
     SETTING_IPV6_RA_DNS,
-    SETTING_LAN_DNS,
+    SETTING_UPSTREAM_DNS,
     CredentialLeak,
     RouterIdentity,
     Secret,
@@ -40,7 +40,7 @@ class FakeRouter:
 
     def __init__(self, settings=None, *, known=True, persist=True, fail_on=None):
         self.settings = settings if settings is not None else {
-            SETTING_LAN_DNS: "192.168.0.1",
+            SETTING_UPSTREAM_DNS: "192.168.0.1",
             SETTING_IPV6_RA_DNS: "self",
         }
         self.known = known
@@ -158,13 +158,13 @@ def test_a_successful_handshake_is_verified_by_re_reading():
     router = FakeRouter()
     result = run(router)
     assert result.ok and result.verified
-    assert router.settings[SETTING_LAN_DNS] == "192.168.0.10"
+    assert router.settings[SETTING_UPSTREAM_DNS] == "192.168.0.10"
     assert router.settings[SETTING_IPV6_RA_DNS] == "disabled"
 
 
 def test_an_already_correct_router_is_left_completely_alone():
     router = FakeRouter(
-        settings={SETTING_LAN_DNS: "192.168.0.10", SETTING_IPV6_RA_DNS: "disabled"}
+        settings={SETTING_UPSTREAM_DNS: "192.168.0.10", SETTING_IPV6_RA_DNS: "disabled"}
     )
     result = run(router)
     assert result.ok and result.verified
@@ -189,7 +189,7 @@ def test_only_the_two_agreed_settings_are_ever_written():
     router = FakeRouter()
     run(router)
     for write in router.writes:
-        assert set(write) <= {SETTING_LAN_DNS, SETTING_IPV6_RA_DNS}
+        assert set(write) <= {SETTING_UPSTREAM_DNS, SETTING_IPV6_RA_DNS}
 
 
 def test_ipv6_advertisement_can_be_left_alone_when_asked():
@@ -205,12 +205,12 @@ def test_ipv6_advertisement_can_be_left_alone_when_asked():
 def test_every_change_can_be_put_back_exactly():
     """A security appliance that permanently alters someone's router with no way
     home is not acceptable. Factory reset has to be able to undo this."""
-    router = FakeRouter(settings={SETTING_LAN_DNS: "8.8.8.8", SETTING_IPV6_RA_DNS: "self"})
+    router = FakeRouter(settings={SETTING_UPSTREAM_DNS: "8.8.8.8", SETTING_IPV6_RA_DNS: "self"})
     result = run(router)
     assert result.ok
 
     plan = {c.setting: c for c in result.rollback_plan}
-    assert plan[SETTING_LAN_DNS].now == "8.8.8.8"
+    assert plan[SETTING_UPSTREAM_DNS].now == "8.8.8.8"
     assert plan[SETTING_IPV6_RA_DNS].now == "self"
     assert len(result.rollback_plan) == len(result.applied)
 
