@@ -140,7 +140,16 @@ def apply(settings: dict) -> bool:
         if not _delete(f"/api/lists/{url}?type=block"):
             failed.append(f"could not remove {url}")
     for url in wanted - have:
-        if _post("/api/lists", {"address": url, "type": "block", "enabled": True}) is None:
+        # `type` GOES IN THE QUERY STRING, NOT THE BODY. Sending it in the body
+        # gets HTTP 400 from Pi-hole v6:
+        #
+        #   Invalid request: Specify type parameter (should be either "allow" or "block")
+        #
+        # Confirmed against the live v6 container on 2026-08-24: body-only is 400,
+        # `?type=block` is 201. The delete call below has always used the query
+        # form; only the add was wrong, and because its return value was
+        # discarded the 400 was invisible for eight days.
+        if _post(f"/api/lists?type=block", {"address": url, "enabled": True}) is None:
             failed.append(f"Pi-hole rejected {url}")
 
     if failed:

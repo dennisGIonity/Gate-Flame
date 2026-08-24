@@ -46,6 +46,7 @@ class Recorder:
         self.lists_after_write = lists_after_write
         self.stats = LOADED if stats is None else stats
         self.posted: list[str] = []
+        self.paths: list[str] = []
         self.gravity_runs = 0
         self._written = False
 
@@ -58,6 +59,12 @@ class Recorder:
         if path == "/api/action/gravity":
             self.gravity_runs += 1
             return {} if self.gravity_ok else None
+        self.paths.append(path)
+        # Pi-hole v6 answers 400 unless `type` is in the QUERY STRING. Modelled
+        # here rather than assumed, so the fixture fails the same way the real
+        # container does.
+        if "type=" not in path:
+            return None
         self.posted.append(payload.get("address", ""))
         if not self.accept_post:
             return None
@@ -143,6 +150,25 @@ def test_a_registered_list_that_downloads_nothing_is_a_failure(monkeypatch):
 
     assert ok is False
     assert "no domains" in blocklists.last_error()
+
+
+def test_the_add_sends_type_in_the_query_string(monkeypatch):
+    """Pi-hole v6 returns 400 unless `type` is a QUERY parameter.
+
+        Invalid request: Specify type parameter (should be either "allow" or "block")
+
+    Verified against the live container on 2026-08-24: body-only is 400,
+    `?type=block` is 201. The delete path had always used the query form; only
+    the add was wrong, and its discarded return value hid the 400 for eight days.
+
+    Pinned because this is a remote contract with no compile-time check - an
+    innocent-looking tidy-up of that f-string silently unprotects a household.
+    """
+    rec = _install(monkeypatch, Recorder(lists=[]))
+
+    assert blocklists.apply(SETTINGS) is True
+    assert rec.paths, "no list write was attempted at all"
+    assert all("type=block" in p for p in rec.paths), rec.paths
 
 
 # ------------------------------------------------------------- non-vacuity

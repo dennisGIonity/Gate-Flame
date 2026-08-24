@@ -515,7 +515,12 @@ def _filtering_state_payload() -> dict:
     # "still working" from the absence of a field cannot tell it apart from an
     # older agent that never sent one.
     state["applying"] = blocklists.is_applying()
-    state["lastError"] = fault or blocklists.last_error()
+    # The specific error wins over the general one. `fault` describes the SYMPTOM
+    # ("no blocklist loaded"); last_error() names the CAUSE ("Pi-hole rejected
+    # <url>"). Preferring the symptom hid a 400 from the lists API behind a
+    # sentence that read like a Pi-hole problem, which cost a diagnostic round
+    # trip on 2026-08-24.
+    state["lastError"] = blocklists.last_error() or fault
 
     state["threatLevel"] = threat_level.describe(settings["threat_level"])
     state["availableLevels"] = threat_level.all_levels()
