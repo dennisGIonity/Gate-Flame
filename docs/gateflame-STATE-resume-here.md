@@ -100,11 +100,29 @@ lock screen would have shown a reassuring status over an empty blocklist.
 
 - **Windows OpenSSH is broken** on wabakipi. Only Git's copy works. Never set
   `GIT_SSH_COMMAND`.
+- **The push failure is NOT an agent problem, and diagnosing it as one has now
+  cost two sessions.** `~/.ssh/id_ed25519` is **unencrypted**, so no agent is
+  involved at any point — ssh reads the file directly. Verbose ssh confirms it
+  is offered (`Offering public key: … SHA256:8AQd4N…`) and GitHub still answers
+  `Permission denied (publickey)`. There is exactly one cause: **the key is not
+  registered on the account.** Before touching `ssh-agent`, run
+  `"C:\Program Files\Git\usr\bin\ssh.exe" -T git@github.com -v` and read what
+  it says; if it offers a key and is refused, the fix is on github.com, not here.
 - **`GATEFLAME-load-ssh-key.cmd` was itself broken** and is now fixed. It tried
   to `printf >` a path that was already a live socket, silently failed, and left
-  every tool pointing at a dead agent.
+  every tool pointing at a dead agent. It is also, per the point above,
+  **irrelevant to this push** — an unencrypted key needs no agent.
 - `NODE_ENV` is wrong on both machines — `production` + npm `omit=dev` here,
-  `development` on the Pi. Always `set NODE_ENV=` before building.
+  `development` on the Pi. The rule is **per step, and the spacing matters**:
+  - `npm ci` → `set NODE_ENV=&& npm ci …` (must NOT be `production`)
+  - `vite build` → `set NODE_ENV=production&& npm run build:…`
+
+  In cmd, `set VAR=value` swallows trailing spaces, so `set NODE_ENV= && …`
+  assigns a **single space** — which is not `production`, so Node resolves
+  React's `development` export condition and Vite bundles the dev build into a
+  production artifact at 382 kB instead of 189 kB. That is the form this
+  document used to recommend, and it shipped dev bundles for weeks.
+  `scripts/verify-bundle.mjs` now fails the build rather than let it happen.
 - The Pi's `/home/wabapi/node-agent/` is **staging**; the agent runs from
   `/opt/gateflame/node-agent/` and is root-owned. Deploy via the script.
 - `pihole` is **`gateflame-pihole`**, and the image has no standalone `sqlite3`
