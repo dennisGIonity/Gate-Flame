@@ -4,11 +4,66 @@ Working notes for Claude. Not documentation — this is the set of things that h
 already cost time at least once. `docs/gateflame-STATE-resume-here.md` is the
 "what's next"; this file is "how this project works and what will bite you".
 
-**Owner:** Dennis / Johan Wilhelm van Antwerp — Ionity (Pty) Ltd / AEDI, Centurion, SA.
-Direct and decisive, prefers momentum over planning paralysis, and corrects
-overreach immediately. Product scoping, filtering policy and UX are **his** calls;
-mine is technical execution and honest evaluation. Multiple chats run against this
-repo in parallel — an unfamiliar commit is probably also mine, from another session.
+---
+
+## 🔴 RULE ZERO — ONE BANNER, ONE COPY. READ BEFORE TOUCHING GIT.
+
+Work on this project has gone missing repeatedly. On 2026-08-25 the cause was
+finally measured: **19 checkouts** of this repo on one machine, **8 author
+identities** in the history, branches with no upstream, and a local `main` **28
+commits ahead** of the remote.
+
+**Who is at this keyboard:** Dennis Grobler — *Wabakipi* — of Ionity Global.
+GitHub `dennisGIonity`. Any alias containing *dennis* or *waba* is him.
+**Johan Wilhelm van Antwerp is the company founder, NOT the person working.**
+His name appears in document header blocks because that is the document
+template. It is **not** a git identity.
+
+### The rules
+
+1. **NEVER pass `-c user.name=`, `-c user.email=`, `--author`, or set
+   `GIT_AUTHOR_*`.** Use whatever the repo is configured with, always. A previous
+   session read "Author: Johan Wilhelm van Antwerp" out of a document header and
+   committed 14 commits under it — which made one person's history look like two
+   people racing each other on the same branch. That single mistake is what made
+   the loss look like concurrent sessions.
+
+2. **The identity is `DennisIonity <dennis@ionitynetwork.onmicrosoft.com>`**,
+   pinned globally *and* `--local` in every live clone. To change it, change it
+   in config once — never per-commit.
+
+3. **`E:\Gateflame` is the ONLY copy that gets edited.** Ever. Others exist and
+   some hold unique commits, but they are read-only until retired.
+
+4. **Never `push --force`, never rewrite pushed history.** The historic 8
+   identities stay as they are. Rewriting shared history is itself a way to lose
+   work, and the goal is that *new* commits are one line — not that the past is
+   tidy.
+
+5. **Push before you finish, and check every branch — not just the checked-out
+   one.** Three commits sat undiscovered on a `deploybundle` branch in
+   `gf-scratch` for ten days purely because nobody was standing on that branch.
+
+### The two commands
+
+```
+bash scripts/gateflame-doctor.sh          # read-only: identity, clones, unpushed work
+C:\Users\DGMic\GATEFLAME-SAVE-EVERYTHING.cmd   # pushes every unique commit, deletes nothing
+```
+
+**Run the doctor at the start and end of any session that touches git.**
+Delete no folder until it reports nothing unpushed.
+
+**Owner:** Dennis Grobler (Wabakipi) — Ionity Global, Centurion, SA. Direct and
+decisive, prefers momentum over planning paralysis, and corrects overreach
+immediately. Product scoping, filtering policy and UX are **his** calls; mine is
+technical execution and honest evaluation.
+
+**On unfamiliar commits:** do not assume "another session". An earlier session
+said exactly that, and it was wrong — the commits were his, under his own
+identity, and the confusion existed only because that session had invented a
+*second* identity for itself. Check `git log --format='%h %an <%ae> %ad'` and say
+what the evidence shows, not what is convenient.
 
 ---
 
