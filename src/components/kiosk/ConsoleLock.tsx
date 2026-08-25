@@ -124,9 +124,30 @@ export default function ConsoleLock({
   const [pinError, setPinError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
 
+  // TICK ON THE MINUTE, NOT EVERY SECOND.
+  //
+  // The clock renders HH:MM. A 1000 ms interval therefore threw away 59 of
+  // every 60 ticks - each one a setState, a React re-render and a reconcile,
+  // forever, on the screen a wall panel sits on by default. On a Pi 5 that is
+  // invisible; on the 2 GB Orange Pi Zero 2W base model it is a core waking
+  // 86,400 times a day to redraw a digit that did not change.
+  //
+  // Re-arming to the next real minute boundary rather than setInterval(60000)
+  // matters: a fixed 60 s interval drifts, so the displayed minute would flip
+  // up to a minute late and progressively further out the longer the panel
+  // stayed up. A wall clock that is visibly wrong undermines every other number
+  // on the screen.
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const d = new Date();
+      setNow(d);
+      // +50 ms so rounding never leaves us a hair short and fires twice.
+      const msToNextMinute = 60_000 - (d.getSeconds() * 1000 + d.getMilliseconds()) + 50;
+      timer = setTimeout(schedule, msToNextMinute);
+    };
+    schedule();
+    return () => clearTimeout(timer);
   }, []);
 
   const face = protection ? PROTECTION_FACE[protection] : null;

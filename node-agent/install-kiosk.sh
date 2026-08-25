@@ -252,11 +252,44 @@ ExecStartPre=/bin/sh -c 'until curl -fsS http://127.0.0.1:$PORT/api/v1/system/st
 ExecStart=$BROWSER \\
   $PLATFORM_FLAGS \\
   --kiosk --incognito --noerrdialogs --disable-infobars \\
-  --disable-session-crashed-bubble --disable-features=TranslateUI \\
+  --disable-session-crashed-bubble \\
   --check-for-update-interval=31536000 \\
+  --enable-low-end-device-mode \\
+  --renderer-process-limit=1 \\
+  --process-per-site \\
+  --disable-dev-shm-usage \\
+  --disk-cache-size=8388608 \\
+  --js-flags=--max-old-space-size=96 \\
+  --disable-background-networking \\
+  --disable-component-update \\
+  --disable-extensions \\
+  --disable-default-apps \\
+  --disable-sync \\
+  --disable-breakpad \\
+  --no-first-run \\
+  --no-default-browser-check \\
+  --force-color-profile=srgb \\
+  --disable-features=TranslateUI,Translate,BackForwardCache,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,CalculateNativeWinOcclusion \\
   http://localhost:$PORT/device-kiosk/
 Restart=always
 RestartSec=5
+
+# THE RESOLVER MUST OUTLIVE THE WALL PANEL.
+#
+# The base model is an Orange Pi Zero 2W with 2 GB. Chromium's default
+# behaviour on such a board is to expand until the kernel starts reclaiming,
+# and what the kernel reclaims is whatever it feels like - which can be
+# Pi-hole. A household losing its display is a cosmetic fault. A household
+# losing DNS is an outage.
+#
+# MemoryHigh throttles and reclaims from Chromium FIRST, before the OOM killer
+# is ever consulted, so pressure lands on the expendable process by design
+# rather than by luck. MemoryMax is the hard stop; with Restart=always the
+# panel comes back on its own and nobody phones anyone.
+#
+# Measure before changing these: gateflame-memcheck.sh prints real RSS.
+MemoryHigh=420M
+MemoryMax=560M
 
 [Install]
 WantedBy=graphical.target
