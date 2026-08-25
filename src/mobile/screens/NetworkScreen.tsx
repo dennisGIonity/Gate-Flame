@@ -12,8 +12,9 @@
 
 import { Laptop, Router as RouterIcon, Smartphone, HelpCircle } from 'lucide-react';
 
-import { usePolled, type LanClient } from '../../components/kiosk/kioskClient';
-import { Card, DASH, Empty, Screen, ScreenTitle } from '../mobileUi';
+import { num, usePolled, useSeries, type LanClient } from '../../components/kiosk/kioskClient';
+import { AreaChart, BarList, CH, Delta, RingGauge } from '../../components/kiosk/charts';
+import { Card, ChartCard, Chip, DASH, Empty, Screen, ScreenTitle } from '../mobileUi';
 
 interface ClientsResponse {
   clients: LanClient[];
@@ -39,13 +40,64 @@ function glyph(hostname: string | null) {
 export function NetworkScreen({ active }: { active: boolean }) {
   const clients = usePolled<ClientsResponse>('/clients', 10000, active);
   const list = clients.data?.clients ?? [];
+  const seen = useSeries(clients.data ? list.length : undefined);
+
+  // Grouped by the interface the box heard them on. This is the shape that
+  // exposes dual-homing: the same /24 appearing under two interfaces makes DNS
+  // intermittent and per-device, and nothing else the customer can see would
+  // ever show it.
+  const byInterface = [...new Set(list.map((c) => c.interface))].map((iface) => {
+    const on = list.filter((c) => c.interface === iface);
+    const subnets = [...new Set(on.map((c) => c.ip.split('.').slice(0, 3).join('.')))];
+    return { label: iface || DASH, value: on.length, hint: `${subnets.join(', ')}.0/24` };
+  });
+
+  const named = list.filter((c) => Boolean(c.hostname)).length;
 
   return (
     <Screen>
       <ScreenTitle
+        kicker="04 · Presence"
         title="Your network"
         sub="Devices your box has heard from recently. It listens rather than scanning, so a device that is asleep will not be here."
+        right={clients.data ? <Chip tone="cyan">{num(list.length)} heard</Chip> : null}
       />
+
+      {/* ------------------------------------------------------- presence */}
+      {clients.data && list.length > 0 && (
+        <>
+          <ChartCard
+            label="Devices heard from"
+            value={num(list.length)}
+            tone={CH.green}
+            right={<Delta samples={seen.samples} />}
+            footer="Live sampling only — it starts when you open this screen. A dip is a device going quiet, not one leaving your house."
+          >
+            <AreaChart samples={seen.samples} height={76} stroke={CH.green} label="devices heard" />
+          </ChartCard>
+
+          <Card>
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[#64748B]">
+              How they reach the box
+            </p>
+            <div className="flex items-center gap-5">
+              <RingGauge
+                value={list.length ? (named / list.length) * 100 : null}
+                sub="named"
+                tone={CH.cyan}
+                size={100}
+              />
+              <div className="min-w-0 flex-1">
+                <BarList rows={byInterface} colour={CH.blue} />
+              </div>
+            </div>
+            <p className="mt-3 text-[11px] leading-relaxed text-[#64748B]">
+              A device is only named here if your network published a name for it. The ring is how
+              many did — it is not a measure of anything being wrong.
+            </p>
+          </Card>
+        </>
+      )}
 
       {clients.error && (
         <Card accent="warn">

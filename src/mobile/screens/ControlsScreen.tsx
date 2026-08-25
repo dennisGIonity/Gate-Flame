@@ -22,8 +22,9 @@ import { useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
-import { kioskApi, type Polled } from '../../components/kiosk/kioskClient';
-import { Card, Gap, Screen, ScreenTitle, Warning } from '../mobileUi';
+import { kioskApi, num, type Polled } from '../../components/kiosk/kioskClient';
+import { CH, Meter } from '../../components/kiosk/charts';
+import { Card, Chip, Gap, Screen, ScreenTitle, Warning } from '../mobileUi';
 
 export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState> }) {
   const f = filtering.data;
@@ -68,7 +69,57 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
 
   return (
     <Screen>
-      <ScreenTitle title="Settings" sub="The few things worth changing from your phone." />
+      <ScreenTitle
+        kicker="06 · Controls"
+        title="Settings"
+        sub="The few things worth changing from your phone."
+        right={
+          <Chip tone={paused ? 'warn' : f.enabled ? 'good' : 'fault'}>
+            {paused ? 'paused' : f.enabled ? 'on' : 'off'}
+          </Chip>
+        }
+      />
+
+      {/* ------------------------------------------------ what is set now
+          Controls with no readout are unverified claims. These three bars are
+          the current configuration stated as quantities, so a customer can see
+          at a glance that a choice actually took — which is exactly what was
+          missing when a box ran for days with an empty blocklist while every
+          control on every screen looked correctly set.                     */}
+      <Card>
+        <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[#64748B]">
+          What is set right now
+        </p>
+        <div className="space-y-3.5">
+          <Meter
+            label="How much is blocked"
+            value={
+              f.availableLevels.findIndex((l) => l.level === f.threatLevel.level) < 0
+                ? null
+                : f.availableLevels.findIndex((l) => l.level === f.threatLevel.level) + 1
+            }
+            max={Math.max(1, f.availableLevels.length)}
+            format={() => f.threatLevel.level.toUpperCase()}
+            tone={CH.green}
+          />
+          <Meter
+            label="Threat lists in use"
+            value={f.threatLevel.blocklistCount ?? null}
+            max={Math.max(1, ...f.availableLevels.map((l) => l.blocklistCount ?? 0))}
+            format={(v) => num(v)}
+            tone={CH.cyan}
+          />
+          <Meter
+            label="Content categories on"
+            value={f.categories.filter((c) => c.enabled).length}
+            max={Math.max(1, f.categories.length)}
+            format={(v) => `${v ?? 0} of ${f.categories.length}`}
+            tone={CH.blue}
+          />
+        </div>
+        {/* The node's own words about the last write that did not land. */}
+        <Gap text={f.lastError} />
+      </Card>
 
       {problem && <Warning tone="fault" title="That did not go through" detail={problem} />}
       {f.applying && (

@@ -394,7 +394,19 @@ const PLAIN: Record<string, string> = {
 
 const IonibotStyles: React.FC = () => (
   <style>{`
-.ib-fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));
+/* Clears the phone's floating tab bar.
+ *
+ * Found by screenshot on 2026-08-25: at 360dp the bubble sat exactly on top of
+ * the last two destinations, so Settings and Play could not be reached at all.
+ * The bar is ~64px tall and floats 12px above the safe-area inset, so the
+ * bubble starts above BOTH. The --ib-fab-bottom custom property lets a host
+ * with no tab bar (the pairing screen) pull it back down without forking this.
+ *
+ * NOTE FOR ANYONE EDITING THIS BLOCK: it lives inside a template literal, so a
+ * backtick here terminates the string and the build fails with a parse error
+ * fifteen lines further down. Use plain quotes in these comments.
+ */
+.ib-fab{position:fixed;right:16px;bottom:calc(var(--ib-fab-bottom, 92px) + env(safe-area-inset-bottom));
   display:flex;align-items:center;gap:8px;padding:12px 16px;border:0;border-radius:28px;
   background:${C.flame};color:#fff;font:600 15px/1 system-ui,-apple-system,sans-serif;
   box-shadow:0 6px 20px rgba(0,0,0,.28);z-index:9998}

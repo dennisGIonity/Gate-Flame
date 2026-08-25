@@ -29,19 +29,17 @@ import {
 } from './kioskClient';
 import {
   ActionButton,
-  COLORS,
   Card,
   EmptyState,
   GapNote,
-  Gauge,
   HoldButton,
   SinceNote,
-  Sparkline,
   StatTile,
   StatusPill,
   Toggle,
   ViewerNotice,
 } from './kioskUi';
+import { AreaChart, CH, Delta, Kicker, Meter, RingGauge } from './charts';
 import type { PanelContext } from './panels';
 
 // ===========================================================================
@@ -95,6 +93,72 @@ export function ModulesPanel({ active, authority }: PanelContext) {
         <div className="col-span-12 rounded-xl border border-[#E11D48]/50 bg-[#E11D48]/10 px-5 py-4 text-sm text-[#E11D48]">
           {error}
         </div>
+      )}
+
+      {/* --- Coverage -------------------------------------------------------
+          The registry below tells the truth module by module. This says it in
+          one number: what fraction of the advertised capability is actually
+          RUNNING. A degraded module is deliberately excluded from the numerator
+          — a capability that is up but carrying a gap is not coverage, and
+          rounding it into the green is exactly the arithmetic that let four
+          layers agree about a box that had never filtered anything.        */}
+      {modules.length > 0 && (
+        <Card
+          className="col-span-12"
+          title="Capability coverage"
+          subtitle="How much of what this appliance advertises is genuinely running right now."
+        >
+          <Kicker index="04">Module performance</Kicker>
+          <div className="grid grid-cols-12 items-center gap-8">
+            <div className="col-span-3 flex justify-center">
+              <RingGauge
+                value={(modules.filter((m) => m.status === 'running').length / modules.length) * 100}
+                label="running, no gap"
+                sub="coverage"
+                tone={CH.green}
+                size={144}
+              />
+            </div>
+            <div className="col-span-5">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                  Modules running, sampled
+                </span>
+                <Delta samples={running.samples} />
+              </div>
+              <AreaChart
+                samples={running.samples}
+                height={104}
+                stroke={CH.green}
+                max={modules.length}
+                label="modules running"
+              />
+            </div>
+            <div className="col-span-4 space-y-4">
+              <Meter
+                label="Running"
+                value={modules.filter((m) => m.status === 'running').length}
+                max={modules.length}
+                format={(v) => `${v ?? 0} of ${modules.length}`}
+                tone={CH.green}
+              />
+              <Meter
+                label="Carrying a named gap"
+                value={modules.filter((m) => Boolean(m.gap)).length}
+                max={modules.length}
+                format={(v) => `${v ?? 0} of ${modules.length}`}
+                tone={CH.amber}
+              />
+              <Meter
+                label="Never built"
+                value={modules.filter((m) => m.status === 'not_implemented').length}
+                max={modules.length}
+                format={(v) => `${v ?? 0} of ${modules.length}`}
+                tone={CH.muted}
+              />
+            </div>
+          </div>
+        </Card>
       )}
 
       <Card
@@ -154,6 +218,9 @@ export function FirewallPanel({ active, authority }: PanelContext) {
   const [error, setError] = useState<string | null>(null);
   const list = bounced.data?.bounced ?? [];
   const canWrite = authority === 'console';
+  // `undefined` while the route has not answered — a failed poll must leave a
+  // hole in the line, not a zero that reads as "nothing was bounced".
+  const heldTrend = useSeries(bounced.data ? list.length : undefined);
 
   const release = async (address: string) => {
     setError(null);
@@ -168,10 +235,33 @@ export function FirewallPanel({ active, authority }: PanelContext) {
   return (
     <div className="grid grid-cols-12 gap-6">
       <div className="col-span-12 grid grid-cols-3 gap-6">
-        <StatTile label="Addresses bounced" value={num(list.length)} tone={list.length ? 'warn' : 'default'} />
+        <StatTile
+          label="Addresses bounced"
+          value={num(list.length)}
+          tone={list.length ? 'warn' : 'default'}
+          series={heldTrend.samples}
+        />
         <StatTile label="Enforcement" value={bounced.error ? DASH : 'nftables'} gap={bounced.error?.message} />
         <StatTile label="Read from" value="kernel" />
       </div>
+
+      {/* --- Held over time --------------------------------------------------
+          The set below is a snapshot, and elements expire in the kernel on
+          their own. Without a line you cannot tell a quiet network from a
+          module that stopped enforcing an hour ago — both render as an empty
+          list. The line separates them: one is flat at zero, the other stops.  */}
+      <Card
+        className="col-span-12"
+        title="Addresses held, over time"
+        subtitle="Sampled every six seconds from the kernel set. A break in the line is a poll that failed, not a network that went quiet."
+      >
+        <Kicker index="05">Firewall performance</Kicker>
+        <div className="flex items-baseline justify-end pb-2">
+          <Delta samples={heldTrend.samples} />
+        </div>
+        <AreaChart samples={heldTrend.samples} height={112} stroke={CH.red} label="addresses held" />
+        <SinceNote since={heldTrend.since} />
+      </Card>
 
       {error && (
         <div className="col-span-12 rounded-xl border border-[#E11D48]/50 bg-[#E11D48]/10 px-5 py-4 text-sm text-[#E11D48]">
@@ -250,25 +340,38 @@ export function WanPanel({ active }: PanelContext) {
       {interfaces.map((b) => (
         <Card key={b.iface} className="col-span-6" title={b.iface} subtitle={`Billing month ${b.month}`}>
           <div className="flex items-center gap-8">
-            <Gauge value={b.percentOfCap} label="of cap" tone={(b.percentOfCap ?? 0) > 85 ? COLORS.fault : COLORS.blue} />
-            <div className="grid flex-1 grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Used</p>
-                <p className="font-mono text-2xl tabular-nums text-slate-100">{bytes(b.usedBytes)}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Cap</p>
-                <p className="font-mono text-2xl tabular-nums text-slate-100">{bytes(b.capBytes)}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Down / Up</p>
-                <p className="font-mono text-base tabular-nums text-slate-300">
-                  {bytes(b.rxBytes)} / {bytes(b.txBytes)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Projected month</p>
-                <p className="font-mono text-base tabular-nums text-slate-300">{bytes(b.projectedTotalBytes)}</p>
+            <RingGauge
+              value={b.percentOfCap}
+              label="of cap"
+              sub={b.iface}
+              tone={(b.percentOfCap ?? 0) > 85 ? CH.red : (b.percentOfCap ?? 0) > 70 ? CH.amber : CH.blue}
+              size={148}
+            />
+            <div className="flex-1 space-y-4">
+              <Meter
+                label="Used this month"
+                value={b.usedBytes}
+                max={b.capBytes ?? Math.max(1, b.usedBytes ?? 1)}
+                format={(v) => bytes(v)}
+              />
+              {/* Projection against the SAME cap, so the two bars are directly
+                  comparable — the whole point is seeing the projection cross
+                  the cap before the month does. */}
+              <Meter
+                label="Projected by month end"
+                value={b.projectedTotalBytes}
+                max={b.capBytes ?? Math.max(1, b.projectedTotalBytes ?? 1)}
+                format={(v) => bytes(v)}
+              />
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">Down</p>
+                  <p className="font-mono text-lg tabular-nums text-slate-200">{bytes(b.rxBytes)}</p>
+                </div>
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">Up</p>
+                  <p className="font-mono text-lg tabular-nums text-slate-200">{bytes(b.txBytes)}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -350,6 +453,7 @@ export function SystemPanel({ telemetry, active, authority }: PanelContext & { s
       </div>
 
       <Card className="col-span-6" title="Memory and storage">
+        <Kicker index="06">Host performance</Kicker>
         <div className="grid grid-cols-2 gap-8">
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Memory used</p>
@@ -357,13 +461,49 @@ export function SystemPanel({ telemetry, active, authority }: PanelContext & { s
               {num(host?.memUsedMB)}
               <span className="text-lg text-slate-500"> / {num(host?.memTotalMB)} MB</span>
             </p>
-            <Sparkline samples={mem.samples} height={44} stroke={COLORS.cyan} className="mt-2" />
+            <AreaChart
+              samples={mem.samples}
+              height={68}
+              stroke={CH.cyan}
+              max={host?.memTotalMB ?? undefined}
+              className="mt-2"
+              label="memory used"
+            />
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Disk used</p>
             <p className="mt-1 font-mono text-3xl tabular-nums text-slate-100">{pct(host?.diskUsedPercent)}</p>
-            <Sparkline samples={disk.samples} height={44} max={100} stroke={COLORS.orange} className="mt-2" />
+            <AreaChart
+              samples={disk.samples}
+              height={68}
+              max={100}
+              stroke={CH.orange}
+              className="mt-2"
+              label="disk used"
+            />
           </div>
+        </div>
+        {/* Headroom, stated as bars rather than left to be inferred from two
+            numbers. The base-tier board has 2 GB and the whole tier decision
+            rests on this fitting — so it is worth being able to see it. */}
+        <div className="mt-5 space-y-3">
+          <Meter
+            label="Memory"
+            value={host?.memUsedMB ?? null}
+            max={host?.memTotalMB ?? 1}
+            unit="MB"
+            format={(v) => num(v)}
+          />
+          <Meter label="Disk" value={host?.diskUsedPercent ?? null} max={100} unit="%" format={(v) => pct(v)} />
+          {/* 85°C is where a Pi hard-throttles. The scale is that limit, not a
+              round number, so the bar means something physical. */}
+          <Meter
+            label="SoC temperature"
+            value={host?.tempC ?? null}
+            max={85}
+            unit="°C"
+            format={(v) => (v === null ? DASH : v.toFixed(1))}
+          />
         </div>
         <SinceNote since={mem.since} />
       </Card>

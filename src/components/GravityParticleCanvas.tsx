@@ -321,8 +321,23 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
         <span>GRAVITY™ EDGE AI THREAT INTERCEPTOR</span>
       </div>
       <div className="absolute bottom-3 right-3 flex items-center gap-3 text-[10px] font-medium text-slate-400 bg-slate-900/80 backdrop-blur-sm px-2.5 py-1.5 rounded-lg border border-slate-800 uppercase tracking-wider">
+        {/*
+          THIS FIGURE WAS HARDCODED AS "37.1%" — found by screenshot, 2026-08-25.
+
+          It sat on the customer's home screen, two inches below the real block
+          share, and disagreed with it. The particles were already driven by the
+          real `blockPercentage`; only the caption was invented, which is the
+          worst possible split: the picture told the truth and the number beside
+          it did not. A customer reading 7% above and 37.1% here has no way to
+          know which one to believe, and every reason to stop believing both.
+
+          Now it renders the same prop the simulation uses, and an em-dash when
+          there is no reading — the rule that governs every other figure in this
+          product finally applied to the one that was exempt from it.
+        */}
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-rose-500"></span> Blocked (37.1%)
+          <span className="w-2 h-2 rounded-full bg-rose-500"></span> Blocked (
+          {typeof blockPercentage === 'number' ? `${blockPercentage.toFixed(1)}%` : '—'})
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-sky-500"></span> Clean Recursive DNS

@@ -25,11 +25,13 @@ import {
   num,
   pct,
   usePolled,
+  useSeries,
   type Polled,
   type ServiceModule,
   type TelemetrySummary,
 } from '../../components/kiosk/kioskClient';
-import { Card, Gap, Metric, Screen, ScreenTitle, Warning } from '../mobileUi';
+import { AreaChart, CH, Meter, RingGauge } from '../../components/kiosk/charts';
+import { Card, Chip, Gap, Metric, Screen, ScreenTitle, Tiles, Warning } from '../mobileUi';
 
 interface ServicesResponse {
   modules: ServiceModule[];
@@ -52,6 +54,10 @@ export function HealthScreen({
   const host = t?.host ?? null;
   const f = filtering.data;
 
+  const cpu = useSeries(host?.cpuPercent ?? null);
+  const temp = useSeries(host?.tempC ?? null);
+  const modules = services.data?.modules ?? [];
+
   // Only genuine problems. A module that honestly reports `not_implemented` is
   // not a fault - it is a capability this box does not claim to have, and
   // showing it as a warning would train the customer to ignore warnings.
@@ -64,7 +70,20 @@ export function HealthScreen({
 
   return (
     <Screen>
-      <ScreenTitle title="Box health" sub="How your Gate^Flame itself is doing." />
+      <ScreenTitle
+        kicker="05 · Diagnostics"
+        title="Box health"
+        sub="How your Gate^Flame itself is doing."
+        right={
+          telemetry.error?.unreachable ? (
+            <Chip tone="fault">offline</Chip>
+          ) : t?.piholeReachable ? (
+            <Chip tone="good">answering</Chip>
+          ) : (
+            <Chip tone="warn">silent</Chip>
+          )
+        }
+      />
 
       {/* -------------------------------------------------- the big one */}
       {f && f.protectionStatus !== 'active' && f.protectionStatus !== 'paused' && (
@@ -91,9 +110,66 @@ export function HealthScreen({
         />
       )}
 
+      {/* ------------------------------------------------ hardware, charted
+          The four figures below are instants. These two are the same readings
+          over the time the screen has been open, which is the only way to tell
+          a box that is briefly busy from one that is pinned — and pinned is
+          what a failing SD card looks like from the outside.               */}
+      <Card>
+        <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[#64748B]">
+          Load, while you have been watching
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-wider text-[#64748B]">Processor</p>
+            <p className="mt-0.5 font-mono text-xl tabular-nums text-slate-100">
+              {pct(host?.cpuPercent)}
+            </p>
+            <AreaChart samples={cpu.samples} height={58} max={100} stroke={CH.cyan} label="cpu" />
+          </div>
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-wider text-[#64748B]">
+              Temperature
+            </p>
+            <p
+              className={`mt-0.5 font-mono text-xl tabular-nums ${warm ? 'text-[#F59E0B]' : 'text-slate-100'}`}
+            >
+              {host?.tempC == null ? DASH : `${host.tempC.toFixed(1)}°`}
+            </p>
+            {/* 85 °C is the Pi's hard-throttle point, so the scale is a
+                physical limit rather than a round number. */}
+            <AreaChart samples={temp.samples} height={58} max={85} stroke={CH.orange} label="temperature" />
+          </div>
+        </div>
+        <div className="mt-5 space-y-3">
+          <Meter label="Processor" value={host?.cpuPercent ?? null} max={100} unit="%" format={(v) => pct(v)} />
+          <Meter
+            label="Storage used"
+            value={host?.diskUsedPercent ?? null}
+            max={100}
+            unit="%"
+            format={(v) => pct(v)}
+          />
+          <Meter
+            label="Memory"
+            value={host?.memUsedMB ?? null}
+            max={host?.memTotalMB ?? 1}
+            unit="MB"
+            format={(v) => num(v)}
+          />
+          <Meter
+            label="Temperature"
+            value={host?.tempC ?? null}
+            max={85}
+            unit="°C"
+            format={(v) => (v == null ? DASH : v.toFixed(1))}
+          />
+        </div>
+      </Card>
+
       {/* ------------------------------------------------------ hardware */}
       <Card>
-        <div className="grid grid-cols-2 gap-5">
+        <Tiles>
           <div className="flex items-start gap-2">
             <Thermometer className="mt-1 h-4 w-4 shrink-0 text-[#64748B]" />
             <Metric
@@ -119,7 +195,7 @@ export function HealthScreen({
             <Timer className="mt-1 h-4 w-4 shrink-0 text-[#64748B]" />
             <Metric label="Running for" value={duration(host?.uptimeSeconds ?? t?.uptimeSeconds)} />
           </div>
-        </div>
+        </Tiles>
         <Gap text={t?.gap} />
       </Card>
 
@@ -136,11 +212,44 @@ export function HealthScreen({
         />
       )}
 
-      {/* ------------------------------------------------------- modules */}
+      {/* ------------------------------------------------------- modules
+          The list below only shows what is WRONG, which is right for a
+          customer — but it leaves "everything is working" as a sentence with
+          no evidence behind it. The ring is that evidence: a fraction of the
+          box's own advertised capability, computed from its own registry.  */}
       <Card>
         <p className="mb-3 font-mono text-[10px] uppercase tracking-wider text-[#64748B]">
           What your box is running
         </p>
+        {modules.length > 0 && (
+          <div className="mb-4 flex items-center gap-5">
+            <RingGauge
+              value={(modules.filter((m) => m.status === 'running').length / modules.length) * 100}
+              sub="running"
+              tone={troubled.length ? CH.amber : CH.green}
+              size={104}
+            />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Meter
+                label="Working"
+                value={modules.filter((m) => m.status === 'running').length}
+                max={modules.length}
+                format={(v) => `${v ?? 0} of ${modules.length}`}
+                tone={CH.green}
+              />
+              {/* Shown as its own bar rather than folded into "working": a
+                  capability this box never claimed is not a fault, and
+                  colouring it like one teaches people to ignore warnings. */}
+              <Meter
+                label="Not fitted to this box"
+                value={modules.filter((m) => m.status === 'not_implemented').length}
+                max={modules.length}
+                format={(v) => `${v ?? 0} of ${modules.length}`}
+                tone={CH.muted}
+              />
+            </div>
+          </div>
+        )}
         {services.error && (
           <p className="text-xs text-[#F59E0B]">Could not read this from the box.</p>
         )}
@@ -158,14 +267,38 @@ export function HealthScreen({
       </Card>
 
       <Card>
-        <div className="grid grid-cols-2 gap-5">
-          <Metric label="Blocklist size" value={num(t?.domainsOnGravity)} hint="domains refused" />
+        <Tiles cols={3}>
+          <Metric
+            label="Blocklist size"
+            value={num(t?.domainsOnGravity)}
+            hint="domains refused"
+            tone={t?.domainsOnGravity === 0 ? 'fault' : 'default'}
+          />
           <Metric
             label="Filter service"
             value={t?.piholeReachable ? 'Answering' : 'Silent'}
             tone={t?.piholeReachable ? 'good' : 'fault'}
           />
-        </div>
+          {/* Non-zero throttle flags on a Pi are almost always the power
+              supply, and that is a fault the customer can actually fix. It
+              belongs in front of them rather than only on the console. */}
+          <Metric
+            label="Power & cooling"
+            value={
+              host?.throttleFlags == null
+                ? DASH
+                : host.throttleFlags === '0x0'
+                  ? 'Healthy'
+                  : 'Throttled'
+            }
+            tone={host?.throttleFlags == null ? 'default' : host.throttleFlags === '0x0' ? 'good' : 'warn'}
+            hint={
+              host?.throttleFlags && host.throttleFlags !== '0x0'
+                ? 'usually the power supply'
+                : undefined
+            }
+          />
+        </Tiles>
       </Card>
     </Screen>
   );

@@ -54,6 +54,7 @@ import {
   type TelemetrySummary,
 } from './kioskClient';
 import { ActionButton, Card, HoldButton, NotTheConsole } from './kioskUi';
+import { CH, LiveBackdrop } from './charts';
 import ConsoleLock from './ConsoleLock';
 import { FilteringPanel, NetworkPanel, OverviewPanel, ThreatsPanel, type PanelContext } from './panels';
 import { FirewallPanel, ModulesPanel, SystemPanel, WanPanel } from './panelsSystem';
@@ -195,6 +196,24 @@ export default function KioskApp() {
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#080D16] font-sans text-slate-200 antialiased">
+      {/* An edge mesh, drifting. Its liveliness is scaled by the real block
+          share and its COLOUR is the real protection state — so a paused or
+          failed box does not sit behind a confident blue field. It encodes no
+          value anyone could read off it: this is atmosphere, not a chart, and
+          the distinction is the reason it is allowed to move at all. */}
+      <LiveBackdrop
+        intensity={Math.min(1, (telemetry.data?.blockPercentage ?? 12) / 45)}
+        tone={
+          filtering?.protectionStatus === 'active'
+            ? CH.blue
+            : filtering?.protectionStatus === 'paused'
+              ? CH.amber
+              : filtering
+                ? CH.red
+                : CH.muted
+        }
+        className="opacity-[0.45]"
+      />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(0,111,211,0.08)_0%,transparent_70%)]" />
 
       {/* ---- Header --------------------------------------------------- */}

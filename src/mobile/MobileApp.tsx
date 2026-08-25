@@ -34,6 +34,7 @@ import {
 
 import type { FilteringState } from '../types/filtering';
 import { usePolled, type TelemetrySummary } from '../components/kiosk/kioskClient';
+import { CH, LiveBackdrop } from '../components/kiosk/charts';
 import { getToken, hasToken, onTokenRejected } from '../services/apiClient';
 import { gateflameApi } from '../services/gateflameApi';
 import { forgetNode } from '../services/nodeDiscovery';
@@ -130,15 +131,40 @@ export function MobileApp() {
     />
   );
 
+  /*
+   * The backdrop's colour is the protection state and its liveliness is the
+   * real block share. Both are readings, but neither is READABLE — you cannot
+   * recover a number from a drifting mesh, which is exactly why it is allowed
+   * to move on a screen whose entire job is telling the truth. Before pairing
+   * there is no state to represent, so it sits neutral and calm.
+   */
+  const backdropTone =
+    filtering.data?.protectionStatus === 'active'
+      ? CH.blue
+      : filtering.data?.protectionStatus === 'paused'
+        ? CH.amber
+        : filtering.data
+          ? CH.red
+          : CH.muted;
+
   if (!paired) {
     return (
-      <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#080D16]">
-        <AppPairingScreen
-          onPaired={() => {
-            void gateflameApi.connect();
-            setPaired(true);
-          }}
-        />
+      /* No tab bar on this screen, so the assistant bubble sits back down at
+         the normal corner offset rather than floating above nothing. */
+      <div
+        className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#080D16]"
+        style={{ ['--ib-fab-bottom' as string]: '16px' }}
+      >
+        <LiveBackdrop intensity={0.28} tone={CH.blue} className="opacity-50" />
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(0,111,211,0.16)_0%,transparent_55%)]" />
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+          <AppPairingScreen
+            onPaired={() => {
+              void gateflameApi.connect();
+              setPaired(true);
+            }}
+          />
+        </div>
         {/* Available DURING pairing, which is when people are most stuck. */}
         {ionibot}
       </div>
@@ -147,8 +173,14 @@ export function MobileApp() {
 
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#080D16] text-slate-200">
-      {/* One radial glow for depth. The design system asks for this rather than
-          drop shadows, which turn to mud on an OLED panel. */}
+      {/* An edge mesh, drifting — the product's own shape, used as atmosphere.
+          Sits under a radial glow for depth; the design system asks for this
+          rather than drop shadows, which turn to mud on an OLED panel. */}
+      <LiveBackdrop
+        intensity={Math.min(1, (telemetry.data?.blockPercentage ?? 10) / 40)}
+        tone={backdropTone}
+        className="opacity-[0.55]"
+      />
       <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(0,111,211,0.14)_0%,transparent_55%)]" />
 
       {tab === 'home' && <HomeScreen telemetry={telemetry} filtering={filtering} />}
@@ -160,39 +192,69 @@ export function MobileApp() {
       )}
       {tab === 'settings' && <ControlsScreen filtering={filtering} />}
       {tab === 'game' && (
-        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-36 pt-3">
-          <Suspense
-            fallback={<p className="p-6 text-center text-sm text-[#64748B]">Loading…</p>}
-          >
-            <IonicrobesGame />
-          </Suspense>
+        <div
+          className="relative z-10 flex-1 overflow-y-auto px-4 pt-3 no-scrollbar"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 7rem)' }}
+        >
+          <div className="mx-auto w-full max-w-md sm:max-w-xl">
+            <Suspense fallback={<p className="p-6 text-center text-sm text-[#64748B]">Loading…</p>}>
+              <IonicrobesGame />
+            </Suspense>
+          </div>
         </div>
       )}
 
-      {/* --------------------------------------------------------- tab bar */}
-      <nav className="absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-40 flex snap-x items-center gap-1 overflow-x-auto rounded-2xl border border-[#1E293B] bg-[#111A28]/95 px-2 py-2 no-scrollbar backdrop-blur-xl">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const on = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              aria-current={on ? 'page' : undefined}
-              /* 48px minimum, per the design system's touch-target rule. */
-              className="flex min-h-[48px] min-w-[52px] shrink-0 snap-center flex-col items-center justify-center rounded-xl px-1"
-            >
-              <Icon className={`h-5 w-5 ${on ? 'text-[#38BDF8]' : 'text-[#64748B]'}`} />
-              <span
-                className={`mt-0.5 font-mono text-[8px] font-bold uppercase tracking-wider ${
-                  on ? 'text-[#38BDF8]' : 'text-[#64748B]'
+      {/* --------------------------------------------------------- tab bar
+          Seven destinations is more than a phone bar comfortably holds, so
+          this is a 7-column GRID rather than a scrolling row. A scroller hides
+          destinations off-screen and, worse, leaves the bar in a half-scrolled
+          position that reads as broken; a grid always shows all seven and lets
+          each cell shrink instead. The cells stay above the 48px touch-target
+          floor down to a 320dp screen, which is narrower than anything still
+          being sold. The bar itself is centred and capped so it becomes a
+          floating pill on a tablet rather than a stretched ribbon.        */}
+      <nav
+        className="absolute inset-x-0 z-40 px-3"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+      >
+        <div className="mx-auto grid w-full max-w-md grid-cols-7 items-center gap-0.5 rounded-2xl border border-[#1E293B] bg-[#111A28]/95 px-1.5 py-1.5 backdrop-blur-xl sm:max-w-lg sm:gap-1 sm:px-2 sm:py-2">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const on = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                aria-current={on ? 'page' : undefined}
+                aria-label={t.label}
+                className={`relative flex min-h-[48px] flex-col items-center justify-center rounded-xl transition-colors ${
+                  on ? 'bg-[#38BDF8]/10' : ''
                 }`}
               >
-                {t.label}
-              </span>
-            </button>
-          );
-        })}
+                {/* The active marker is a bar above the icon rather than a
+                    filled cell: at this width a filled cell swallows the
+                    label, and the label is what makes the bar learnable. */}
+                <span
+                  className={`absolute inset-x-3 top-0 h-0.5 rounded-full transition-all duration-300 ${
+                    on ? 'bg-[#38BDF8] opacity-100 shadow-[0_0_10px_rgba(56,189,248,0.8)]' : 'opacity-0'
+                  }`}
+                />
+                <Icon
+                  className={`h-[18px] w-[18px] transition-colors sm:h-5 sm:w-5 ${
+                    on ? 'text-[#38BDF8]' : 'text-[#64748B]'
+                  }`}
+                />
+                <span
+                  className={`mt-0.5 max-w-full truncate px-0.5 font-mono text-[7px] font-bold uppercase tracking-wide transition-colors sm:text-[9px] sm:tracking-wider ${
+                    on ? 'text-[#38BDF8]' : 'text-[#64748B]'
+                  }`}
+                >
+                  {t.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
       {/* The assistant rides above every screen as a bubble, never a

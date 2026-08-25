@@ -19,14 +19,15 @@
     "test": "vitest",
     "test:run": "vitest run",
     "build:all": "npm run build:html-mobile && npm run build:html-kiosk && npm run build:apk",
-    "build:html-mobile": "vite build --config vite.standalone.config.ts && node scripts/assemble-dist.mjs mobile",
-    "build:html-kiosk": "vite build --config vite.standalone.config.ts && node scripts/assemble-dist.mjs kiosk",
+    "build:html-mobile": "vite build --config vite.standalone.config.ts && node scripts/verify-bundle.mjs dist/assets && node scripts/assemble-dist.mjs mobile",
+    "build:html-kiosk": "vite build --config vite.standalone.config.ts && node scripts/verify-bundle.mjs dist/assets && node scripts/assemble-dist.mjs kiosk",
     "build:apk": "npm run version:bump && npm run build:html-mobile && npx cap sync android && cd android && chmod +x gradlew && ./gradlew assembleRelease && cd .. && mkdir -p release && cp android/app/build/outputs/apk/release/app-release.apk release/GateFlame-Mobile.apk && npm run apk:fingerprint",
     "build:apk-debug": "npm run build:html-mobile && npx cap sync android && cd android && chmod +x gradlew && ./gradlew assembleDebug && cd .. && mkdir -p release && cp android/app/build/outputs/apk/debug/app-debug.apk release/GateFlame-Mobile-debug.apk",
     "apk:fingerprint": "node scripts/apk-fingerprint.mjs",
     "version:bump": "node scripts/bump-version.mjs",
     "version:release": "node scripts/bump-version.mjs --name",
-    "package:release": "mkdir -p release && npm run build:html-mobile && npm run build:html-kiosk && tar -czf release/GateFlame-Complete-Package.tar.gz dist-mobile dist-kiosk && gzip -t release/GateFlame-Complete-Package.tar.gz && echo 'tarball verified: gzip OK'"
+    "package:release": "mkdir -p release && npm run build:html-mobile && npm run build:html-kiosk && tar -czf release/GateFlame-Complete-Package.tar.gz dist-mobile dist-kiosk && gzip -t release/GateFlame-Complete-Package.tar.gz && echo 'tarball verified: gzip OK'",
+    "verify:bundle": "node scripts/verify-bundle.mjs dist/assets"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

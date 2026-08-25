@@ -65,6 +65,29 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /*
+   * The capability strip on the phone's Home screen, lifted from
+   * ionity.co.za. Translating -50% works because the caller renders the list
+   * TWICE, so the halfway point is visually identical to the start and the
+   * loop has no seam.
+   *
+   * It carries words, never figures — nothing scrolling past here could be
+   * mistaken for a live reading, which is the only reason a decorative
+   * animation is allowed on a screen whose entire job is telling the truth.
+   */
+  .gf-marquee {
+    animation: gf-marquee-scroll 34s linear infinite;
+  }
+  @keyframes gf-marquee-scroll {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(-50%, 0, 0); }
+  }
+  /* Someone who asked for less movement gets a still strip, not a hidden one:
+     the words are content, the motion is not. */
+  @media (prefers-reduced-motion: reduce) {
+    .gf-marquee { animation: none; }
+  }
   
   .glass-panel {
     @apply bg-white/95 dark:bg-black/60 backdrop-blur-3xl transition-all duration-500;

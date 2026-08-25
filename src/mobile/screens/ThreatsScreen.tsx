@@ -9,12 +9,17 @@
 
 import { ShieldAlert } from 'lucide-react';
 
+import { useMemo } from 'react';
+
 import {
   clockTime,
+  num,
   usePolled,
+  useSeries,
   type ThreatsResponse,
 } from '../../components/kiosk/kioskClient';
-import { Card, DASH, Empty, Gap, Screen, ScreenTitle } from '../mobileUi';
+import { AreaChart, BarList, CH, Delta, RingGauge } from '../../components/kiosk/charts';
+import { Card, ChartCard, Chip, DASH, Empty, Gap, Screen, ScreenTitle } from '../mobileUi';
 
 /**
  * FTL's own verdict, in words a customer can read.
@@ -37,12 +42,79 @@ export function ThreatsScreen({ active }: { active: boolean }) {
   const data = threats.data;
   const entries = data?.entries ?? [];
 
+  const blockedTrend = useSeries(data ? (data.blockedInWindow ?? null) : undefined);
+
+  /**
+   * The worst offenders, ranked.
+   *
+   * Counted from the entries the node actually returned, so this is "in this
+   * window" and nothing more — it is not extrapolated to a day, and the
+   * footer says so. A ranked list that quietly implies a daily total is the
+   * kind of small dishonesty that costs trust the first time someone checks.
+   */
+  const topDomains = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of entries) {
+      if (!e.domain) continue;
+      counts.set(e.domain, (counts.get(e.domain) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([label, value]) => ({ label, value }));
+  }, [entries]);
+
+  // Only when BOTH figures are real. A rate computed from a missing scanned
+  // count would be a confident percentage derived from an unknown.
+  const rate = data && data.scanned ? ((data.blockedInWindow ?? 0) / data.scanned) * 100 : null;
+
   return (
     <Screen>
       <ScreenTitle
+        kicker="03 · Refusals"
         title="Blocked"
         sub="The most recent things your box refused to look up."
+        right={
+          data ? <Chip tone={entries.length ? 'warn' : 'good'}>{num(entries.length)} shown</Chip> : null
+        }
       />
+
+      {/* ------------------------------------------------- detection rate */}
+      {data && (
+        <Card>
+          <div className="flex items-center gap-5">
+            <RingGauge value={rate} sub="refused" tone={CH.orange} size={112} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-200">Of what your box examined</p>
+              <p className="mt-1 text-xs leading-relaxed text-[#64748B]">
+                {num(data.blockedInWindow ?? null)} refused out of {num(data.scanned ?? null)} it
+                looked at. This is the recent window, not your whole day.
+              </p>
+              <div className="mt-3">
+                <AreaChart
+                  samples={blockedTrend.samples}
+                  height={36}
+                  stroke={CH.orange}
+                  showAxis={false}
+                  label="blocked in window"
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* --------------------------------------------------- top offenders */}
+      {topDomains.length > 0 && (
+        <ChartCard
+          label="Asked for most often"
+          tone={CH.orange}
+          right={<Delta samples={blockedTrend.samples} />}
+          footer="Counted from the entries above only. Nothing here is extrapolated to a day."
+        >
+          <BarList rows={topDomains} colour={CH.orange} />
+        </ChartCard>
+      )}
 
       {threats.error && (
         <Card accent="warn">

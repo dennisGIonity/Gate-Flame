@@ -41,6 +41,7 @@ import {
   Toggle,
   ViewerNotice,
 } from './kioskUi';
+import { AnimatedNumber, AreaChart, BarList, CH, Delta, Kicker, Meter, RingGauge } from './charts';
 
 export interface PanelContext {
   telemetry: TelemetrySummary | null;
@@ -163,7 +164,13 @@ export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
 
       <Card title="Query split" className="col-span-4" subtitle="Allowed against blocked, today.">
         <div className="flex items-center justify-center py-2">
-          <Gauge value={telemetry?.blockPercentage ?? null} label="blocked" tone={COLORS.orange} />
+          <RingGauge
+            value={telemetry?.blockPercentage ?? null}
+            label="blocked"
+            sub="today"
+            tone={COLORS.orange}
+            size={152}
+          />
         </div>
         <div className="mt-4">
           <ProportionBar
@@ -183,7 +190,7 @@ export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">CPU</p>
             <p className="mt-1 font-mono text-3xl tabular-nums text-slate-100">{pct(telemetry?.host?.cpuPercent)}</p>
-            <Sparkline samples={cpu.samples} height={44} max={100} stroke={COLORS.cyan} className="mt-2" />
+            <AreaChart samples={cpu.samples} height={62} max={100} stroke={CH.cyan} className="mt-2" label="cpu" />
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Temperature</p>
@@ -196,7 +203,7 @@ export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
                 ? DASH
                 : `${telemetry.host.tempC.toFixed(1)}°`}
             </p>
-            <Sparkline samples={temp.samples} height={44} max={90} stroke={COLORS.orange} className="mt-2" />
+            <AreaChart samples={temp.samples} height={62} max={90} stroke={CH.orange} className="mt-2" label="temperature" />
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Memory</p>
@@ -204,10 +211,26 @@ export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
               {num(telemetry?.host?.memUsedMB)}
               <span className="text-lg text-slate-500"> / {num(telemetry?.host?.memTotalMB)} MB</span>
             </p>
+            {/* Scaled against installed RAM, so the bar answers the question
+                the two numbers only imply: how close is this board to full. */}
+            <Meter
+              label="of installed"
+              value={telemetry?.host?.memUsedMB ?? null}
+              max={telemetry?.host?.memTotalMB ?? 1}
+              unit="MB"
+              format={(v) => num(v)}
+            />
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Disk used</p>
             <p className="mt-1 font-mono text-3xl tabular-nums text-slate-100">{pct(telemetry?.host?.diskUsedPercent)}</p>
+            <Meter
+              label="of volume"
+              value={telemetry?.host?.diskUsedPercent ?? null}
+              max={100}
+              unit="%"
+              format={(v) => pct(v)}
+            />
           </div>
         </div>
         <SinceNote since={cpu.since} extra="Stored history arrives with the telemetry tables (plan Phase 3)." />
@@ -222,6 +245,7 @@ export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
 
 export function FilteringPanel({
   filtering,
+  telemetry,
   authority,
   onSetLevel,
   onSetCategories,
@@ -240,11 +264,17 @@ export function FilteringPanel({
   const [reason, setReason] = useState('');
   const canWrite = authority === 'console';
 
+  // Hooks must run before the early return below, so these sit above it. Both
+  // tolerate `undefined` and record a gap rather than a zero.
+  const blockedSeries = useSeries(telemetry?.queriesBlockedToday ?? undefined);
+  const shareSeries = useSeries(telemetry?.blockPercentage ?? undefined);
+
   if (!filtering) {
     return <EmptyState title="Reading filtering state…" detail="Waiting for the agent to answer /api/v1/filtering." />;
   }
 
   const enabledCategories = filtering.categories.filter((c) => c.enabled).map((c) => c.id);
+  const levelIndex = filtering.availableLevels.findIndex((l) => l.level === filtering.threatLevel.level);
 
   return (
     <div className="grid grid-cols-12 gap-6">
@@ -327,6 +357,106 @@ export function FilteringPanel({
         )}
       </Card>
 
+      {/* --- Is any of this working? --------------------------------------
+          Everything else on this tab is a CONTROL. Without this card the
+          console could offer a threat dial, a category list and a pause button
+          and never once show what any of them achieved — which is exactly the
+          shape of the failure that let a box ship having never filtered a
+          single query. A setting with no readout is an unverified claim.   */}
+      <Card
+        className="col-span-12"
+        title="Is it working?"
+        subtitle="What these three controls are actually achieving, measured — not what they were set to."
+      >
+        <Kicker index="02">Filtering performance</Kicker>
+        <div className="grid grid-cols-12 items-center gap-8">
+          <div className="col-span-3 flex justify-center">
+            <RingGauge
+              value={telemetry?.blockPercentage ?? null}
+              label="of lookups refused"
+              sub="live"
+              tone={filtering.enabled ? CH.orange : CH.muted}
+              size={150}
+            />
+          </div>
+
+          <div className="col-span-5">
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                Blocked today, while this screen has been open
+              </span>
+              <Delta samples={blockedSeries.samples} />
+            </div>
+            <AreaChart
+              samples={blockedSeries.samples}
+              height={104}
+              stroke={CH.orange}
+              label="blocked today"
+            />
+            <SinceNote since={blockedSeries.since} />
+          </div>
+
+          <div className="col-span-4 space-y-4">
+            <Meter
+              label="Domains on the blocklist"
+              value={filtering.threatLevel.blocklistCount ?? null}
+              max={Math.max(1, ...filtering.availableLevels.map((l) => l.blocklistCount ?? 0))}
+              unit="lists"
+              tone={CH.cyan}
+            />
+            <Meter
+              label="Threat level"
+              value={levelIndex < 0 ? null : levelIndex + 1}
+              max={Math.max(1, filtering.availableLevels.length)}
+              format={() => filtering.threatLevel.level.toUpperCase()}
+              tone={CH.green}
+            />
+            <Meter
+              label="Content categories on"
+              value={enabledCategories.length}
+              max={Math.max(1, filtering.categories.length)}
+              format={(v) => `${v ?? 0} of ${filtering.categories.length}`}
+              tone={CH.blue}
+            />
+            <div className="rounded-xl border border-[#1E293B] bg-[#0F1B2D]/60 px-4 py-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                Refused this session
+              </p>
+              <p className="mt-1 font-mono text-3xl leading-none text-slate-100">
+                <AnimatedNumber
+                  value={telemetry?.queriesBlockedToday ?? null}
+                  format={(v) => num(v)}
+                />
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                of <AnimatedNumber value={telemetry?.totalQueriesToday ?? null} format={(v) => num(v)} />{' '}
+                looked up
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* The agent's own words, verbatim. `applying` is why a control can look
+            like it did nothing for half a minute — gravity is rebuilding. */}
+        {filtering.applying && (
+          <p className="mt-5 flex items-center gap-2 text-sm text-[#38BDF8]">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#38BDF8]" />
+            Applying — the blocklists are rebuilding. The numbers above are still describing the previous
+            configuration.
+          </p>
+        )}
+        <GapNote text={filtering.lastError} />
+        <GapNote text={telemetry?.gap} />
+        <div className="mt-4 flex items-center gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-600">
+            Share, sampled
+          </span>
+          <div className="flex-1">
+            <AreaChart samples={shareSeries.samples} height={40} stroke={CH.cyan} showAxis={false} max={100} />
+          </div>
+        </div>
+      </Card>
+
       {/* --- Threat level ------------------------------------------------- */}
       <Card
         className="col-span-7"
@@ -405,7 +535,11 @@ export function ThreatsPanel({ active }: PanelContext) {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [entries]);
 
-  const peak = topDomains[0]?.[1] ?? 1;
+  // Trend of the node's own window count. `undefined` while the poll has not
+  // answered means the series records a gap rather than a run of zeroes, so a
+  // node that goes quiet leaves a hole in the line instead of a flat floor.
+  const blockedTrend = useSeries(threats.data ? (threats.data.blockedInWindow ?? null) : undefined);
+  const examinedTrend = useSeries(threats.data ? (threats.data.scanned ?? null) : undefined);
 
   return (
     <div className="grid grid-cols-12 gap-6">
@@ -414,14 +548,55 @@ export function ThreatsPanel({ active }: PanelContext) {
           label="Blocked in window"
           value={num(threats.data?.blockedInWindow ?? null)}
           tone={(threats.data?.blockedInWindow ?? 0) > 0 ? 'good' : 'default'}
+          series={blockedTrend.samples}
         />
-        <StatTile label="Queries examined" value={num(threats.data?.scanned ?? null)} />
+        <StatTile
+          label="Queries examined"
+          value={num(threats.data?.scanned ?? null)}
+          series={examinedTrend.samples}
+        />
         <StatTile
           label="Source"
           value={threats.data?.source === 'none' ? DASH : (threats.data?.source ?? DASH)}
           gap={threats.data?.gap}
         />
       </div>
+
+      {/* --- Detection rate ------------------------------------------------
+          The two counts above are absolutes and drift together as the window
+          rolls. What actually tells you whether the lists are earning their
+          keep is the RATIO, and it is not a number the node returns — so it is
+          computed here from two figures it does return, and only when BOTH are
+          present. Deriving it from a missing scanned count would produce a
+          confident percentage out of one unknown.                          */}
+      <Card className="col-span-12" title="Detection rate" subtitle="Refusals as a share of what the node examined.">
+        <Kicker index="01">Threat performance</Kicker>
+        <div className="grid grid-cols-12 items-center gap-8">
+          <div className="col-span-3 flex justify-center">
+            <RingGauge
+              value={
+                threats.data && threats.data.scanned
+                  ? ((threats.data.blockedInWindow ?? 0) / threats.data.scanned) * 100
+                  : null
+              }
+              label="of examined, refused"
+              sub="window"
+              tone={CH.orange}
+              size={144}
+            />
+          </div>
+          <div className="col-span-9">
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                Blocked in window, sampled
+              </span>
+              <Delta samples={blockedTrend.samples} />
+            </div>
+            <AreaChart samples={blockedTrend.samples} height={112} stroke={CH.orange} label="blocked in window" />
+            <SinceNote since={blockedTrend.since} />
+          </div>
+        </div>
+      </Card>
 
       <Card
         className="col-span-5"
@@ -434,22 +609,10 @@ export function ThreatsPanel({ active }: PanelContext) {
             detail={threats.data?.gap ?? 'No query entries have been returned in this window.'}
           />
         ) : (
-          <div className="space-y-3">
-            {topDomains.map(([domain, count]) => (
-              <div key={domain}>
-                <div className="flex items-baseline justify-between gap-4">
-                  <span className="truncate font-mono text-sm text-slate-300">{domain}</span>
-                  <span className="font-mono text-sm tabular-nums text-slate-400">{count}</span>
-                </div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#0F1B2D]">
-                  <div
-                    className="h-full rounded-full bg-[#FF8700] transition-all duration-500"
-                    style={{ width: `${(count / peak) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+          <BarList
+            colour={CH.orange}
+            rows={topDomains.map(([domain, count]) => ({ label: domain, value: count }))}
+          />
         )}
       </Card>
 
@@ -552,7 +715,7 @@ export function NetworkPanel({ active }: PanelContext) {
             ))}
           </div>
         )}
-        <Sparkline samples={count.samples} height={40} stroke={COLORS.blue} className="mt-4" />
+        <AreaChart samples={count.samples} height={56} stroke={CH.blue} className="mt-4" label="devices seen" />
         <SinceNote since={count.since} />
       </Card>
 
@@ -598,6 +761,54 @@ export function NetworkPanel({ active }: PanelContext) {
         )}
       </Card>
 
+      {/* --- Where the devices are attached --------------------------------
+          Worth its own readout rather than a column in the list above,
+          because this is the shape that exposes DUAL-HOMING: if the same /24
+          appears on two interfaces, DNS becomes intermittent and per-device in
+          a way nothing else on this console would show. A6 in the dependency
+          map, visible here instead of only in a script's output.           */}
+      <Card
+        className="col-span-12"
+        title="Attachment"
+        subtitle="Which interface each device was discovered on. Two interfaces carrying the same subnet is a fault, not a feature."
+      >
+        <Kicker index="03">Network performance</Kicker>
+        {list.length === 0 ? (
+          <EmptyState title="Nothing discovered yet" detail="Passive discovery only sees a device once it speaks." />
+        ) : (
+          <div className="grid grid-cols-12 gap-8">
+            <div className="col-span-7">
+              <BarList
+                colour={CH.blue}
+                rows={[...new Set(list.map((c) => c.interface))].map((iface) => {
+                  const on = list.filter((c) => c.interface === iface);
+                  // Distinct /24s behind this interface — named, not counted,
+                  // so a reader can see WHICH subnet is doubled up.
+                  const subnets = [...new Set(on.map((c) => c.ip.split('.').slice(0, 3).join('.')))];
+                  return {
+                    label: iface || DASH,
+                    value: on.length,
+                    hint: `${subnets.join(', ')}.0/24`,
+                  };
+                })}
+              />
+            </div>
+            <div className="col-span-5 flex items-center justify-center">
+              <RingGauge
+                value={
+                  list.length
+                    ? ([...new Set(list.map((c) => c.hostname).filter(Boolean))].length / list.length) * 100
+                    : null
+                }
+                label="devices with a name"
+                sub="named"
+                tone={CH.cyan}
+                size={132}
+              />
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
