@@ -4,9 +4,9 @@ Answers one question for the customer: *which hostnames is this device on my
 network talking to?* It reads the TLS ClientHello SNI and the HTTP/1.x Host
 header. Nothing else.
 
-────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────
 WHAT THIS DELIBERATELY DOES NOT DO
-────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────
 "Deep packet inspection" is a phrase that covers everything from reading a
 hostname to decrypting a customer's banking session. This module sits at the
 shallow end and the boundary is structural, not a policy note:
@@ -26,9 +26,9 @@ shallow end and the boundary is structural, not a policy note:
   A shrinking DPI number over the next few years is the internet getting
   more private, not the product breaking.
 
-────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────
 WHY THE PARSER IS SHAPED LIKE THIS
-────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────
 `parse_frame()` is a pure function: bytes in, an observation or None out. No
 socket, no state, no I/O. That is what makes it testable against truncated,
 malformed and hostile input without root or a NIC — and a packet parser that
@@ -234,7 +234,7 @@ def parse_frame(frame: bytes) -> Observation | None:
         return _parse_frame_inner(frame)
     except _Reader._Truncated:
         return None
-    except Exception:  # noqa: BLE001 — a parser bug must not kill the module
+    except Exception:
         logger.debug("frame parse failed", exc_info=True)
         return None
 
@@ -395,7 +395,7 @@ def capability(has_cap_net_raw=None) -> tuple[bool, str | None]:
                 "no CAP_NET_RAW — grant it to the unit "
                 "(AmbientCapabilities=CAP_NET_RAW in gateflame.service), never run as root",
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return False, f"cannot determine packet capture capability: {exc}"
     return True, None
 
