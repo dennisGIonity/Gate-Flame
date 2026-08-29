@@ -44,11 +44,32 @@ template. It is **not** a git identity.
    one.** Three commits sat undiscovered on a `deploybundle` branch in
    `gf-scratch` for ten days purely because nobody was standing on that branch.
 
-### The two commands
+### 6. Nothing operational goes in `C:\Users\DGMic`
+
+Earlier sessions scattered **98 loose scratch files** into the home folder —
+`gf-scan.ps1` through `gf-scan8.ps1`, three `gf-pihole*.ps1`, four `gf-verify*`.
+That is how a machine ends up with nineteen copies of a project and nobody able
+to say which one is real.
+
+**Scratch goes in `E:\Gateflame\tools\` and gets committed, or it does not
+exist.** If a script is worth writing twice it is worth version-controlling; if
+it is not, delete it in the same breath.
+
+Only these legitimately stay on C:, because their tools look nowhere else:
+
+| Path | Why |
+|---|---|
+| `~/.ssh` | ssh reads only from here |
+| `~/.gitconfig` | git reads only from here |
+| `~/.gateflame-signing` | the release keystore — **irreplaceable, back it up** |
+| `~/.gradle`, Android SDK | hardcoded by their toolchains |
+
+### The commands — all in `E:\Gateflame\tools\`
 
 ```
-bash scripts/gateflame-doctor.sh          # read-only: identity, clones, unpushed work
-C:\Users\DGMic\GATEFLAME-SAVE-EVERYTHING.cmd   # pushes every unique commit, deletes nothing
+tools\doctor.cmd            read-only: identity, clones, unpushed work
+tools\SAVE-EVERYTHING.cmd   pushes every unique commit. deletes nothing, never forces
+tools\load-key.cmd          loads the SSH key (once per Windows restart)
 ```
 
 **Run the doctor at the start and end of any session that touches git.**
