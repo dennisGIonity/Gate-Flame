@@ -1,0 +1,25 @@
+[Unit]
+Description=Gate^Flame Fleet Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=gateflame-fleet
+WorkingDirectory=/opt/gateflame-fleet
+Environment=GATEFLAME_FLEET_DB=/opt/gateflame-fleet/fleet.db
+# --- set these two before starting, they have no default and the app refuses to boot without them ---
+Environment=GATEFLAME_FLEET_TOKEN=CHANGE_ME_SAME_VALUE_AS_NODE_AGENTS_GATEFLAME_FEED_TOKEN
+Environment=GATEFLAME_FLEET_ADMIN_USER=admin
+Environment=GATEFLAME_FLEET_ADMIN_PASSWORD=CHANGE_ME
+ExecStart=/opt/gateflame-fleet/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8090
+Restart=on-failure
+RestartSec=3
+
+# Basic hardening — this process only needs its own directory and the network.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/gateflame-fleet
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

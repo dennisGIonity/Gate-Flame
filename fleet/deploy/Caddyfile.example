@@ -1,0 +1,10 @@
+# Caddy gets you free automatic HTTPS with zero certificate hassle — point
+# this at whatever domain you land on (feeds.ionity.today or otherwise) once
+# DNS is pointed at the server's IP. Caddy handles the cert renewal itself.
+#
+# Install: https://caddyserver.com/docs/install
+# Run:     sudo caddy run --config /etc/caddy/Caddyfile
+
+feeds.ionity.today {
+    reverse_proxy 127.0.0.1:8090
+}

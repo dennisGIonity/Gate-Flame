@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gate^Flame Fleet</title>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #121821; --border: #232c38; --text: #e8edf3; --muted: #8ba0b6;
+    --green: #34c77b; --amber: #f5b942; --red: #f2545b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; justify-content: space-between; }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: 0.3px; }
+  #summary { color: var(--muted); font-size: 13px; }
+  main { padding: 24px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+  tr:last-child td { border-bottom: none; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot.online { background: var(--green); }
+  .dot.stale { background: var(--amber); }
+  .dot.offline { background: var(--red); }
+  .mod { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; margin-right: 4px; border: 1px solid var(--border); }
+  .mod.running { color: var(--green); }
+  .mod.degraded { color: var(--amber); }
+  .mod.stopped { color: var(--red); }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+  code { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Gate^Flame Fleet</h1>
+  <span id="summary">loading…</span>
+</header>
+<main>
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>Status</th><th>Node</th><th>Agent</th><th>Last seen</th><th>Uptime</th>
+        <th>CPU</th><th>Mem</th><th>Disk</th><th>Temp</th><th>Pi-hole</th>
+        <th>Modules</th><th>Errors/24h</th><th>Restarts/24h</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</main>
+<script>
+function fmtDuration(s) {
+  if (s == null) return '—';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+function fmtAgo(s) {
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+async function refresh() {
+  let nodes;
+  try {
+    const res = await fetch('/api/v1/nodes', { cache: 'no-store' });
+    if (!res.ok) { document.getElementById('summary').textContent = `error ${res.status}`; return; }
+    nodes = await res.json();
+  } catch (e) {
+    document.getElementById('summary').textContent = 'unreachable';
+    return;
+  }
+  const online = nodes.filter(n => n.status === 'online').length;
+  document.getElementById('summary').textContent =
+    `${nodes.length} device${nodes.length === 1 ? '' : 's'} · ${online} online · refreshed ${new Date().toLocaleTimeString()}`;
+
+  const tbody = document.querySelector('#tbl tbody');
+  if (nodes.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="13" class="empty">No devices have reported in yet.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = nodes.map(n => {
+    const h = n.host || {};
+    const c = n.counters || {};
+    const mods = (n.modules || []).map(m =>
+      `<span class="mod ${m.status}" title="${m.gap || ''}">${m.id.replace('module_', '')}</span>`
+    ).join('');
+    return `<tr>
+      <td><span class="dot ${n.status}"></span>${n.status}</td>
+      <td><code>${n.nodeId}</code></td>
+      <td>${n.agentVersion || '—'}</td>
+      <td>${fmtAgo(n.lastSeenAgoSeconds)}</td>
+      <td>${fmtDuration(n.uptimeSeconds)}</td>
+      <td>${h.cpuPercent != null ? h.cpuPercent.toFixed(0) + '%' : '—'}</td>
+      <td>${h.memUsedMB != null && h.memTotalMB ? Math.round(100*h.memUsedMB/h.memTotalMB) + '%' : '—'}</td>
+      <td>${h.diskUsedPercent != null ? h.diskUsedPercent + '%' : '—'}</td>
+      <td>${h.tempC != null ? h.tempC.toFixed(0) + '°C' : '—'}</td>
+      <td>${n.piholeReachable ? 'yes' : 'no'}</td>
+      <td>${mods || '—'}</td>
+      <td>${c.errors24h ?? '—'}</td>
+      <td>${c.restarts24h ?? '—'}</td>
+    </tr>`;
+  }).join('');
+}
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>
