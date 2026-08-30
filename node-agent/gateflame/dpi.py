@@ -4,9 +4,9 @@ Answers one question for the customer: *which hostnames is this device on my
 network talking to?* It reads the TLS ClientHello SNI and the HTTP/1.x Host
 header. Nothing else.
 
-────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────
 WHAT THIS DELIBERATELY DOES NOT DO
-────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────
 "Deep packet inspection" is a phrase that covers everything from reading a
 hostname to decrypting a customer's banking session. This module sits at the
 shallow end and the boundary is structural, not a policy note:
@@ -26,9 +26,9 @@ shallow end and the boundary is structural, not a policy note:
   A shrinking DPI number over the next few years is the internet getting
   more private, not the product breaking.
 
-────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────
 WHY THE PARSER IS SHAPED LIKE THIS
-────────────────────────────────────────────────────────────────────────────
+─────────────────────────────────────────────────────────────────────────────
 `parse_frame()` is a pure function: bytes in, an observation or None out. No
 socket, no state, no I/O. That is what makes it testable against truncated,
 malformed and hostile input without root or a NIC — and a packet parser that
