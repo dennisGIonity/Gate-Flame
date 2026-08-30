@@ -29,6 +29,12 @@ export function AppPairingScreen({ onPaired }: Props) {
   );
   const [error, setError] = useState<string | null>(null);
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
+  // Discovery finding A node doesn't mean it found the RIGHT one — more than
+  // one Gate^Flame box can answer on a LAN (a neighbour's, a second unit being
+  // provisioned). Previously the manual-address override only appeared after
+  // discovery itself failed, so there was no way to correct a false-positive
+  // match short of it erroring out on its own.
+  const [showManual, setShowManual] = useState(false);
 
   const runDiscovery = useCallback(async () => {
     setStep('discover');
@@ -77,6 +83,7 @@ export function AppPairingScreen({ onPaired }: Props) {
       setBaseUrl(result.baseUrl);
       setNodeName(result.status.nodeName ?? result.status.nodeId);
       setStep('enter-code');
+      setShowManual(false);
     } catch {
       setError(`Nothing that looks like a Gate^Flame node answered at ${candidate}.`);
       setStep('error');
@@ -160,6 +167,11 @@ export function AppPairingScreen({ onPaired }: Props) {
               Start over
             </button>
           )}
+          {!showManual && (
+            <button onClick={() => setShowManual(true)} className="text-sm underline opacity-60">
+              Not the right node? Connect to a specific address
+            </button>
+          )}
         </div>
       )}
 
@@ -174,7 +186,11 @@ export function AppPairingScreen({ onPaired }: Props) {
           >
             Try again
           </button>
+        </div>
+      )}
 
+      {(step === 'error' || showManual) && (
+        <>
           <div className="mt-2 flex flex-col gap-2 border-t border-slate-700 pt-3">
             <label htmlFor="gf-manual-address" className="text-sm opacity-70">
               Know the node&rsquo;s address? Enter it here.
@@ -199,7 +215,7 @@ export function AppPairingScreen({ onPaired }: Props) {
               Connect
             </button>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

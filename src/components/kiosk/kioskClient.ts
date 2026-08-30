@@ -77,7 +77,19 @@ export function apiRoot(): string {
   if (transport) return `${transport.baseUrl}/api/v1`;
   if (typeof window === 'undefined') return 'http://localhost:8080/api/v1';
   const { origin, port } = window.location;
-  if (port === '3000' || port === '5173') return 'http://localhost:8080/api/v1';
+  if (port === '3000' || port === '5173') {
+    // Lets a local demo point at a node-agent running on a non-default port
+    // (e.g. when 8080 is already taken by something else on the same
+    // workstation), without touching the production same-origin path below.
+    // Stays same-origin from the BROWSER's point of view — vite.config.ts's
+    // dev proxy (also gated on VITE_DEV_NODE_PORT) is what actually forwards
+    // it server-side. A direct cross-port URL here would still be same-origin
+    // as far as this app's own CORS setup is concerned, but some embedded
+    // browser contexts refuse cross-origin fetches outright regardless of the
+    // target's CORS headers, so same-origin is the more robust choice.
+    const devPort = (import.meta as { env?: Record<string, string> }).env?.VITE_DEV_NODE_PORT;
+    return devPort ? `${origin}/api/v1` : 'http://localhost:8080/api/v1';
+  }
   return `${origin}/api/v1`;
 }
 
