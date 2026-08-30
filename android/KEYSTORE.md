@@ -74,6 +74,16 @@ Record the SHA-256 fingerprint somewhere durable now:
 keytool -list -v -keystore gateflame-release.jks -alias gateflame | grep SHA256
 ```
 
+**Recorded 2026-08-29**, keystore generated 2026-08-17, from `wabakipi`:
+
+```
+SHA256: AB:F9:6D:F7:FF:E3:2F:FC:2D:A1:22:A4:B9:70:96:3E:1D:E8:C7:F8:D8:9A:D6:27:72:F6:1F:82:81:05:E2:7D
+```
+
+Compare every future `npm run build:apk` fingerprint against this line (Step 4
+below prints it). If it ever differs, stop before shipping — you signed with
+the wrong key.
+
 ## Step 3 — wire it up locally
 
 Put the keystore **outside the repository** — the `.gitignore` covers the obvious

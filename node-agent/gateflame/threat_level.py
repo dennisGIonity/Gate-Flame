@@ -35,6 +35,17 @@ LIST SOURCES
 Every list is a public, well-maintained blocklist with a stable URL. They are
 fetched by Pi-hole, not by us, and never vendored into this repo - their
 licences govern redistribution and we have no need to take on that question.
+
+2026-08-30: added zachlagden/Pi-hole-Optimized-Blocklists (Unlicense - public
+domain, redistribution is fine) alongside the existing sources at each level,
+same category, broader coverage - not a replacement, since the incumbent lists
+each cover slightly different ground. Deliberately NOT using
+dennisGIonity/Pi-hole-Optimized-Blocklists (the org's own fork): it is roughly
+ten months behind upstream and stored via Git LFS, which a plain clone or
+fetch cannot read past pointer stubs anyway - point at the maintained repo
+directly. Deliberately NOT including that repo's nsfw.txt at any level, same
+reason `content_categories.py` keeps adult-content blocking out of this dial
+entirely: it is a parental-control choice, not a security one.
 """
 
 from __future__ import annotations
@@ -52,18 +63,28 @@ LEVEL_LISTS: dict[ThreatLevel, list[str]] = {
     "low": [
         # StevenBlack unified: the de-facto standard ads + trackers list.
         "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+        # zachlagden/Pi-hole-Optimized-Blocklists, ads + tracking categories -
+        # broader coverage than StevenBlack alone, same low-risk category.
+        "https://media.githubusercontent.com/media/zachlagden/Pi-hole-Optimized-Blocklists/refs/heads/main/lists/advertising.txt",
+        "https://media.githubusercontent.com/media/zachlagden/Pi-hole-Optimized-Blocklists/refs/heads/main/lists/tracking.txt",
     ],
     "medium": [
         # Phishing domains, updated continuously.
         "https://raw.githubusercontent.com/mitchellkrogza/Phishing.Database/master/phishing-domains-ACTIVE.txt",
         # Malware command-and-control and distribution domains.
         "https://urlhaus.abuse.ch/downloads/hostfile/",
+        # zachlagden/Pi-hole-Optimized-Blocklists, malicious category - broader
+        # malware coverage, same category as the two lists above.
+        "https://media.githubusercontent.com/media/zachlagden/Pi-hole-Optimized-Blocklists/refs/heads/main/lists/malicious.txt",
     ],
     "high": [
         # Aggressive tracking and telemetry - higher false-positive risk.
         "https://raw.githubusercontent.com/crazy-max/WindowsSpyBlocker/master/data/hosts/spy.txt",
         # Additional advertising and tracking coverage.
         "https://adaway.org/hosts.txt",
+        # zachlagden/Pi-hole-Optimized-Blocklists, suspicious category - their
+        # own "aggressive" tier, matching this level's higher-risk posture.
+        "https://media.githubusercontent.com/media/zachlagden/Pi-hole-Optimized-Blocklists/refs/heads/main/lists/suspicious.txt",
     ],
 }
 

@@ -170,7 +170,7 @@ asserts that is correct.
 > on the 18th; that clone has not fetched since). **Always fetch before believing
 > the number** — `SAVE-EVERYTHING.cmd` does, which is why it is the tool to trust.
 - 🔴 Uncommitted in the tree, **not mine, do not clobber**: `android/version.properties`, `vite.standalone.config.ts`, untracked `debug.cjs`
-- 🔴 Release keystore `~/.gateflame-signing` — **irreplaceable, still no verified backup, no SHA-256 recorded**
+- 🔴 Release keystore `~/.gateflame-signing` — **irreplaceable, still no verified backup.** SHA-256 recorded 2026-08-29 in `android/KEYSTORE.md` (`AB:F9:...:E2:7D`) — that part is done.
 - 🔴 Revoke the two GitHub PATs and the `GEMINI_API_KEY` (live plaintext copy in `TempGateFlameBuild\.env.local`)
 - 🟡 Router decision (§4) · 🟡 RA advertiser not deployed · 🟡 memcheck not yet run on hardware
 - 🟡 Two agent routes missing: `GET /api/v1/posture/netcheck`, `POST /api/v1/pair/router/revert` — Ionibot IB-605 needs the second

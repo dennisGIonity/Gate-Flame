@@ -198,7 +198,9 @@ as one.
 - Thermal-validate at 35 °C ambient with the case closed.
 - Enclosure, asset manifest, packaging, per-unit serial and provisioning record.
 - 20-point QA checklist, 24 h burn-in per unit, two suppliers for board and PSU.
-- Pricing.
+- Pricing. **Decided 2026-08-31 by Dennis: R49/month subscription, first month
+  free as an introductory promo.** Applies to the standard tier; premium
+  pricing is still open.
 
 **🚪 GATE H — ten units built to the runbook, all passing QA, boxed.**
 

@@ -268,6 +268,66 @@ else
   note "install with: sudo bash install-watchdog.sh"
 fi
 
+# ------------------------------------------------------- 8. connectivity quality
+hd "8. Connectivity quality"
+#
+# Bucketing idea from surveying AntwerpDesignsIonity/NetworkzeroMonitor
+# (2026-08-30): a plain "up/down" check misses the state that actually
+# frustrates a household - the WAN answering, but slowly or with loss. Same
+# dns_query() used everywhere else in this script, no new dependency.
+
+Q_TARGETS=("1.1.1.1" "8.8.8.8" "9.9.9.9")
+Q_OK=0; Q_TOTAL=0; Q_SLOW=0
+for t in "${Q_TARGETS[@]}"; do
+  Q_TOTAL=$((Q_TOTAL+1))
+  start_ns=$(date +%s%N)
+  ans="$(dns_query "$t" cloudflare.com 3)"
+  end_ns=$(date +%s%N)
+  ms=$(( (end_ns - start_ns) / 1000000 ))
+  if [[ -n "$ans" ]]; then
+    Q_OK=$((Q_OK+1))
+    (( ms > 800 )) && Q_SLOW=$((Q_SLOW+1))
+  fi
+done
+
+if (( Q_OK == Q_TOTAL && Q_SLOW == 0 )); then
+  pass quality "Excellent - $Q_OK/$Q_TOTAL upstream resolvers answered, all under 800ms"
+elif (( Q_OK > 0 )); then
+  warn quality "Degraded - $Q_OK/$Q_TOTAL upstream resolvers answered ($Q_SLOW slow)"
+  note "Slow or partial upstream answers here usually mean the WAN itself, not this"
+  note "box - check the router's own internet connection before anything else."
+else
+  fail quality "None - 0/$Q_TOTAL upstream resolvers answered at all"
+  note "This box has no working path to the internet. Everything else in this"
+  note "report can look healthy while this is true - a household with no WAN"
+  note "still gets a resolver that answers doubleclick.net correctly."
+fi
+
+# --------------------------------------------------- 9. cross-server DNS agreement
+hd "9. Cross-server DNS agreement"
+#
+# Same NetworkzeroMonitor idea: resolve one CLEAN (never blocked) domain
+# through this box and through a public resolver, and compare. This is a
+# sanity check, not a security scanner - it catches the box's own upstream
+# being wrong, not a sophisticated hijack, and a mismatch is a lead to
+# follow, not proof of anything on its own.
+
+CMP_DOMAIN="wikipedia.org"
+CMP_LOCAL="$(dns_query 127.0.0.1 "$CMP_DOMAIN" 5)"
+CMP_PUBLIC="$(dns_query 1.1.1.1 "$CMP_DOMAIN" 5)"
+
+if [[ -z "$CMP_LOCAL" || -z "$CMP_PUBLIC" ]]; then
+  warn crosscheck "could not compare - this box: '${CMP_LOCAL:-no answer}', 1.1.1.1: '${CMP_PUBLIC:-no answer}'"
+elif [[ "$CMP_LOCAL" == "$CMP_PUBLIC" ]]; then
+  pass crosscheck "$CMP_DOMAIN agrees with 1.1.1.1 ($CMP_LOCAL)"
+else
+  warn crosscheck "$CMP_DOMAIN differs: this box -> $CMP_LOCAL, 1.1.1.1 -> $CMP_PUBLIC"
+  note "Large sites often serve different, equally correct answers from a CDN per"
+  note "resolver location - this alone is not a fault. Worth a second look only if"
+  note "paired with a FAIL elsewhere in this report, or if the household reports"
+  note "a specific site behaving oddly."
+fi
+
 # ------------------------------------------------------------------ summary
 if (( JSON )); then
   printf '{"fails":%d,"warns":%d,"lan_ip":"%s","gateway":"%s","results":[' \
