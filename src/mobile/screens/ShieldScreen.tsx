@@ -237,7 +237,7 @@ export function ShieldScreen({ active }: { active: boolean }) {
       <ScreenTitle
         kicker="07 · Shield"
         title={r?.label ?? 'Gate^Flame Shield'}
-        sub="Per-device VPN. Pick a device the box has seen, then a region."
+        sub="Pick a device, then a region."
       />
 
       {problem && (
@@ -255,8 +255,8 @@ export function ShieldScreen({ active }: { active: boolean }) {
         {!r || r.regions.length === 0 ? (
           <p className="text-xs leading-relaxed text-[#64748B]">
             {!r || (!r.controlPlaneReachable && !r.vpnGateAvailable)
-              ? 'Not set up on this box yet. Nothing to turn on until it is.'
-              : 'Set up, but no regions are available right now.'}
+              ? 'Not set up on this box yet.'
+              : 'No regions available right now.'}
           </p>
         ) : rows.length === 0 ? (
           <p className="text-xs leading-relaxed text-[#64748B]">

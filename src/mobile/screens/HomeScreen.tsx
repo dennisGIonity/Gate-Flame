@@ -41,7 +41,7 @@ import {
   Delta,
   RingGauge,
 } from '../../components/kiosk/charts';
-import { Card, ChartCard, Gap, Marquee, Metric, Screen, Warning } from '../mobileUi';
+import { Card, ChartCard, Gap, Metric, Screen, Warning } from '../mobileUi';
 
 const GravityParticleCanvas = lazy(() =>
   import('../../components/GravityParticleCanvas').then((m) => ({
@@ -63,10 +63,15 @@ const LOOK: Record<
     tone: string;
   }
 > = {
+  // Subs are deliberately fragments, not sentences. The owner reads this
+  // screen for two seconds; a paragraph under a one-word verdict is a
+  // paragraph nobody finishes. The FULL explanation still exists - it moved
+  // into the warning card below, where it only appears when something is
+  // actually wrong and there is a reason to read it.
   protected: {
     icon: ShieldCheck,
     title: 'Protected',
-    sub: 'Your box is filtering everything your router asks it about.',
+    sub: '',
     ring: 'border-[#10B981]/50',
     text: 'text-[#10B981]',
     accent: 'good',
@@ -75,7 +80,7 @@ const LOOK: Record<
   paused: {
     icon: ShieldOff,
     title: 'Paused by you',
-    sub: 'Nothing is being blocked until you turn protection back on.',
+    sub: 'Nothing is being blocked',
     ring: 'border-[#F59E0B]/50',
     text: 'text-[#F59E0B]',
     accent: 'warn',
@@ -83,8 +88,8 @@ const LOOK: Record<
   },
   unprotected: {
     icon: ShieldAlert,
-    title: 'Not protecting you',
-    sub: 'Your internet still works, but nothing is being filtered right now.',
+    title: 'Not filtering',
+    sub: 'Your internet still works',
     ring: 'border-[#E11D48]/60',
     text: 'text-[#E11D48]',
     accent: 'fault',
@@ -92,8 +97,8 @@ const LOOK: Record<
   },
   unknown: {
     icon: HelpCircle,
-    title: 'Cannot reach your box',
-    sub: 'Your internet is fine. This phone just cannot see the box to ask.',
+    title: 'Cannot see your box',
+    sub: 'Your internet is fine',
     ring: 'border-[#1E293B]',
     text: 'text-slate-400',
     accent: 'none',
@@ -180,7 +185,7 @@ export function HomeScreen({
           >
             {look.title}
           </h1>
-          <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-300">{look.sub}</p>
+          {look.sub && <p className="mt-1.5 text-sm text-slate-400">{look.sub}</p>}
 
           {status === 'protected' && (
             <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#64748B]">
@@ -207,23 +212,25 @@ export function HomeScreen({
         </div>
       </div>
 
-      <Marquee items={CAPABILITIES} />
+      {/* The capability marquee was removed from Home on Dennis's "way too
+          many words" note: it was a scrolling strip of seven phrases directly
+          under the verdict, carrying no reading. It is still exported below
+          and can go back on a marketing surface where words ARE the content -
+          it just should not compete with the one screen someone opens to ask
+          whether their family is safe. */}
 
       {/* ------------------------------------------------- why, if not fine */}
       {status === 'unprotected' && (
         <Warning
           tone="fault"
           title="Nothing is being filtered"
-          detail={
-            f?.lastError ??
-            'The box is reachable but is not blocking anything. Open Help and I will walk through it.'
-          }
+          detail={f?.lastError ?? 'The box is reachable but blocking nothing. Open Help.'}
         />
       )}
       {status === 'unknown' && (
         <Warning
-          title="I cannot see your box from this phone"
-          detail="Check you are on your home Wi-Fi rather than mobile data. If the box is switched off, your internet keeps working but nothing is being filtered."
+          title="Not reachable from this phone"
+          detail="Are you on home Wi-Fi rather than mobile data?"
         />
       )}
 
@@ -237,11 +244,11 @@ export function HomeScreen({
             size={116}
           />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-200">Share of lookups refused</p>
-            <p className="mt-1 text-xs leading-relaxed text-[#64748B]">
-              Ads, trackers and known-bad addresses your devices asked for and did not get. A low
-              number on a quiet network is normal — a number that never moves is not.
-            </p>
+            {/* The explanatory paragraph that used to sit here ("ads, trackers
+                and known-bad addresses your devices asked for and did not
+                get…") was four lines on a phone, under a number that already
+                says it. Three words carry the same meaning. */}
+            <p className="text-sm font-medium text-slate-200">Lookups refused</p>
             <div className="mt-3">
               <AreaChart
                 samples={share.samples}
@@ -274,11 +281,13 @@ export function HomeScreen({
 
       {/* ---------------------------------------------------------- trend */}
       <ChartCard
-        label="Blocked, while you have been watching"
+        label="Blocked since you opened this"
         value={t ? num(t.queriesBlockedToday) : DASH}
         tone={CH.orange}
         right={<Delta samples={blocked.samples} />}
-        footer="This is live, not a history. Your box does not keep yesterday yet, so the line starts when you open the app."
+        // Still says it is not history - that claim has to stay - but in one
+        // clause rather than two sentences.
+        footer="Live only — the box keeps no history yet."
       >
         <AreaChart samples={blocked.samples} height={104} stroke={CH.orange} label="blocked today" />
       </ChartCard>

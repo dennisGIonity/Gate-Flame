@@ -57,7 +57,7 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
         <Card>
           <p className="text-sm text-[#64748B]">
             {filtering.error
-              ? 'I cannot reach your box, so I will not show settings that might be out of date.'
+              ? 'Cannot reach your box.'
               : 'Reading your settings from the box…'}
           </p>
         </Card>
@@ -72,7 +72,7 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
       <ScreenTitle
         kicker="06 · Controls"
         title="Settings"
-        sub="The few things worth changing from your phone."
+        sub="Changeable from here."
         right={
           <Chip tone={paused ? 'warn' : f.enabled ? 'good' : 'fault'}>
             {paused ? 'paused' : f.enabled ? 'on' : 'off'}
@@ -134,7 +134,7 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
       <Card>
         <p className="mb-1 text-sm font-semibold text-slate-100">How much to block</p>
         <p className="mb-3 text-xs leading-relaxed text-[#64748B]">
-          Higher settings block more, and are slightly more likely to catch something you wanted.
+          Higher blocks more, and more false positives.
         </p>
         <div className="flex flex-col gap-2">
           {f.availableLevels.map((lvl) => {
@@ -241,7 +241,7 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
         ) : (
           <>
             <p className="mb-3 text-xs leading-relaxed text-[#64748B]">
-              Nothing will be blocked until it comes back on.
+              Nothing blocked until it is back on.
             </p>
             <div className="flex flex-wrap gap-2">
               {/* The two open-ended durations need a deliberate confirmation at
@@ -262,7 +262,7 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
                 ))}
             </div>
             <p className="mt-3 text-[11px] leading-relaxed text-[#64748B]">
-              Longer pauses can only be set at the box itself.
+              Longer pauses: at the box only.
             </p>
           </>
         )}

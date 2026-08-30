@@ -73,7 +73,7 @@ export function ThreatsScreen({ active }: { active: boolean }) {
       <ScreenTitle
         kicker="03 · Refusals"
         title="Blocked"
-        sub="The most recent things your box refused to look up."
+        sub="Most recently refused."
         right={
           data ? <Chip tone={entries.length ? 'warn' : 'good'}>{num(entries.length)} shown</Chip> : null
         }
@@ -110,7 +110,7 @@ export function ThreatsScreen({ active }: { active: boolean }) {
           label="Asked for most often"
           tone={CH.orange}
           right={<Delta samples={blockedTrend.samples} />}
-          footer="Counted from the entries above only. Nothing here is extrapolated to a day."
+          footer="From the entries above only."
         >
           <BarList rows={topDomains} colour={CH.orange} />
         </ChartCard>
@@ -118,7 +118,7 @@ export function ThreatsScreen({ active }: { active: boolean }) {
 
       {threats.error && (
         <Card accent="warn">
-          <p className="text-sm text-[#F59E0B]">I could not read the block list from your box.</p>
+          <p className="text-sm text-[#F59E0B]">Could not read the block list.</p>
           <p className="mt-1 text-xs leading-relaxed text-[#64748B]">{threats.error.message}</p>
         </Card>
       )}
@@ -126,7 +126,7 @@ export function ThreatsScreen({ active }: { active: boolean }) {
       {!threats.error && data && entries.length === 0 && (
         <Empty
           title="Nothing has been blocked yet"
-          detail="This is a real answer, not a missing one — your box is answering and has refused nothing recently."
+          detail="A real answer: nothing refused recently."
         />
       )}
 

@@ -64,7 +64,11 @@ export function Screen({ children }: { children: ReactNode }) {
       className="relative z-10 flex-1 overflow-y-auto overscroll-contain px-4 no-scrollbar sm:px-6"
       style={{
         paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)',
-        paddingBottom: 'calc(env(safe-area-inset-bottom) + 7rem)',
+        // 7rem cleared the tab bar but NOT the assistant bubble, which floats
+        // 92px above the inset and is ~64px tall - so the last row of the
+        // bottom card sat underneath it and a real reading was unreadable.
+        // Measured on the S10e, not guessed.
+        paddingBottom: 'calc(env(safe-area-inset-bottom) + 10rem)',
       }}
     >
       <div className="mx-auto flex w-full max-w-md flex-col gap-3 sm:max-w-xl sm:gap-4 lg:max-w-3xl">

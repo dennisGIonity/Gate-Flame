@@ -90,7 +90,7 @@ export function HealthScreen({
         <Warning
           tone="fault"
           title="Your box is not filtering"
-          detail={f.lastError ?? 'It is switched on and answering, but nothing is being blocked.'}
+          detail={f.lastError ?? 'On and answering, but blocking nothing.'}
         />
       )}
 
@@ -98,7 +98,7 @@ export function HealthScreen({
         <Card accent="warn">
           <p className="text-sm text-[#F59E0B]">Updating the blocklist…</p>
           <p className="mt-1 text-xs leading-relaxed text-[#64748B]">
-            This takes up to a minute on the box. Your settings are saved already.
+            Saved. Applying on the box.
           </p>
         </Card>
       )}
@@ -106,7 +106,7 @@ export function HealthScreen({
       {telemetry.error?.unreachable && (
         <Warning
           title="I cannot reach the box from this phone"
-          detail="Check this phone is on your home Wi-Fi. Nothing below is current."
+          detail="Nothing below is current."
         />
       )}
 
@@ -202,13 +202,13 @@ export function HealthScreen({
       {warm && (
         <Warning
           title="The box is running warm"
-          detail="Above 70 °C it slows itself down to cool off. Give it some air, and keep it out of a cupboard or direct sun."
+          detail="Over 70 °C it slows down. Give it air."
         />
       )}
       {tight && (
         <Warning
           title="The box is running out of storage"
-          detail="It needs room to keep the blocklist up to date. Worth mentioning to support before it fills."
+          detail="It needs room for the blocklist."
         />
       )}
 

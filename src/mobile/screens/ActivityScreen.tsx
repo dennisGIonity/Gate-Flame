@@ -38,7 +38,7 @@ export function ActivityScreen({ telemetry }: { telemetry: Polled<TelemetrySumma
       <ScreenTitle
         kicker="01 · Live"
         title="Activity"
-        sub="Live from your box. It starts when you open the app — the box does not keep a history yet."
+        sub="Live only — no history kept yet."
       />
 
       {/* ------------------------------------------------- share blocked */}
@@ -96,7 +96,7 @@ export function ActivityScreen({ telemetry }: { telemetry: Polled<TelemetrySumma
         value={num(t?.activeClientsCount)}
         tone={CH.green}
         right={<Delta samples={clients.samples} />}
-        footer="Your router asks on behalf of the whole house, so this counts what the box can see — not every gadget you own."
+        footer="Counted via your router, not per device."
       >
         <AreaChart samples={clients.samples} height={70} stroke={CH.green} label="devices" />
       </ChartCard>
@@ -132,7 +132,7 @@ export function ActivityScreen({ telemetry }: { telemetry: Polled<TelemetrySumma
         <Gap
           text={
             t && t.domainsOnGravity === 0
-              ? 'The blocklist is empty, so nothing is being refused. Open Help and I will check the box.'
+              ? 'Blocklist is empty — nothing is being refused.'
               : null
           }
         />

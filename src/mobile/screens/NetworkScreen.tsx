@@ -59,7 +59,7 @@ export function NetworkScreen({ active }: { active: boolean }) {
       <ScreenTitle
         kicker="04 · Presence"
         title="Your network"
-        sub="Devices your box has heard from recently. It listens rather than scanning, so a device that is asleep will not be here."
+        sub="Heard from recently. Sleeping devices are absent."
         right={clients.data ? <Chip tone="cyan">{num(list.length)} heard</Chip> : null}
       />
 
@@ -71,7 +71,7 @@ export function NetworkScreen({ active }: { active: boolean }) {
             value={num(list.length)}
             tone={CH.green}
             right={<Delta samples={seen.samples} />}
-            footer="Live sampling only — it starts when you open this screen. A dip is a device going quiet, not one leaving your house."
+            footer="Live only. A dip means quiet, not gone."
           >
             <AreaChart samples={seen.samples} height={76} stroke={CH.green} label="devices heard" />
           </ChartCard>
@@ -109,7 +109,7 @@ export function NetworkScreen({ active }: { active: boolean }) {
       {!clients.error && clients.data && list.length === 0 && (
         <Empty
           title="No devices heard from yet"
-          detail="Your box only sees a device once it speaks. Give it a few minutes."
+          detail="Nothing has spoken yet."
         />
       )}
 
