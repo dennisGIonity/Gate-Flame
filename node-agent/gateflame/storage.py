@@ -121,6 +121,21 @@ CREATE TABLE IF NOT EXISTS device_names (
     name TEXT NOT NULL,
     updated_at REAL NOT NULL
 );
+
+-- Small key/value bag for things the agent learns at runtime and must not
+-- forget across a reboot. Deliberately NOT config: config is what the owner
+-- or the installer set, this is what the box was told by something else.
+--
+-- First use: the per-node health-feed token. Every box shipping with the same
+-- shared feed secret means any one of them could post as any other; the fleet
+-- server now issues each node its own on first contact, and this is where it
+-- is kept. Until it exists the node keeps using the shared one, which is what
+-- makes the rollout safe for boxes already in the field.
+CREATE TABLE IF NOT EXISTS agent_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
 """
 
 
@@ -376,6 +391,22 @@ class Store:
                     "updated_at = excluded.updated_at",
                     (mac, cleaned, time.time()),
                 )
+
+    # ---- runtime settings the agent was told, not configured with ---------
+
+    def get_setting(self, key: str) -> str | None:
+        with self._cursor() as cur:
+            cur.execute("SELECT value FROM agent_settings WHERE key = ?", (key,))
+            row = cur.fetchone()
+            return row[0] if row else None
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO agent_settings (key, value, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+                (key, value, time.time()),
+            )
 
     # ---- devices ----------------------------------------------------------
 

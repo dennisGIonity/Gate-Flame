@@ -44,9 +44,26 @@ def build_payload(store: Store) -> dict:
     }
 
 
+# Where the node's own feed credential lives once the server has issued one.
+FEED_TOKEN_KEY = "feed_node_token"
+
+
 def _send_once(store: Store) -> bool:
+    """Post one check-in, and pick up a per-node token if the server offers one.
+
+    Every box used to ship with the SAME shared feed secret, which meant any
+    one of them could post as any other node id. The fleet server now mints a
+    token per node on first contact and returns it 201; this stores it and
+    uses it from then on, so the shared secret stops being a master key.
+
+    Deliberately tolerant in both directions: a node that has no token yet
+    falls back to the shared one (that is how it enrols), and a server that
+    never returns one leaves behaviour exactly as it was. Neither side has to
+    be upgraded first.
+    """
     payload = build_payload(store)
-    headers = {"Authorization": f"Bearer {config.feed_token}"} if config.feed_token else {}
+    token = store.get_setting(FEED_TOKEN_KEY) or config.feed_token
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
         r = httpx.post(
             f"{config.feed_url}/{store.node_id()}/health",
@@ -54,6 +71,14 @@ def _send_once(store: Store) -> bool:
             headers=headers,
             timeout=5.0,
         )
+        if r.status_code == 201:
+            try:
+                issued = (r.json() or {}).get("nodeToken")
+            except ValueError:
+                issued = None
+            if issued:
+                store.set_setting(FEED_TOKEN_KEY, issued)
+                logger.info("health feed: stored this node's own feed token")
         return r.status_code < 300
     except httpx.HTTPError as exc:
         logger.warning("health feed post failed, dropping: %s", exc)

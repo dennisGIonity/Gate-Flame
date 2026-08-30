@@ -9,239 +9,184 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 /*
- * Gate^Flame Fleet — styled to the product's own design language, lifted from
- * src/index.css and the console: Outfit/Jakarta/JetBrains Mono, near-black
- * slate, sky-500 glass borders with a glow, rounded-3xl panels.
+ * Gate^Flame Fleet — the operator's console for a few hundred customer boxes.
  *
- * The fonts are loaded from Google with real fallback stacks behind them, so
- * a box with no internet still renders correctly — just in system faces.
+ * Styled to the product's own language (src/index.css): Outfit / Plus Jakarta
+ * Sans / JetBrains Mono, near-black slate, sky-500 glass borders with a glow.
+ * Fonts load from Google with real fallback stacks, so an offline box still
+ * renders correctly in system faces.
  *
- * THE RULE FROM THE REST OF THIS PROJECT APPLIES HERE TOO: nothing on this
- * page is invented. Every figure comes from /api/v1/nodes, which comes from
- * what a node actually posted. A value the API did not return renders as an
- * em-dash, never as a zero — a missing reading and a real zero mean opposite
- * things. There are no placeholder rows, no demo node, no sample data.
+ * THE RULE THE WHOLE PROJECT KEEPS, KEPT HERE: nothing on this page is
+ * invented. Every figure comes from what a node actually posted, or from
+ * something the operator typed. A value the API did not return renders as an
+ * em-dash, never a zero. Charts state their own resolution, because a line
+ * that silently switches from 5-minute samples to hourly averages has
+ * silently changed what it means. There is no demo node and no sample data.
  */
 :root {
-  --bg:        #050505;
-  --panel:     rgba(0,0,0,0.60);
-  --panel-2:   #0a0a0a;
-  --line:      #262626;
-  --text:      #f8fafc;
-  --muted:     #8ba0b6;
-  --dim:       #64748b;
+  --bg:#050505; --panel:rgba(0,0,0,.6); --panel-2:#0a0a0a; --line:#262626;
+  --text:#f8fafc; --muted:#8ba0b6; --dim:#64748b;
+  --sky-400:#38bdf8; --sky-500:#0ea5e9;
+  --green:#10b981; --amber:#f59e0b; --red:#f43f5e; --purple:#a855f7;
+  --glass-border:rgba(14,165,233,.6); --glass-glow:0 0 16px 2px rgba(14,165,233,.25);
+  --font-display:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-sans:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(circle at 50% -10%,rgba(14,165,233,.13) 0%,transparent 55%)}
+.wrap{position:relative;z-index:1;max-width:1520px;margin:0 auto;padding:0 28px 56px}
 
-  --sky-400:   #38bdf8;
-  --sky-500:   #0ea5e9;
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+  flex-wrap:wrap;padding:30px 0 22px}
+.brand{display:flex;align-items:center;gap:16px;cursor:pointer}
+.mark{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  background:var(--panel-2);border:1px solid var(--line)}
+.mark svg{width:24px;height:24px;color:var(--sky-500)}
+h1{font-family:var(--font-display);font-size:29px;font-weight:200;letter-spacing:-.5px;margin:0;line-height:1.1}
+h1 b{font-weight:700} h1 .caret{color:var(--sky-500);font-weight:400}
+.sub{margin-top:5px;font-family:var(--font-mono);font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.2em;color:#475569}
+.pulse{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:11px;
+  text-transform:uppercase;letter-spacing:.14em;color:var(--sky-400);font-weight:700;
+  padding:10px 16px;border-radius:16px;background:var(--panel);backdrop-filter:blur(24px);
+  border:1px solid var(--glass-border);box-shadow:var(--glass-glow)}
+.pulse .beat{width:7px;height:7px;border-radius:50%;background:var(--sky-400);
+  box-shadow:0 0 10px var(--sky-400);animation:beat 2.4s ease-in-out infinite}
+@keyframes beat{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.pulse .beat{animation:none}}
 
-  --green:     #10b981;
-  --amber:     #f59e0b;
-  --red:       #f43f5e;
-  --purple:    #a855f7;
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:18px}
+.tile{background:var(--panel);backdrop-filter:blur(24px);border:1px solid var(--line);
+  border-radius:18px;padding:16px 18px;cursor:pointer;transition:border-color .2s}
+.tile:hover{border-color:#3f3f46}
+.tile.on{border-color:var(--glass-border);box-shadow:var(--glass-glow)}
+.tile .k{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.19em;color:var(--dim)}
+.tile .v{font-family:var(--font-display);font-weight:300;font-size:31px;line-height:1.15;
+  margin-top:7px;font-variant-numeric:tabular-nums}
+.tile .v small{font-size:14px;color:var(--muted);font-weight:400;margin-left:4px}
+.tile.good .v{color:var(--green)} .tile.warn .v{color:var(--amber)} .tile.bad .v{color:var(--red)}
 
-  --glass-border: rgba(14,165,233,0.60);
-  --glass-glow:   0 0 16px 2px rgba(14,165,233,0.25);
+/* ------------------------------------------------------------------ controls */
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+input,select,textarea{font-family:var(--font-sans);font-size:13px;color:var(--text);
+  background:var(--panel-2);border:1px solid var(--line);border-radius:12px;
+  padding:9px 13px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--glass-border)}
+input::placeholder{color:#475569}
+.search{flex:1;min-width:220px}
+.chip{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:5px 10px;
+  border-radius:999px;background:var(--panel-2);border:1px solid var(--line);
+  color:var(--muted);cursor:pointer}
+.chip.on{color:var(--sky-400);border-color:var(--glass-border);background:rgba(14,165,233,.08)}
+button.act{font-family:var(--font-sans);font-size:13px;font-weight:600;cursor:pointer;
+  background:var(--sky-500);color:#04121c;border:none;border-radius:12px;padding:9px 16px}
+button.act.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+button.act:disabled{opacity:.5;cursor:not-allowed}
 
-  --font-display: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-sans:    "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono:    "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-}
-* { box-sizing: border-box; }
-html, body { height: 100%; }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  position: relative;
-  overflow-x: hidden;
-}
-/* The console's radial glow. Atmosphere only — it encodes nothing, which is
-   the sole reason a screen this literal is allowed any decoration at all. */
-body::before {
-  content: "";
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background: radial-gradient(circle at 50% -10%, rgba(14,165,233,0.13) 0%, transparent 55%);
-}
-.wrap { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 28px 56px; }
+/* -------------------------------------------------------------------- table */
+.fleet{background:var(--panel);backdrop-filter:blur(24px);border:1px solid var(--line);
+  border-radius:20px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:12px 16px;font-size:13px;border-bottom:1px solid #141414;white-space:nowrap}
+th{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.17em;
+  color:var(--dim);font-weight:500;cursor:pointer;user-select:none}
+tr:last-child td{border-bottom:none}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:rgba(14,165,233,.05)}
+.nid{font-family:var(--font-mono);font-size:12px;color:var(--dim)}
+.nname{font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.13em;padding:5px 11px;border-radius:999px}
+.pill .dot{width:7px;height:7px;border-radius:50%}
+.pill.online{color:var(--green);background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.35)}
+.pill.online .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+.pill.stale{color:var(--amber);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35)}
+.pill.stale .dot{background:var(--amber)}
+.pill.offline{color:var(--red);background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.35)}
+.pill.offline .dot{background:var(--red)}
+.bill{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.12em;
+  padding:3px 8px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+.bill.active{color:var(--green);border-color:rgba(16,185,129,.35)}
+.bill.suspended,.bill.unpaid{color:var(--red);border-color:rgba(244,63,94,.35)}
+.bill.trial{color:var(--purple);border-color:rgba(168,85,247,.35)}
+.tag{font-family:var(--font-mono);font-size:9.5px;padding:3px 7px;border-radius:6px;
+  background:#0a0a0a;border:1px solid var(--line);color:var(--muted);margin-right:4px}
+.mini{width:74px;height:22px;vertical-align:middle}
 
-/* ---------------------------------------------------------------- header */
-header {
-  display: flex; align-items: flex-end; justify-content: space-between;
-  gap: 24px; flex-wrap: wrap;
-  padding: 34px 0 26px;
-}
-.brand { display: flex; align-items: center; gap: 16px; }
-.mark {
-  width: 46px; height: 46px; border-radius: 14px;
-  display: grid; place-items: center;
-  background: var(--panel-2); border: 1px solid var(--line);
-}
-.mark svg { width: 24px; height: 24px; color: var(--sky-500); }
-h1 {
-  font-family: var(--font-display);
-  font-size: 30px; font-weight: 200; letter-spacing: -0.5px;
-  margin: 0; line-height: 1.1;
-}
-h1 b { font-weight: 700; }
-h1 .caret { color: var(--sky-500); font-weight: 400; }
-.sub {
-  margin-top: 5px;
-  font-family: var(--font-mono);
-  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.2em;
-  color: #475569;
-}
-.pulse {
-  display: flex; align-items: center; gap: 10px;
-  font-family: var(--font-mono); font-size: 11px;
-  text-transform: uppercase; letter-spacing: 0.14em;
-  color: var(--sky-400); font-weight: 700;
-  padding: 10px 16px; border-radius: 16px;
-  background: var(--panel); backdrop-filter: blur(24px);
-  border: 1px solid var(--glass-border); box-shadow: var(--glass-glow);
-}
-.pulse .beat {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--sky-400); box-shadow: 0 0 10px var(--sky-400);
-  animation: beat 2.4s ease-in-out infinite;
-}
-@keyframes beat { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-@media (prefers-reduced-motion: reduce) { .pulse .beat { animation: none; } }
+/* ------------------------------------------------------------------- detail */
+.back{font-family:var(--font-mono);font-size:11px;color:var(--sky-400);cursor:pointer;
+  text-transform:uppercase;letter-spacing:.15em;margin-bottom:14px;display:inline-block}
+.cols{display:grid;grid-template-columns:1fr 380px;gap:18px;align-items:start}
+.card{background:var(--panel);backdrop-filter:blur(26px);border:1px solid var(--line);
+  border-radius:20px;padding:20px 22px;margin-bottom:16px}
+.card.glow{border-color:var(--glass-border);box-shadow:var(--glass-glow)}
+.card h3{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.19em;
+  color:var(--dim);margin:0 0 14px;font-weight:500}
+.meter{margin-bottom:12px}
+.meter .row{display:flex;justify-content:space-between;font-family:var(--font-mono);
+  font-size:10.5px;margin-bottom:5px}
+.meter .lbl{text-transform:uppercase;letter-spacing:.15em;color:var(--dim)}
+.meter .val{font-variant-numeric:tabular-nums}
+.bar{height:5px;border-radius:999px;background:#141414;overflow:hidden}
+.bar span{display:block;height:100%;border-radius:999px}
+.bar.unknown{background:repeating-linear-gradient(90deg,#141414 0 6px,transparent 6px 12px)}
+.field{margin-bottom:12px}
+.field label{display:block;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.16em;color:var(--dim);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%}
+.note{border-left:2px solid var(--line);padding:2px 0 2px 12px;margin-bottom:14px}
+.note .meta{font-family:var(--font-mono);font-size:9.5px;color:var(--dim);margin-bottom:3px}
+.note .body{font-size:13px;line-height:1.55;white-space:pre-wrap}
+.mods{display:flex;flex-wrap:wrap;gap:6px}
+.mod{font-family:var(--font-mono);font-size:10px;padding:4px 9px;border-radius:8px;
+  background:#0a0a0a;border:1px solid var(--line);color:var(--muted)}
+.mod.running{color:var(--green);border-color:rgba(16,185,129,.35)}
+.mod.degraded{color:var(--amber);border-color:rgba(245,158,11,.35)}
+.mod.failed{color:var(--red);border-color:rgba(244,63,94,.35)}
+.gap{margin-top:12px;padding:10px 13px;border-radius:12px;background:rgba(245,158,11,.07);
+  border:1px solid rgba(245,158,11,.28);color:#fbbf24;font-size:11.5px;line-height:1.55}
+.gap b{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.14em;
+  display:block;margin-bottom:3px}
+.notice{padding:11px 14px;border-radius:12px;border:1px dashed var(--line);
+  color:var(--muted);font-size:12px;line-height:1.6}
+.chartwrap{position:relative}
+.chartmeta{font-family:var(--font-mono);font-size:9.5px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.14em;margin-top:6px}
 
-/* ------------------------------------------------------------ stat tiles */
-.tiles {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 16px; margin-bottom: 22px;
-}
-.tile {
-  background: var(--panel); backdrop-filter: blur(24px);
-  border: 1px solid var(--line); border-radius: 20px;
-  padding: 18px 20px;
-}
-.tile .k {
-  font-family: var(--font-mono); font-size: 9.5px;
-  text-transform: uppercase; letter-spacing: 0.19em; color: var(--dim);
-}
-.tile .v {
-  font-family: var(--font-display); font-weight: 300;
-  font-size: 34px; line-height: 1.15; margin-top: 8px;
-  font-variant-numeric: tabular-nums;
-}
-.tile .v small { font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 4px; }
-.tile.good .v { color: var(--green); }
-.tile.warn .v { color: var(--amber); }
-.tile.bad  .v { color: var(--red); }
+.state{border:1px dashed var(--line);border-radius:22px;padding:56px 32px;text-align:center;
+  background:rgba(0,0,0,.35)}
+.state h2{font-family:var(--font-display);font-weight:300;font-size:21px;margin:0 0 9px}
+.state p{color:var(--muted);margin:0 auto;max-width:560px;font-size:13.5px;line-height:1.65}
+.state code{font-family:var(--font-mono);font-size:12px;color:var(--sky-400)}
+.state.fault{border-style:solid;border-color:rgba(244,63,94,.45)}
+.state.fault h2{color:var(--red)}
 
-/* ----------------------------------------------------------- node cards */
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; }
-.node {
-  background: var(--panel); backdrop-filter: blur(28px);
-  border: 1px solid var(--glass-border); box-shadow: var(--glass-glow);
-  border-radius: 24px; padding: 22px 24px 20px;
-}
-.node.stale   { border-color: rgba(245,158,11,0.55); box-shadow: 0 0 16px 2px rgba(245,158,11,0.18); }
-.node.offline { border-color: rgba(244,63,94,0.55);  box-shadow: 0 0 16px 2px rgba(244,63,94,0.18); }
+footer{margin-top:30px;padding-top:16px;border-top:1px solid #141414;display:flex;
+  justify-content:space-between;flex-wrap:wrap;gap:10px;font-family:var(--font-mono);
+  font-size:9.5px;text-transform:uppercase;letter-spacing:.22em;color:#334155}
 
-.node-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-.node-id { font-family: var(--font-mono); font-size: 17px; font-weight: 700; letter-spacing: 0.02em; }
-.node-meta { margin-top: 4px; font-family: var(--font-mono); font-size: 10.5px; color: var(--dim); }
-.pill {
-  display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.14em;
-  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
-}
-.pill .dot { width: 7px; height: 7px; border-radius: 50%; }
-.pill.online  { color: var(--green);  background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.35); }
-.pill.online .dot  { background: var(--green); box-shadow: 0 0 8px var(--green); }
-.pill.stale   { color: var(--amber);  background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.35); }
-.pill.stale .dot   { background: var(--amber); }
-.pill.offline { color: var(--red);    background: rgba(244,63,94,0.10);  border: 1px solid rgba(244,63,94,0.35); }
-.pill.offline .dot { background: var(--red); }
-
-/* meters */
-.meters { margin-top: 20px; display: grid; gap: 13px; }
-.meter .row {
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-family: var(--font-mono); font-size: 10.5px; margin-bottom: 6px;
-}
-.meter .row .lbl { text-transform: uppercase; letter-spacing: 0.16em; color: var(--dim); }
-.meter .row .val { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
-.bar { height: 5px; border-radius: 999px; background: #141414; overflow: hidden; }
-.bar span { display: block; height: 100%; border-radius: 999px; transition: width .6s ease; }
-/* An unknown reading draws no bar at all rather than a zero-length one — an
-   empty bar and a genuine 0% must not look the same. */
-.bar.unknown { background: repeating-linear-gradient(90deg,#141414 0 6px,transparent 6px 12px); }
-
-.facts { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px 22px; font-family: var(--font-mono); font-size: 11px; }
-.facts span { color: var(--dim); }
-.facts b { color: var(--text); font-weight: 500; }
-
-.mods { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
-.mod {
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em;
-  padding: 4px 9px; border-radius: 8px;
-  background: #0a0a0a; border: 1px solid var(--line); color: var(--muted);
-}
-.mod.running   { color: var(--green);  border-color: rgba(16,185,129,0.35); }
-.mod.degraded  { color: var(--amber);  border-color: rgba(245,158,11,0.35); }
-.mod.stopped   { color: var(--dim); }
-.mod.failed    { color: var(--red);    border-color: rgba(244,63,94,0.35); }
-
-.gap {
-  margin-top: 14px; padding: 10px 13px; border-radius: 12px;
-  background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.28);
-  color: #fbbf24; font-size: 11.5px; line-height: 1.55;
-}
-.gap b { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; display: block; margin-bottom: 3px; }
-
-/* ---------------------------------------------------------- empty/error */
-.state {
-  border: 1px dashed var(--line); border-radius: 24px;
-  padding: 64px 32px; text-align: center; background: rgba(0,0,0,0.35);
-}
-.state h2 { font-family: var(--font-display); font-weight: 300; font-size: 22px; margin: 0 0 10px; }
-.state p { color: var(--muted); margin: 0 auto; max-width: 560px; font-size: 13.5px; line-height: 1.65; }
-.state code { font-family: var(--font-mono); font-size: 12px; color: var(--sky-400); }
-.state.fault { border-style: solid; border-color: rgba(244,63,94,0.45); }
-.state.fault h2 { color: var(--red); }
-
-footer {
-  margin-top: 34px; padding-top: 18px; border-top: 1px solid #141414;
-  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
-  font-family: var(--font-mono); font-size: 9.5px;
-  text-transform: uppercase; letter-spacing: 0.22em; color: #334155;
-}
-
-/* ---------------------------------------------------------------- narrow
-   On a phone the tiles stacked one-per-row pushed every actual node below
-   the fold - four screens of summary before a single device. Two-up keeps
-   the summary to one glance, which is the only thing it is for. */
-@media (max-width: 640px) {
-  .wrap { padding: 0 16px 40px; }
-  header { padding: 24px 0 20px; }
-  h1 { font-size: 23px; }
-  .tiles { grid-template-columns: 1fr 1fr; gap: 11px; }
-  .tile { padding: 13px 14px; border-radius: 16px; }
-  .tile .v { font-size: 25px; margin-top: 5px; }
-  .tile .v small { font-size: 12px; }
-  .grid { grid-template-columns: 1fr; }
-  .node { padding: 18px 17px 16px; border-radius: 20px; }
-  .node-id { font-size: 15px; }
-  footer { justify-content: flex-start; gap: 6px 16px; }
+@media (max-width:980px){ .cols{grid-template-columns:1fr} }
+@media (max-width:640px){
+  .wrap{padding:0 15px 40px} header{padding:22px 0 18px} h1{font-size:22px}
+  .tiles{grid-template-columns:1fr 1fr;gap:10px}
+  .tile{padding:12px 13px;border-radius:15px} .tile .v{font-size:24px}
+  th,td{padding:10px 11px;font-size:12px}
+  .hide-sm{display:none}
+  footer{justify-content:flex-start;gap:6px 14px}
 }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="brand">
-      <div class="mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-      </div>
+    <div class="brand" onclick="showFleet()">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
       <div>
         <h1>GATE<span class="caret">^</span><b>FLAME</b> Fleet</h1>
         <div class="sub" id="sub">connecting…</div>
@@ -249,166 +194,359 @@ footer {
     </div>
     <div class="pulse"><span class="beat"></span><span id="pulse">loading</span></div>
   </header>
-
-  <div class="tiles" id="tiles" hidden></div>
-  <div class="grid" id="grid"></div>
-
+  <div id="view"></div>
   <footer>
     <span>Ionity Gate^Flame</span>
-    <span id="foot">health fields only · no domains, no client IPs</span>
+    <span>health fields only · no domains, no client ips, no device names</span>
     <span>Building Tomorrow, Today.</span>
   </footer>
 </div>
 
 <script>
 const DASH = '—';
+const esc = t => String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const state = { view:'fleet', nodeId:null, q:'', status:'', tag:'', billing:'', sort:'status', window:'24h' };
+let summary = null, nodes = [], detail = null, history = null;
 
-function fmtDuration(s) {
-  if (s == null) return DASH;
-  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-function fmtAgo(s) {
-  if (s == null) return DASH;
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s/60)}m ago`;
-  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
-  return `${Math.floor(s/86400)}d ago`;
-}
-const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c =>
-  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fmtDur(s){ if(s==null) return DASH;
+  const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);
+  return d>0?`${d}d ${h}h`:h>0?`${h}h ${m}m`:`${m}m`; }
+function fmtAgo(s){ if(s==null) return DASH;
+  return s<60?`${s}s ago`:s<3600?`${Math.floor(s/60)}m ago`:s<86400?`${Math.floor(s/3600)}h ago`:`${Math.floor(s/86400)}d ago`; }
+function fmtDate(t){ return t==null?DASH:new Date(t*1000).toLocaleString('en-ZA',{hour12:false}); }
+function tone(p,warn,bad){ if(p==null) return 'var(--dim)'; return p>=bad?'var(--red)':p>=warn?'var(--amber)':'var(--green)'; }
 
-/* Colour follows the reading, not the label: the same meter goes green ->
-   amber -> red as the number gets worse, so the card is legible from across
-   a room without reading a single digit. */
-function tone(pct, warn, bad) {
-  if (pct == null) return 'var(--dim)';
-  if (pct >= bad)  return 'var(--red)';
-  if (pct >= warn) return 'var(--amber)';
-  return 'var(--green)';
-}
-function meter(label, pct, text, warn = 75, bad = 90) {
-  const known = pct != null && !Number.isNaN(pct);
-  const w = known ? Math.max(0, Math.min(100, pct)) : 0;
-  return `<div class="meter">
-    <div class="row"><span class="lbl">${label}</span><span class="val">${text}</span></div>
-    <div class="bar ${known ? '' : 'unknown'}">${known ? `<span style="width:${w}%;background:${tone(pct, warn, bad)}"></span>` : ''}</div>
-  </div>`;
+async function api(path, opts){
+  const res = await fetch(path, Object.assign({cache:'no-store'}, opts||{}));
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  return res.status===204 ? null : res.json();
 }
 
-function nodeCard(n) {
-  const h = n.host || {}, c = n.counters || {};
-  const memPct = (h.memUsedMB != null && h.memTotalMB) ? (100 * h.memUsedMB / h.memTotalMB) : null;
-  // 80C is where a Pi throttles hard; 70C is worth noticing. Scaled so the
-  // bar is readable rather than pinned at the bottom of a 0-100 range.
-  const tempPct = h.tempC != null ? (h.tempC / 85) * 100 : null;
+/* ---------------------------------------------------------------- charting
+   Inline SVG, no library: this runs on a LAN box that may have no internet,
+   and a chart is not worth a CDN dependency that can fail closed.
+   A gap in the data draws as a BREAK in the line, never interpolated across —
+   a missing sample and a real value must not look the same. */
+function linechart(points, key, colour, h){
+  h = h || 90;
+  const vals = points.map(p=>p[key]).filter(v=>v!=null);
+  if(!vals.length) return `<div class="notice">No readings for this window yet.</div>`;
+  const w = 1000;
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const lo = min === max ? min - 1 : min, hi = min === max ? max + 1 : max;
+  const t0 = points[0].t, t1 = points[points.length-1].t || (t0+1);
+  const x = t => t1===t0 ? 0 : ((t-t0)/(t1-t0))*w;
+  const y = v => h - ((v-lo)/(hi-lo))*(h-8) - 4;
 
-  const mods = (n.modules || []).map(m =>
-    `<span class="mod ${esc(m.status)}" title="${esc(m.gap || m.status || '')}">${esc((m.id || '').replace('module_',''))}</span>`
-  ).join('');
+  let d = '', open = false;
+  for(const p of points){
+    if(p[key]==null){ open=false; continue; }
+    d += (open?' L ':' M ') + x(p.t).toFixed(1) + ' ' + y(p[key]).toFixed(1);
+    open = true;
+  }
+  const last = vals[vals.length-1];
+  return `<svg class="chartwrap" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block">
+    <path d="${d}" fill="none" stroke="${colour}" stroke-width="2.5" vector-effect="non-scaling-stroke"
+      stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>
+  <div class="chartmeta">min ${min.toFixed(1)} · max ${max.toFixed(1)} · now ${last.toFixed(1)}</div>`;
+}
 
-  // A module that reported a reason for being unhappy gets that reason shown
-  // verbatim. The node already writes honest gap text; hiding it here would
-  // undo that work.
-  const gaps = (n.modules || []).filter(m => m.gap).map(m =>
-    `<div class="gap"><b>${esc((m.id || '').replace('module_',''))}</b>${esc(m.gap)}</div>`
-  ).join('');
+function sparkline(points, key, colour){
+  const vals = points.map(p=>p[key]).filter(v=>v!=null);
+  if(vals.length<2) return '';
+  const w=74,h=22, min=Math.min(...vals), max=Math.max(...vals);
+  const lo = min===max?min-1:min, hi = min===max?max+1:max;
+  const d = vals.map((v,i)=>`${i===0?'M':'L'} ${(i/(vals.length-1)*w).toFixed(1)} ${(h-((v-lo)/(hi-lo))*(h-4)-2).toFixed(1)}`).join(' ');
+  return `<svg class="mini" viewBox="0 0 ${w} ${h}"><path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5"/></svg>`;
+}
 
-  return `<article class="node ${esc(n.status)}">
-    <div class="node-top">
-      <div>
-        <div class="node-id">${esc(n.nodeId)}</div>
-        <div class="node-meta">agent ${esc(n.agentVersion || DASH)} &middot; up ${fmtDuration(n.uptimeSeconds)} &middot; ${fmtAgo(n.lastSeenAgoSeconds)}</div>
+function meter(label,pct,text,warn,bad){
+  warn=warn??75; bad=bad??90;
+  const known = pct!=null && !Number.isNaN(pct);
+  return `<div class="meter"><div class="row"><span class="lbl">${label}</span><span class="val">${text}</span></div>
+    <div class="bar ${known?'':'unknown'}">${known?`<span style="width:${Math.max(0,Math.min(100,pct))}%;background:${tone(pct,warn,bad)}"></span>`:''}</div></div>`;
+}
+
+/* ------------------------------------------------------------- fleet view */
+function qs(){
+  const p = new URLSearchParams();
+  if(state.q) p.set('q',state.q);
+  if(state.status) p.set('status',state.status);
+  if(state.tag) p.set('tag',state.tag);
+  if(state.billing) p.set('billing',state.billing);
+  p.set('sort',state.sort);
+  return p.toString();
+}
+
+async function loadFleet(){
+  try{
+    [summary, nodes] = await Promise.all([ api('/api/v1/fleet/summary'), api('/api/v1/nodes?'+qs()) ]);
+  }catch(e){
+    document.getElementById('pulse').textContent='unreachable';
+    document.getElementById('view').innerHTML =
+      `<div class="state fault"><h2>Fleet server unreachable</h2>
+       <p>Nothing here would describe the fleet as it is now, so nothing is shown.
+       Check that <code>start-fleet.ps1</code> is still running.</p></div>`;
+    return;
+  }
+  renderFleet();
+}
+
+function renderFleet(){
+  const s = summary;
+  document.getElementById('sub').textContent = `${s.total} device${s.total===1?'':'s'} registered`;
+  document.getElementById('pulse').textContent = 'updated ' + new Date().toLocaleTimeString('en-ZA',{hour12:false});
+
+  const tagChips = Object.entries(s.tags).sort((a,b)=>b[1]-a[1]).map(([t,n])=>
+    `<span class="chip ${state.tag===t?'on':''}" onclick="setFilter('tag','${esc(t)}')">${esc(t)} ${n}</span>`).join('');
+  const billChips = Object.entries(s.billing).filter(([b])=>b!=='unknown').sort((a,b)=>b[1]-a[1]).map(([b,n])=>
+    `<span class="chip ${state.billing===b?'on':''}" onclick="setFilter('billing','${esc(b)}')">${esc(b)} ${n}</span>`).join('');
+
+  const tiles = `
+    <div class="tiles">
+      <div class="tile ${state.status===''?'on':''}" onclick="setFilter('status','')">
+        <div class="k">Fleet</div><div class="v">${s.total}</div></div>
+      <div class="tile good ${state.status==='online'?'on':''}" onclick="setFilter('status','online')">
+        <div class="k">Online</div><div class="v">${s.online}</div></div>
+      <div class="tile warn ${state.status==='stale'?'on':''}" onclick="setFilter('status','stale')">
+        <div class="k">Stale</div><div class="v">${s.stale}</div></div>
+      <div class="tile bad ${state.status==='offline'?'on':''}" onclick="setFilter('status','offline')">
+        <div class="k">Offline</div><div class="v">${s.offline}</div></div>
+      <div class="tile ${s.filtering===s.total?'good':'warn'}">
+        <div class="k">DNS filter up</div><div class="v">${s.filtering}<small>of ${s.total}</small></div></div>
+      <div class="tile ${s.hottestC==null?'':(s.hottestC>=80?'bad':s.hottestC>=70?'warn':'good')}">
+        <div class="k">Hottest</div><div class="v">${s.hottestC==null?DASH:s.hottestC.toFixed(1)}<small>°C</small></div></div>
+    </div>`;
+
+  const trend = (s.trend && s.trend.length>1) ? `
+    <div class="card"><h3>Fleet average · last 7 days</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px">
+        <div><div class="chartmeta" style="margin:0 0 6px">Processor %</div>
+          ${linechart(s.trend.map(p=>({t:p.hour*3600,v:p.cpu})),'v','var(--sky-400)',80)}</div>
+        <div><div class="chartmeta" style="margin:0 0 6px">Temperature °C</div>
+          ${linechart(s.trend.map(p=>({t:p.hour*3600,v:p.temp})),'v','var(--amber)',80)}</div>
+        <div><div class="chartmeta" style="margin:0 0 6px">Memory %</div>
+          ${linechart(s.trend.map(p=>({t:p.hour*3600,v:p.mem})),'v','var(--purple)',80)}</div>
       </div>
-      <span class="pill ${esc(n.status)}"><span class="dot"></span>${esc(n.status)}</span>
-    </div>
+      <div class="chartmeta">hourly averages across every reporting box</div>
+    </div>` : '';
 
-    <div class="meters">
-      ${meter('Processor', h.cpuPercent, h.cpuPercent != null ? h.cpuPercent.toFixed(0) + '%' : DASH)}
-      ${meter('Memory', memPct, (h.memUsedMB != null && h.memTotalMB)
-          ? `${(h.memUsedMB/1024).toFixed(1)} / ${(h.memTotalMB/1024).toFixed(1)} GB` : DASH)}
-      ${meter('Storage', h.diskUsedPercent, h.diskUsedPercent != null ? h.diskUsedPercent + '%' : DASH)}
-      ${meter('Temperature', tempPct, h.tempC != null ? h.tempC.toFixed(1) + ' °C' : DASH, 82, 94)}
-    </div>
+  const controls = `
+    <div class="controls">
+      <input class="search" id="q" placeholder="Search node id, name, customer ref or tag…"
+        value="${esc(state.q)}" oninput="onSearch(this.value)">
+      <select onchange="state.sort=this.value;loadFleet()">
+        <option value="status" ${state.sort==='status'?'selected':''}>Needs attention first</option>
+        <option value="name" ${state.sort==='name'?'selected':''}>Name</option>
+        <option value="temp" ${state.sort==='temp'?'selected':''}>Hottest</option>
+        <option value="seen" ${state.sort==='seen'?'selected':''}>Most recently seen</option>
+      </select>
+      ${(state.tag||state.billing||state.status||state.q)?`<button class="act ghost" onclick="clearFilters()">Clear filters</button>`:''}
+      ${tagChips} ${billChips}
+    </div>`;
 
-    <div class="facts">
-      <span>DNS filter <b style="color:${n.piholeReachable ? 'var(--green)' : 'var(--red)'}">${n.piholeReachable ? 'reachable' : 'unreachable'}</b></span>
-      <span>throttle <b>${esc(h.throttleFlags || DASH)}</b></span>
-      <span>errors/24h <b>${c.errors24h ?? DASH}</b></span>
-      <span>restarts/24h <b>${c.restarts24h ?? DASH}</b></span>
-    </div>
+  const rows = nodes.length ? nodes.map(n=>{
+    const h=n.host||{};
+    const memPct = (h.memUsedMB!=null&&h.memTotalMB)?100*h.memUsedMB/h.memTotalMB:null;
+    return `<tr onclick="showNode('${esc(n.nodeId)}')">
+      <td><span class="pill ${n.status}"><span class="dot"></span>${n.status}</span></td>
+      <td><div class="nname">${esc(n.label||n.nodeId)}</div>
+          ${n.label?`<div class="nid">${esc(n.nodeId)}</div>`:''}
+          ${n.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</td>
+      <td class="hide-sm"><span class="bill ${esc(n.billingState)}">${esc(n.billingState)}</span></td>
+      <td class="hide-sm">${fmtAgo(n.lastSeenAgoSeconds)}</td>
+      <td class="hide-sm">${fmtDur(n.uptimeSeconds)}</td>
+      <td>${h.cpuPercent!=null?h.cpuPercent.toFixed(0)+'%':DASH}</td>
+      <td class="hide-sm">${memPct!=null?memPct.toFixed(0)+'%':DASH}</td>
+      <td>${h.tempC!=null?`<span style="color:${tone(h.tempC,70,80)}">${h.tempC.toFixed(1)}°</span>`:DASH}</td>
+      <td class="hide-sm" style="color:${n.piholeReachable?'var(--green)':'var(--red)'}">${n.piholeReachable?'up':'down'}</td>
+      <td class="hide-sm">${n.modulesRunning}/${n.modules.length}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted)">
+      ${s.total===0 ? 'No devices have reported in yet. A box appears the moment it posts its first check-in.'
+                    : 'No devices match these filters.'}</td></tr>`;
 
-    ${mods ? `<div class="mods">${mods}</div>` : ''}
-    ${gaps}
-  </article>`;
+  document.getElementById('view').innerHTML = tiles + trend + controls + `
+    <div class="fleet"><table>
+      <thead><tr>
+        <th>Status</th><th>Device</th><th class="hide-sm">Billing</th><th class="hide-sm">Last seen</th>
+        <th class="hide-sm">Uptime</th><th>CPU</th><th class="hide-sm">Mem</th><th>Temp</th>
+        <th class="hide-sm">DNS</th><th class="hide-sm">Modules</th>
+      </tr></thead><tbody>${rows}</tbody>
+    </table></div>`;
 }
 
-async function refresh() {
-  const grid  = document.getElementById('grid');
-  const tiles = document.getElementById('tiles');
-  const sub   = document.getElementById('sub');
-  const pulse = document.getElementById('pulse');
+let searchTimer=null;
+function onSearch(v){ state.q=v; clearTimeout(searchTimer); searchTimer=setTimeout(loadFleet,250); }
+function setFilter(k,v){ state[k] = state[k]===v ? '' : v; loadFleet(); }
+function clearFilters(){ state.q=''; state.status=''; state.tag=''; state.billing=''; loadFleet(); }
+function showFleet(){ state.view='fleet'; state.nodeId=null; loadFleet(); }
 
-  let nodes;
-  try {
-    const res = await fetch('/api/v1/nodes', { cache: 'no-store' });
-    if (!res.ok) {
-      pulse.textContent = 'error ' + res.status;
-      tiles.hidden = true;
-      grid.innerHTML = `<div class="state fault"><h2>The fleet server answered ${res.status}</h2>
-        <p>This page is reachable but the API refused it. If that is a 401, the browser session needs the dashboard login again.</p></div>`;
-      return;
-    }
-    nodes = await res.json();
-  } catch (e) {
-    // Unreachable is stated, never papered over with the last good numbers.
-    pulse.textContent = 'unreachable';
-    tiles.hidden = true;
-    grid.innerHTML = `<div class="state fault"><h2>Fleet server unreachable</h2>
-      <p>Nothing on this page would describe the fleet as it is now, so nothing is shown.
-      Check that <code>start-fleet.ps1</code> is still running on the workstation.</p></div>`;
+/* -------------------------------------------------------------- node view */
+async function showNode(id){
+  state.view='node'; state.nodeId=id;
+  try{
+    [detail, history] = await Promise.all([
+      api('/api/v1/nodes/'+encodeURIComponent(id)),
+      api('/api/v1/nodes/'+encodeURIComponent(id)+'/history?window='+state.window),
+    ]);
+  }catch(e){
+    document.getElementById('view').innerHTML=`<div class="state fault"><h2>Could not load that device</h2><p>${esc(e.message)}</p></div>`;
     return;
   }
-
-  const online  = nodes.filter(n => n.status === 'online').length;
-  const stale   = nodes.filter(n => n.status === 'stale').length;
-  const offline = nodes.filter(n => n.status === 'offline').length;
-  const now = new Date().toLocaleTimeString('en-ZA', { hour12: false });
-
-  sub.textContent = `${nodes.length} device${nodes.length === 1 ? '' : 's'} registered`;
-  pulse.textContent = `updated ${now}`;
-
-  if (nodes.length === 0) {
-    tiles.hidden = true;
-    grid.innerHTML = `<div class="state"><h2>No devices have reported in yet</h2>
-      <p>A node appears here the moment it posts its first health check-in. Nothing is shown
-      until one does &mdash; there is no sample device on this page.</p></div>`;
-    return;
-  }
-
-  const temps = nodes.map(n => n.host && n.host.tempC).filter(v => v != null);
-  const hottest = temps.length ? Math.max(...temps) : null;
-  const filtering = nodes.filter(n => n.piholeReachable).length;
-
-  tiles.hidden = false;
-  tiles.innerHTML = `
-    <div class="tile"><div class="k">Devices</div><div class="v">${nodes.length}</div></div>
-    <div class="tile ${online === nodes.length ? 'good' : (online ? 'warn' : 'bad')}">
-      <div class="k">Online</div><div class="v">${online}<small>of ${nodes.length}</small></div></div>
-    <div class="tile ${filtering === nodes.length ? 'good' : 'warn'}">
-      <div class="k">DNS filter up</div><div class="v">${filtering}<small>of ${nodes.length}</small></div></div>
-    <div class="tile ${hottest == null ? '' : (hottest >= 80 ? 'bad' : hottest >= 70 ? 'warn' : 'good')}">
-      <div class="k">Hottest</div><div class="v">${hottest == null ? DASH : hottest.toFixed(1)}<small>°C</small></div></div>
-    ${(stale || offline) ? `<div class="tile bad"><div class="k">Not reporting</div><div class="v">${stale + offline}</div></div>` : ''}
-  `;
-
-  grid.innerHTML = nodes.map(nodeCard).join('');
+  renderNode();
 }
 
-refresh();
-setInterval(refresh, 15000);
+async function setWindow(w){ state.window=w; await showNode(state.nodeId); }
+
+function renderNode(){
+  const n = detail, h = n.host||{}, c = n.counters||{};
+  const memPct = (h.memUsedMB!=null&&h.memTotalMB)?100*h.memUsedMB/h.memTotalMB:null;
+  document.getElementById('sub').textContent = n.label ? n.label : n.nodeId;
+  document.getElementById('pulse').textContent = 'updated ' + new Date().toLocaleTimeString('en-ZA',{hour12:false});
+
+  const gaps = (n.modules||[]).filter(m=>m.gap).map(m=>
+    `<div class="gap"><b>${esc((m.id||'').replace('module_',''))}</b>${esc(m.gap)}</div>`).join('');
+
+  const winBtns = ['24h','7d','30d','90d'].map(w=>
+    `<span class="chip ${state.window===w?'on':''}" onclick="setWindow('${w}')">${w}</span>`).join('');
+
+  const pts = history.points||[];
+  const charts = pts.length ? `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px">
+      <div><div class="chartmeta" style="margin:0 0 6px">Processor %</div>${linechart(pts,'cpu','var(--sky-400)')}</div>
+      <div><div class="chartmeta" style="margin:0 0 6px">Temperature °C</div>${linechart(pts,'temp','var(--amber)')}</div>
+      <div><div class="chartmeta" style="margin:0 0 6px">Memory %</div>${linechart(pts,'mem','var(--purple)')}</div>
+      <div><div class="chartmeta" style="margin:0 0 6px">Storage %</div>${linechart(pts,'disk','var(--green)')}</div>
+    </div>
+    <div class="chartmeta">${esc(history.resolution)} · ${pts.length} points</div>`
+    : `<div class="notice">No history for this window yet. The first graph appears once the box has
+       reported a few times &mdash; nothing is drawn from a single point.</div>`;
+
+  document.getElementById('view').innerHTML = `
+    <span class="back" onclick="showFleet()">&larr; all devices</span>
+    <div class="cols">
+      <div>
+        <div class="card glow">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+            <div>
+              <div style="font-family:var(--font-display);font-size:26px;font-weight:300">${esc(n.label||n.nodeId)}</div>
+              <div class="nid" style="margin-top:4px">${esc(n.nodeId)} · agent ${esc(n.agentVersion||DASH)} ·
+                up ${fmtDur(n.uptimeSeconds)} · ${fmtAgo(n.lastSeenAgoSeconds)}</div>
+              <div style="margin-top:8px">${n.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}
+                <span class="bill ${esc(n.billingState)}">${esc(n.billingState)}</span></div>
+            </div>
+            <span class="pill ${n.status}"><span class="dot"></span>${n.status}</span>
+          </div>
+          <div style="margin-top:20px">
+            ${meter('Processor',h.cpuPercent,h.cpuPercent!=null?h.cpuPercent.toFixed(0)+'%':DASH)}
+            ${meter('Memory',memPct,(h.memUsedMB!=null&&h.memTotalMB)?`${(h.memUsedMB/1024).toFixed(1)} / ${(h.memTotalMB/1024).toFixed(1)} GB`:DASH)}
+            ${meter('Storage',h.diskUsedPercent,h.diskUsedPercent!=null?h.diskUsedPercent+'%':DASH)}
+            ${meter('Temperature',h.tempC!=null?(h.tempC/85)*100:null,h.tempC!=null?h.tempC.toFixed(1)+' °C':DASH,82,94)}
+          </div>
+          <div style="margin-top:14px;font-family:var(--font-mono);font-size:11px;display:flex;gap:22px;flex-wrap:wrap">
+            <span style="color:var(--dim)">DNS filter <b style="color:${n.piholeReachable?'var(--green)':'var(--red)'}">${n.piholeReachable?'reachable':'unreachable'}</b></span>
+            <span style="color:var(--dim)">throttle <b style="color:var(--text)">${esc(h.throttleFlags||DASH)}</b></span>
+            <span style="color:var(--dim)">errors/24h <b style="color:var(--text)">${c.errors24h??DASH}</b></span>
+            <span style="color:var(--dim)">first seen <b style="color:var(--text)">${fmtDate(n.firstSeenAt)}</b></span>
+          </div>
+          <div class="mods" style="margin-top:14px">
+            ${(n.modules||[]).map(m=>`<span class="mod ${esc(m.status)}">${esc((m.id||'').replace('module_',''))}</span>`).join('')}
+          </div>
+          ${gaps}
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <h3 style="margin:0">History</h3><div>${winBtns}</div>
+          </div>
+          ${charts}
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>Your record</h3>
+          <div class="field"><label>Name for this box</label>
+            <input id="a-label" value="${esc(n.label||'')}" placeholder="e.g. Van Wyk · Centurion"></div>
+          <div class="field"><label>Customer reference</label>
+            <input id="a-ref" value="${esc(n.customerRef||'')}" placeholder="your own ref"></div>
+          <div class="field"><label>Tags (comma separated)</label>
+            <input id="a-tags" value="${esc(n.tags.join(', '))}" placeholder="batch-3, reseller-x"></div>
+          <div class="field"><label>Billing state</label>
+            <select id="a-bill">
+              ${['active','trial','suspended','unpaid','cancelled','unknown'].map(b=>
+                `<option value="${b}" ${n.billingState===b?'selected':''}>${b}</option>`).join('')}
+            </select></div>
+          <button class="act" onclick="saveAdmin()">Save</button>
+          <span id="a-msg" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>
+        </div>
+
+        <div class="card">
+          <h3>Remote support</h3>
+          <div class="notice">
+            Not available yet. Boxes post outward only &mdash; nothing reaches back, so this
+            console can watch a device but cannot change one. The chosen design is a
+            persistent per-box tunnel, which needs the same control plane Shield is waiting
+            on. Until that exists this page will not offer a button that would do nothing.
+            <div style="margin-top:8px;font-family:var(--font-mono);font-size:10px;color:var(--dim)">
+              enrolled ${n.tokenIssuedAt?fmtDate(n.tokenIssuedAt):'no — still using the shared token'}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Support log</h3>
+          <div class="field">
+            <textarea id="n-body" rows="3" placeholder="What happened, what you did…"></textarea>
+          </div>
+          <button class="act" onclick="addNote()">Add note</button>
+          <div style="margin-top:18px">
+            ${n.notes.length ? n.notes.map(x=>`<div class="note">
+              <div class="meta">${fmtDate(x.createdAt)} · ${esc(x.author||'')}</div>
+              <div class="body">${esc(x.body)}</div></div>`).join('')
+              : '<div class="notice">No notes yet.</div>'}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function saveAdmin(){
+  const msg = document.getElementById('a-msg');
+  msg.textContent = 'saving…';
+  try{
+    await api('/api/v1/nodes/'+encodeURIComponent(state.nodeId)+'/admin', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        label: document.getElementById('a-label').value,
+        customerRef: document.getElementById('a-ref').value,
+        tags: document.getElementById('a-tags').value.split(',').map(s=>s.trim()).filter(Boolean),
+        billingState: document.getElementById('a-bill').value,
+      })
+    });
+    // Re-read rather than trusting the write: the server normalises tags and
+    // caps lengths, so what it stored may differ from what was typed.
+    await showNode(state.nodeId);
+  }catch(e){ msg.textContent = 'did not save: '+e.message; }
+}
+
+async function addNote(){
+  const el = document.getElementById('n-body');
+  if(!el.value.trim()) return;
+  try{
+    await api('/api/v1/nodes/'+encodeURIComponent(state.nodeId)+'/notes', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ body: el.value })
+    });
+    el.value='';
+    await showNode(state.nodeId);
+  }catch(e){ alert('Note not saved: '+e.message); }
+}
+
+loadFleet();
+setInterval(()=>{ if(state.view==='fleet') loadFleet(); }, 15000);
 </script>
 </body>
 </html>
