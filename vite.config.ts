@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 import {manualChunks} from './vite.chunks.config';
+import {devBuildsPlugin} from './scripts/vite-dev-builds-plugin';
 
 export default defineConfig(() => {
   // Opt-in only (VITE_DEV_NODE_PORT), for pointing `npm run dev` at a
@@ -13,7 +14,7 @@ export default defineConfig(() => {
   // requests outright regardless of the target's own CORS headers.
   const devNodePort = process.env.VITE_DEV_NODE_PORT;
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), devBuildsPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

@@ -20,12 +20,18 @@ interface AppLayoutProps {
 
 const NAV_ITEMS = [
   { id: 'mobile_apk', label: 'Mobile Dashboard', icon: Smartphone },
-  { id: 'device_kiosk', label: 'Node Kiosk', icon: Cpu },
+  // Not a view — a link to the REAL on-device console (kiosk.html / KioskApp),
+  // the same bundle that ships to the box. Opened in a new tab rather than
+  // rendered inline: KioskApp is a full-screen `fixed inset-0` surface with
+  // its own lock screen, header and footer, and embedding it inside this
+  // shell's layout would either fight that or silently clip it. See
+  // src/main-kiosk.tsx for what this actually is.
+  { id: 'node_console', label: 'Node Console', icon: Cpu, href: '/kiosk.html' },
   { id: 'server_sync', label: 'Server Sync', icon: Server },
   { id: 'container_architecture', label: 'Containers', icon: Box },
   { id: 'scripts_bom', label: 'Scripts & BOM', icon: Terminal },
   { id: 'future_roadmap', label: 'Roadmap', icon: Sparkles },
-  { id: 'package_export', label: 'Export App', icon: Package },
+  { id: 'builds', label: 'Builds', icon: Package },
 ] as const;
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -73,16 +79,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <nav className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
-              const isActive = currentView === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onSelectView(item.id as AppViewMode)}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative overflow-hidden group",
-                    isActive ? "text-black dark:text-white" : "text-slate-400 hover:text-slate-200 hover:bg-black/5 dark:bg-white/5"
-                  )}
-                >
+              const href = 'href' in item ? item.href : undefined;
+              const isActive = !href && currentView === item.id;
+              const sharedClass = cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative overflow-hidden group",
+                isActive ? "text-black dark:text-white" : "text-slate-400 hover:text-slate-200 hover:bg-black/5 dark:bg-white/5"
+              );
+              const content = (
+                <>
                   {isActive && (
                     <motion.div
                       layoutId="sidebar-active"
@@ -96,6 +100,22 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   )}
                   <Icon className={cn("w-4 h-4 relative z-10", isActive ? "text-sky-400" : "text-slate-600 dark:text-slate-500 group-hover:text-slate-400")} />
                   <span className="relative z-10">{item.label}</span>
+                  {href && <ExternalLink className="w-3 h-3 relative z-10 ml-auto text-slate-600" />}
+                </>
+              );
+              // A link, not a view switch: opens the real on-device console in
+              // its own tab (see NAV_ITEMS above) rather than joining the
+              // Suspense-rendered panels below.
+              if (href) {
+                return (
+                  <a key={item.id} href={href} target="_blank" rel="noreferrer" className={sharedClass}>
+                    {content}
+                  </a>
+                );
+              }
+              return (
+                <button key={item.id} onClick={() => onSelectView(item.id as AppViewMode)} className={sharedClass}>
+                  {content}
                 </button>
               );
             })}

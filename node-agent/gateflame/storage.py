@@ -88,6 +88,17 @@ CREATE TABLE IF NOT EXISTS vpn_devices (
     provider TEXT NOT NULL DEFAULT 'headscale',
     updated_at REAL NOT NULL DEFAULT 0
 );
+
+-- Console PIN lockout (ConsoleLock.tsx). One row, id=1 - like filter_settings,
+-- there is exactly one physical console to guard, not one per source IP: the
+-- scope is already loopback-only (security.py), so this is purely an
+-- anti-guessing throttle for whoever is standing at the box, not a defence
+-- against a remote attacker.
+CREATE TABLE IF NOT EXISTS console_lockout (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until REAL
+);
 """
 
 
@@ -260,6 +271,51 @@ class Store:
             if remaining <= 0:
                 cur.execute("DELETE FROM pairing_codes WHERE id = ?", (row_id,))
             return remaining
+
+    # ---- console PIN lockout (ConsoleLock.tsx) -----------------------------
+    #
+    # Five wrong PINs in a row locks the console for a minute. Not five wrong
+    # attempts EVER - that would turn one fat-fingered guest into a lockout an
+    # owner has to fix, for a feature whose entire threat model is "slow down
+    # a passer-by guessing digits," not "defend against a determined attacker
+    # already standing at the box with unlimited time."
+
+    CONSOLE_LOCKOUT_AFTER = 5
+    _CONSOLE_LOCKOUT_SECONDS = 60
+
+    def console_lock_status(self) -> tuple[int, float | None]:
+        """(failed_attempts, locked_until) - locked_until is None if not locked."""
+        with self._cursor() as cur:
+            cur.execute("SELECT failed_attempts, locked_until FROM console_lockout WHERE id = 1")
+            row = cur.fetchone()
+            return (row[0], row[1]) if row else (0, None)
+
+    def console_pin_succeeded(self) -> None:
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO console_lockout (id, failed_attempts, locked_until) VALUES (1, 0, NULL) "
+                "ON CONFLICT(id) DO UPDATE SET failed_attempts = 0, locked_until = NULL"
+            )
+
+    def console_pin_failed(self) -> tuple[int, float | None]:
+        """Record a wrong PIN. Returns (attempts_so_far, locked_until)."""
+        attempts, locked_until = self.console_lock_status()
+        # A lockout already in force doesn't accumulate further against the
+        # count - it just keeps returning the same expiry until it lapses.
+        if locked_until is not None and time.time() < locked_until:
+            return attempts, locked_until
+        attempts += 1
+        locked_until = (
+            time.time() + self._CONSOLE_LOCKOUT_SECONDS if attempts >= self.CONSOLE_LOCKOUT_AFTER else None
+        )
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO console_lockout (id, failed_attempts, locked_until) VALUES (1, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET failed_attempts = excluded.failed_attempts, "
+                "locked_until = excluded.locked_until",
+                (attempts, locked_until),
+            )
+        return attempts, locked_until
 
     # ---- devices ----------------------------------------------------------
 

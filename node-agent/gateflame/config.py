@@ -33,6 +33,11 @@ class Config:
     # honestly instead of a fault, same shape as pihole_api_url above.
     headscale_url: str | None = os.environ.get("GATEFLAME_HEADSCALE_URL")
     headscale_api_key: str | None = os.environ.get("GATEFLAME_HEADSCALE_API_KEY")
+    # Console PIN (ConsoleLock.tsx's `verifyPin` seam). Absent means the console
+    # stays hold-to-unlock only, same as before this existed - a household that
+    # never sets one loses nothing. Set by the owner at the box, never over the
+    # network: nothing here reads it from a paired-device request.
+    console_pin: str | None = os.environ.get("GATEFLAME_CONSOLE_PIN")
 
 
 config = Config()

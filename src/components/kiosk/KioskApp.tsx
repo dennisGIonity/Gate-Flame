@@ -185,7 +185,7 @@ export default function KioskApp() {
         reachable={reachable}
         refused={refused}
         authority={authority}
-        verifyPin={null}
+        verifyPin={kioskMount.data?.consolePinEnabled ? kioskApi.verifyConsolePin : null}
         onUnlock={() => {
           lastTouch.current = Date.now();
           setUnlocked(true);

@@ -12,6 +12,8 @@ or via the systemd unit in install.sh on the Pi.
 from __future__ import annotations
 
 import os
+import secrets
+import time
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -160,6 +162,69 @@ def pair_revoke_all(_=Depends(kiosk_only)):
     # provisioned flag is untouched by design — see storage.Store.revoke_all.
     count = store.revoke_all()
     return {"ok": True, "revoked": count, "provisioned": store.is_provisioned()}
+
+
+# ---- Console PIN (ConsoleLock.tsx's `verifyPin` seam) ----------------------
+#
+# kiosk-scope, same as everything else on this screen: the PIN is a SECOND
+# check on top of physical presence, not a replacement for it. A request from
+# off the loopback socket never reaches config.console_pin at all, regardless
+# of what PIN it sends.
+
+
+class ConsoleUnlockBody(BaseModel):
+    pin: str
+
+
+@app.post("/api/v1/console/unlock")
+def console_unlock(body: ConsoleUnlockBody, _=Depends(kiosk_only)):
+    if not config.console_pin:
+        # No PIN configured on this box. The frontend is expected to check
+        # consolePinEnabled (below) and never call this at all in that case -
+        # this 503 exists so a stray call still fails honestly instead of
+        # accepting anything.
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "console_pin_not_configured", "advisory": "No console PIN is set on this box."},
+        )
+
+    attempts, locked_until = store.console_lock_status()
+    if locked_until is not None and time.time() < locked_until:
+        wait = round(locked_until - time.time())
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "console_locked",
+                "retryAfterSeconds": wait,
+                "advisory": f"Too many wrong codes. Try again in {wait}s.",
+            },
+        )
+
+    # Constant-time compare: this is a real secret check, not a demo one.
+    if secrets.compare_digest(body.pin, config.console_pin):
+        store.console_pin_succeeded()
+        return {"ok": True}
+
+    attempts, locked_until = store.console_pin_failed()
+    if locked_until is not None:
+        wait = round(locked_until - time.time())
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "console_locked",
+                "retryAfterSeconds": wait,
+                "advisory": f"Too many wrong codes. Try again in {wait}s.",
+            },
+        )
+    remaining = max(0, Store.CONSOLE_LOCKOUT_AFTER - attempts)
+    raise HTTPException(
+        status_code=401,
+        detail={
+            "error": "invalid_pin",
+            "attemptsRemaining": remaining,
+            "advisory": "That code was not accepted.",
+        },
+    )
 
 
 # ---- Telemetry / threats / clients -----------------------------------------
@@ -387,9 +452,14 @@ def kiosk_status(request: Request):
     Exists so install-kiosk.sh and the Pi validator can ASSERT the kiosk is
     reachable instead of assuming it - which is how it stayed broken while the
     bundle was rebuilt every release and served by nothing.
+
+    Also carries `consolePinEnabled`: whether the owner has set a console PIN
+    (config.console_pin). ConsoleLock.tsx uses this to decide whether to offer
+    a PIN prompt at all — false means hold-to-unlock only, same as before this
+    existed, rather than a prompt that would accept anything.
     """
     require_lan(request)
-    return request.app.state.kiosk
+    return {**request.app.state.kiosk, "consolePinEnabled": bool(config.console_pin)}
 
 
 # ---------------------------------------------------------------------------

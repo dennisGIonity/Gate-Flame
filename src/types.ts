@@ -94,7 +94,7 @@ export interface IonityUserAccount {
   appTheme: AppTheme;
 }
 
-export type AppViewMode = 'mobile_apk' | 'device_kiosk' | 'server_sync' | 'container_architecture' | 'scripts_bom' | 'future_roadmap' | 'package_export';
+export type AppViewMode = 'mobile_apk' | 'server_sync' | 'container_architecture' | 'scripts_bom' | 'future_roadmap' | 'builds';
 
 export interface ContainerSpec {
   id: string;

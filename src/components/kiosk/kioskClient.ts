@@ -290,6 +290,10 @@ export interface KioskMount {
   path: string | null;
   directory: string;
   gap: string | null;
+  /** Whether the owner has set a console PIN (config.console_pin on the node).
+   * False means ConsoleLock stays hold-to-unlock only - never offer a PIN
+   * prompt that would accept anything. */
+  consolePinEnabled: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +389,24 @@ export const kioskApi = {
     nodeRequest<FilteringState>('/filtering/pause', { method: 'POST', body: { duration, reason } }),
 
   resumeFiltering: () => nodeRequest<FilteringState>('/filtering/resume', { method: 'POST' }),
+
+  /**
+   * ConsoleLock's `verifyPin` seam, finally wired to a real node route.
+   * `false` means the node checked it and said no — the caller shows "not
+   * accepted" and lets the owner try again. Anything else (locked out, no
+   * PIN configured, unreachable) is a real problem and is thrown, so the
+   * caller's generic "the node could not check that code" applies to it
+   * instead of silently reading as a wrong guess.
+   */
+  verifyConsolePin: async (pin: string): Promise<boolean> => {
+    try {
+      await nodeRequest<{ ok: boolean }>('/console/unlock', { method: 'POST', body: { pin } });
+      return true;
+    } catch (err) {
+      if (err instanceof NodeError && err.status === 401) return false;
+      throw err;
+    }
+  },
 
   startModule: (id: string) => nodeRequest<unknown>(`/services/${id}/start`, { method: 'POST' }),
   stopModule: (id: string) => nodeRequest<unknown>(`/services/${id}/stop`, { method: 'POST' }),

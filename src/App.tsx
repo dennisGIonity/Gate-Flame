@@ -16,11 +16,6 @@ import { useAppStore } from './store/useAppStore';
  * buys a round trip. Every other view sits behind a nav click and is fetched
  * when that click happens.
  */
-const DeviceOnboardingSimulator = lazy(() =>
-  import('./components/DeviceOnboardingSimulator').then((m) => ({
-    default: m.DeviceOnboardingSimulator,
-  })),
-);
 const ServerSyncArchitecture = lazy(() =>
   import('./components/ServerSyncArchitecture').then((m) => ({
     default: m.ServerSyncArchitecture,
@@ -41,20 +36,19 @@ const FutureFeatureRoadmap = lazy(() =>
     default: m.FutureFeatureRoadmap,
   })),
 );
-const ExportPackagingCenter = lazy(() =>
-  import('./components/ExportPackagingCenter').then((m) => ({
-    default: m.ExportPackagingCenter,
+const BuildsPanel = lazy(() =>
+  import('./components/BuildsPanel').then((m) => ({
+    default: m.BuildsPanel,
   })),
 );
 
 /** Fallback caption per view, so the spinner names the panel that is arriving. */
 const VIEW_LOADING_LABEL: Record<string, string> = {
-  device_kiosk: 'Loading node kiosk',
   server_sync: 'Loading server sync',
   scripts_bom: 'Loading scripts & BOM',
   container_architecture: 'Loading containers',
   future_roadmap: 'Loading roadmap',
-  package_export: 'Loading export centre',
+  builds: 'Loading builds',
 };
 
 export default function App() {
@@ -112,12 +106,11 @@ export default function App() {
           key={currentView}
           fallback={<PanelFallback label={VIEW_LOADING_LABEL[currentView] ?? 'Loading view'} />}
         >
-          {currentView === 'device_kiosk' && <DeviceOnboardingSimulator />}
           {currentView === 'server_sync' && <ServerSyncArchitecture />}
           {currentView === 'scripts_bom' && <DeploymentScriptViewer />}
           {currentView === 'container_architecture' && <ContainerArchitectureView />}
           {currentView === 'future_roadmap' && <FutureFeatureRoadmap />}
-          {currentView === 'package_export' && <ExportPackagingCenter />}
+          {currentView === 'builds' && <BuildsPanel />}
         </Suspense>
       )}
     </AppLayout>
