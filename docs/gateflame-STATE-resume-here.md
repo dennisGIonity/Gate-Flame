@@ -20,20 +20,22 @@ Then run `tools\doctor.cmd` before touching anything.
 
 ---
 
-# 0 — NOTHING IS WAITING FOR DENNIS RIGHT NOW
+# 0 — ONE THING IS WAITING FOR DENNIS
 
-Everything from the last two handoffs is deployed and verified. The Shield
-(VPN) work, the console rebuild, the phone app and the fleet dashboard are all
-live. Open items in §7 are longer-horizon, none of them blocking.
+| # | Action | Why |
+|---|---|---|
+| 1 | On the phone: **Settings → Developer options → Wireless debugging → ON**, then read out the IP:port | The rebuilt APK (device names + Shield rename) is built and verified at `release\GateFlame-Mobile-debug.apk`. The phone answers ping on 192.168.0.8 but advertises no debug service, so wireless debugging is off. Android picks a NEW port every time it is toggled — the old 33441 is dead. |
 
-Live right now, all measured not assumed:
+Everything else is deployed and verified. Live right now, all measured not
+assumed:
 
 | Thing | Where | State |
 |---|---|---|
-| **Fleet dashboard** | `http://192.168.0.6:8091/` (login `admin`, password in `fleet/fleet.env.ps1`, **not** in git) | Running. Pi reports itself every 5 min. |
-| **Shield / VPN** | phone app + kiosk console | `/vpn/regions` returns **HTTP 200** with real VPN Gate countries (BR, BY, CA, ES, GB, JP…). Was 404 until 2026-08-30 23:22. |
-| **Kiosk console** | Pi wall panel, `/opt/gateflame/kiosk` | Rebuilt bundle installed (was still the 17 Aug build). |
-| **Phone app** | Dennis's S10e | `today.ionity.gateflame.debug`, updated 23:05, Shield confirmed inside the installed APK. |
+| **Fleet dashboard** | `http://192.168.0.6:8091/` (login `admin`, password in `fleet/fleet.env.ps1`, **not** in git) | v2 running: history, graphs, tags/billing/notes, per-node tokens. Pi reports every 5 min. |
+| **Shield / VPN** | phone app + kiosk console | `/vpn/regions` returns **HTTP 200** with real VPN Gate countries. Was 404 until 2026-08-30 23:22. |
+| **Device names** | phone Shield + kiosk Shield | Live on the box. `/clients` now returns 4 real household devices (was 17 raw rows), each with a label; `PUT /clients/{mac}/name` verified against the live agent — persists, rejects a bad MAC with 400, and clearing reverts to the MAC. |
+| **Kiosk console** | Pi wall panel, `/opt/gateflame/kiosk` | Rebuilt and reinstalled 2026-08-31 01:12, read-back confirmed. |
+| **Phone app** | Dennis's S10e | Still on the 23:05 build. The newer one is built but **not installed** — see the action above. |
 | **DNS filtering** | Pi-hole on the box | 359,667 gravity domains, 3 lists, `protectionStatus: active`. Asked directly it blocks correctly (`doubleclick.net → 0.0.0.0`, `ionity.today` resolves fine). |
 
 ⚠️ **The Pi's own `/etc/resolv.conf` still points at the router (192.168.0.1),
@@ -256,6 +258,16 @@ only the agent and the Chromium panel — the resolver is never touched.
 - 🟡 Shield's `controlPlaneReachable` is **false** — Ionity's own exit servers
   (headscale) do not exist yet, so every region currently offered is VPN Gate
   (community, best-effort, never to be labelled "audited" or "no-logs").
+- 🔴 **THE NEXT REAL DECISION: the Headscale control plane.** Dennis chose a
+  persistent per-box tunnel for remote support (2026-08-31). That is the SAME
+  missing piece Shield needs — standing it up once serves both. It needs three
+  answers before any code: where it is hosted (the fleet box is hand-started
+  and dies with its terminal, so not there), what the customer consent notice
+  says, and whether a live inbound path into a household is premium-only.
+  Until it exists the fleet dashboard states plainly that remote actions are
+  unavailable rather than offering a dead button.
+- 🟡 Android rotates the wireless-debugging port on every toggle, so a stored
+  IP:port is single-use. Expect to ask for a fresh one each session, or use USB.
 
 ```
 © 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM2

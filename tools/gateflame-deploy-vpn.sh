@@ -50,7 +50,8 @@ hd "1/7  checking what is staged, before touching anything"
 [[ -d "$STAGE_AGENT/gateflame" ]] || die "no staged agent at $STAGE_AGENT/gateflame"
 [[ -f "$STAGE_AGENT/gateflame/vpn.py" ]] || die "staged agent has no vpn.py - wrong package, nothing changed"
 [[ -f "$STAGE_AGENT/gateflame/vpngate.py" ]] || die "staged agent has no vpngate.py - wrong package, nothing changed"
-ok "staged agent carries vpn.py + vpngate.py"
+[[ -f "$STAGE_AGENT/gateflame/device_names.py" ]] || die "staged agent has no device_names.py - wrong package, nothing changed"
+ok "staged agent carries vpn.py + vpngate.py + device_names.py"
 
 [[ -f "$STAGE_KIOSK/index.html" ]] || die "no staged kiosk at $STAGE_KIOSK"
 grep -q "Not set up on this box yet" "$STAGE_KIOSK"/assets/kiosk.*.js 2>/dev/null \
@@ -181,6 +182,26 @@ echo
 echo "    What /vpn/regions actually returns:"
 curl -s -m 8 http://127.0.0.1:8080/api/v1/vpn/regions | head -c 500
 echo
+
+# The device-name work only pays off if the client list is now the household
+# and not 17 rows of duplicates and containers. Prove it here, on the box.
+echo
+echo "    --- /clients: are devices named and de-duplicated? ---"
+curl -s -m 8 http://127.0.0.1:8080/api/v1/clients | python3 -c '
+import json, sys
+try:
+    cs = json.load(sys.stdin).get("clients", [])
+except Exception as e:
+    print("      (could not read /clients:", e, ")"); raise SystemExit
+if not cs:
+    print("      no clients seen - the neighbour table may be cold")
+for c in cs:
+    ifaces = ",".join(c.get("interfaces") or [c.get("interface","")])
+    print("      %-26s %-18s %-15s %s" % (c.get("label"), c.get("mac"), c.get("ip"), ifaces))
+print("      %d household devices" % len(cs))
+named = [c for c in cs if c.get("ownerName")]
+print("      %d named by the owner" % len(named))
+' || echo "      (client list check skipped)"
 
 # ---------------------------------------------------------------- health
 hd "8/8  is the box still healthy, and is it reporting to the dashboard?"
