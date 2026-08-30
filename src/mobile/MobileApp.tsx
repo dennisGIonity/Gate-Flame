@@ -27,6 +27,7 @@ import {
   Gamepad2,
   Home,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   Stethoscope,
   Wifi,
@@ -48,18 +49,20 @@ import { ThreatsScreen } from './screens/ThreatsScreen';
 import { NetworkScreen } from './screens/NetworkScreen';
 import { HealthScreen } from './screens/HealthScreen';
 import { ControlsScreen } from './screens/ControlsScreen';
+import { ShieldScreen } from './screens/ShieldScreen';
 
 /** Kept, at the owner's request. Lazy: it is the one screen most people never open. */
 const IonicrobesGame = lazy(() =>
   import('../components/IonicrobesGame').then((m) => ({ default: m.IonicrobesGame })),
 );
 
-type TabId = 'home' | 'activity' | 'blocked' | 'network' | 'health' | 'settings' | 'game';
+type TabId = 'home' | 'activity' | 'blocked' | 'shield' | 'network' | 'health' | 'settings' | 'game';
 
 const TABS: { id: TabId; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'activity', label: 'Activity', icon: ActivityIcon },
   { id: 'blocked', label: 'Blocked', icon: ShieldAlert },
+  { id: 'shield', label: 'Shield', icon: ShieldCheck },
   { id: 'network', label: 'Network', icon: Wifi },
   { id: 'health', label: 'Health', icon: Stethoscope },
   { id: 'settings', label: 'Settings', icon: SlidersHorizontal },
@@ -186,6 +189,7 @@ export function MobileApp() {
       {tab === 'home' && <HomeScreen telemetry={telemetry} filtering={filtering} />}
       {tab === 'activity' && <ActivityScreen telemetry={telemetry} />}
       {tab === 'blocked' && <ThreatsScreen active={tab === 'blocked'} />}
+      {tab === 'shield' && <ShieldScreen active={tab === 'shield'} />}
       {tab === 'network' && <NetworkScreen active={tab === 'network'} />}
       {tab === 'health' && (
         <HealthScreen telemetry={telemetry} filtering={filtering} active={tab === 'health'} />
@@ -205,19 +209,22 @@ export function MobileApp() {
       )}
 
       {/* --------------------------------------------------------- tab bar
-          Seven destinations is more than a phone bar comfortably holds, so
-          this is a 7-column GRID rather than a scrolling row. A scroller hides
-          destinations off-screen and, worse, leaves the bar in a half-scrolled
-          position that reads as broken; a grid always shows all seven and lets
-          each cell shrink instead. The cells stay above the 48px touch-target
-          floor down to a 320dp screen, which is narrower than anything still
-          being sold. The bar itself is centred and capped so it becomes a
-          floating pill on a tablet rather than a stretched ribbon.        */}
+          Eight destinations (Shield joined the bar so a real, working
+          feature stopped reading as absent — it used to be the last card at
+          the bottom of Settings, with nothing pointing at it) is more than a
+          phone bar comfortably holds, so this is an 8-column GRID rather
+          than a scrolling row. A scroller hides destinations off-screen and,
+          worse, leaves the bar in a half-scrolled position that reads as
+          broken; a grid always shows all eight and lets each cell shrink
+          instead. The cells stay above the 48px touch-target floor down to
+          a 320dp screen, which is narrower than anything still being sold.
+          The bar itself is centred and capped so it becomes a floating pill
+          on a tablet rather than a stretched ribbon.                     */}
       <nav
         className="absolute inset-x-0 z-40 px-3"
         style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
       >
-        <div className="mx-auto grid w-full max-w-md grid-cols-7 items-center gap-0.5 rounded-2xl border border-[#1E293B] bg-[#111A28]/95 px-1.5 py-1.5 backdrop-blur-xl sm:max-w-lg sm:gap-1 sm:px-2 sm:py-2">
+        <div className="mx-auto grid w-full max-w-md grid-cols-8 items-center gap-0.5 rounded-2xl border border-[#1E293B] bg-[#111A28]/95 px-1.5 py-1.5 backdrop-blur-xl sm:max-w-lg sm:gap-1 sm:px-2 sm:py-2">
           {TABS.map((t) => {
             const Icon = t.icon;
             const on = tab === t.id;

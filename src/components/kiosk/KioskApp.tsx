@@ -58,13 +58,15 @@ import { CH, LiveBackdrop } from './charts';
 import ConsoleLock from './ConsoleLock';
 import { FilteringPanel, NetworkPanel, OverviewPanel, ThreatsPanel, type PanelContext } from './panels';
 import { FirewallPanel, ModulesPanel, SystemPanel, WanPanel } from './panelsSystem';
+import { ShieldPanel, SHIELD_TAB_ICON } from './panelsShield';
 
-type TabId = 'overview' | 'filtering' | 'threats' | 'network' | 'modules' | 'firewall' | 'wan' | 'system';
+type TabId = 'overview' | 'filtering' | 'threats' | 'shield' | 'network' | 'modules' | 'firewall' | 'wan' | 'system';
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'filtering', label: 'Filtering', icon: ShieldHalf },
   { id: 'threats', label: 'Threats', icon: Bug },
+  { id: 'shield', label: 'Shield', icon: SHIELD_TAB_ICON },
   { id: 'network', label: 'Network', icon: Network },
   { id: 'modules', label: 'Modules', icon: Boxes },
   { id: 'firewall', label: 'Firewall', icon: Activity },
@@ -320,6 +322,7 @@ export default function KioskApp() {
           />
         )}
         {!refused && tab === 'threats' && <ThreatsPanel {...panelCtx('threats')} />}
+        {!refused && tab === 'shield' && <ShieldPanel {...panelCtx('shield')} />}
         {!refused && tab === 'network' && <NetworkPanel {...panelCtx('network')} />}
         {!refused && tab === 'modules' && <ModulesPanel {...panelCtx('modules')} />}
         {!refused && tab === 'firewall' && <FirewallPanel {...panelCtx('firewall')} />}
