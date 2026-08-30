@@ -16,6 +16,7 @@ import { manualChunks } from './vite.chunks.config';
  * vite-plugin-singlefile existed solely to serve them. They are in git history.
  */
 export default defineConfig({
+  base: './',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
