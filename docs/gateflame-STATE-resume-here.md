@@ -2,7 +2,7 @@
 ========================================================================================
 GATE^FLAME — 📌 PINNED STATE / RESUME HERE
 Author: Dennis Grobler (Wabakipi) | Ionity Global (Pty) Ltd | AEDI
-Document ID: DOC-2026-08-013-STATE | Version: 9.0 | Updated: 2026-08-30 SAST
+Document ID: DOC-2026-08-013-STATE | Version: 10.0 | Updated: 2026-08-30 SAST
 Governance: Policy 986 AED | License: AED 900 | CC BY-NC-SA 4.0 where stated
 (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - All Rights Reserved - TM2
 Web: https://www.ionity.today | https://www.ionity.world | Ref: https://www.ionity.co.za
@@ -20,17 +20,27 @@ Then run `tools\doctor.cmd` before touching anything.
 
 ---
 
-# 0 — THE ONE ACTION WAITING FOR DENNIS
+# 0 — NOTHING IS WAITING FOR DENNIS RIGHT NOW
 
-Everything else from the last handoff is now done. Only this is open:
+Everything from the last two handoffs is deployed and verified. The Shield
+(VPN) work, the console rebuild, the phone app and the fleet dashboard are all
+live. Open items in §7 are longer-horizon, none of them blocking.
 
-| # | Action | Why |
+Live right now, all measured not assumed:
+
+| Thing | Where | State |
 |---|---|---|
-| 1 | On the phone: **Settings → Developer options → Wireless debugging → turn it on**, then read out the IP:port it shows | The rebuilt APK (with the new Shield tab) is sitting on this machine at `release\GateFlame-Mobile-debug.apk`, verified on disk. Nothing plugged in over USB, and the phone isn't advertising a wireless-debug session yet (`adb mdns services` finds nothing), so it cannot be installed until one of those exists. |
+| **Fleet dashboard** | `http://192.168.0.6:8091/` (login `admin`, password in `fleet/fleet.env.ps1`, **not** in git) | Running. Pi reports itself every 5 min. |
+| **Shield / VPN** | phone app + kiosk console | `/vpn/regions` returns **HTTP 200** with real VPN Gate countries (BR, BY, CA, ES, GB, JP…). Was 404 until 2026-08-30 23:22. |
+| **Kiosk console** | Pi wall panel, `/opt/gateflame/kiosk` | Rebuilt bundle installed (was still the 17 Aug build). |
+| **Phone app** | Dennis's S10e | `today.ionity.gateflame.debug`, updated 23:05, Shield confirmed inside the installed APK. |
+| **DNS filtering** | Pi-hole on the box | 359,667 gravity domains, 3 lists, `protectionStatus: active`. Asked directly it blocks correctly (`doubleclick.net → 0.0.0.0`, `ionity.today` resolves fine). |
 
-Already done this session, do not repeat: `tools\load-key.cmd` was run and the
-key is loaded (`SHA256:8AQd...rEpI dennis@wabakipi`); `fix/mobile-dns-drops`
-is pushed to `origin` (see §5).
+⚠️ **The Pi's own `/etc/resolv.conf` still points at the router (192.168.0.1),
+not at itself.** That is known fault #2 in §3 — the router is not forwarding to
+the box — and it is why a lookup run *on the Pi* still resolves trackers
+normally even though Pi-hole blocks them when asked directly. Not a regression,
+not caused by any of this work: it is the open router decision in §4.
 
 ---
 
@@ -141,10 +151,59 @@ see all clients, support access, working build/deploy tab), and — mid-session
 | Verification | `tsc --noEmit` clean across the whole project after every change. `npm run build:html-kiosk` and `npm run build:apk-debug` both run for real on this machine (not just source review) — kiosk bundle checked for the new strings, APK re-confirmed on disk (4,571,765 bytes) after the build, not trusted from exit code alone. |
 | Git | Committed as `b3e3f24` on `fix/mobile-dns-drops`, correct identity. **Pushed to origin this session** (`3f08d33..b3e3f24`) after loading the SSH key via `tools\load-key.cmd`. |
 
-**Still open from this session:** the *rebuilt* APK (with the Shield tab) has
-not reached Dennis's phone yet — see §0. The dev-shell "repo" preview
-(`App.tsx`'s mobile-preview tab) renders the real `<MobileApp/>` directly, so
-it already inherits the Shield fix with no separate change needed.
+The dev-shell "repo" preview (`App.tsx`'s mobile-preview tab) renders the real
+`<MobileApp/>` directly, so it already inherits the Shield fix with no separate
+change needed.
+
+## 5b — THE SHIELD BUG BEHIND "I don't see the vpn anywhere" (same night)
+
+After the two front-ends shipped, Dennis still saw no VPN on either surface. He
+was right, and **the UI was never the missing part**:
+
+> `/opt/gateflame/node-agent/gateflame/` on the live Pi was the 24 August build
+> and contained **no `vpn.py` and no `vpngate.py`**. `/api/v1/vpn/regions`,
+> `/vpn/continents` and `/vpn/devices` every one returned **HTTP 404**.
+
+So both Shield screens were calling routes that did not exist, and both
+correctly rendered *"Not set up on this box yet"* — which from the outside is
+indistinguishable from "there is no VPN". The front-ends were shipped without
+checking the backend they depend on was deployed. **Lesson, worth keeping: a UI
+that talks to a route is not done until that route is confirmed answering on
+the box the customer actually has.**
+
+Proved the phone was *not* at fault by pulling the installed APK back off the
+handset and grepping its bundle — Shield, `/vpn/regions`, `/vpn/continents` and
+the continent picker were all present the whole time.
+
+Fixed by `tools/gateflame-deploy-vpn.sh` (committed), run once with sudo:
+full agent package incl. vpn.py + vpngate.py, the rebuilt kiosk bundle, and the
+fleet-feed drop-in. Backs up both, verifies staged copies before overwriting,
+re-reads after installing, auto-rolls-back the agent on failure, and restarts
+only the agent and the Chromium panel — the resolver is never touched.
+
+## 5c — THE FLEET DASHBOARD, finished the same night
+
+`fleet.db` was **0 bytes** — nothing had ever reported. Two real reasons:
+`GATEFLAME_FEED_ENABLED` defaults to false, and the default feed URL points at
+`feeds.ionity.today`, which does not resolve.
+
+- `fleet/` is now **in the repo**. It had been loose in `Downloads\GF Files`
+  with no version control at all — the exact failure Rule Zero exists to stop.
+- `fleet/start-fleet.ps1` binds `0.0.0.0:8091`. **Not 8090** — a local dev
+  node-agent already holds that port on the workstation, and taking a free port
+  beats killing something already running.
+- Chain proved end to end with genuine telemetry off the live Pi before
+  declaring it working: POST accepted `204`, node renders `online`,
+  unauthenticated `GET /` correctly refused `401`.
+- The feed token lives only in `~/gateflame-feed.conf` on the Pi (mode 600,
+  root) and `fleet/fleet.env.ps1` on the workstation. **Neither is committed**;
+  `.gitignore` covers `fleet.db` and `fleet.env.ps1`. The deploy script reads
+  the drop-in rather than carrying the secret, so the script itself is safe to
+  commit.
+- Consent caveat carried over from `PAIRING-AND-TELEMETRY.md` §4.3: this is
+  Dennis's own test box. A **customer** unit needs a consent screen and a kill
+  toggle before the feed is switched on for them. Neither is built. Do not ship
+  the feed drop-in to a customer box.
 
 ---
 
@@ -186,7 +245,17 @@ it already inherits the Shield fix with no separate change needed.
 - 🔴 No history database — a reboot is still amnesia
 - 🔴 `feed-receiver` tests not in CI; ruff non-blocking
 - 🟡 Retire the 14 Antigravity snapshots + dormant C: clones — only after `SAVE-EVERYTHING.cmd` reports clean
-- 🟡 Rebuilt debug APK (with Shield tab) not yet installed on Dennis's phone — §0
+- 🟡 **Workstation is on DHCP and has moved to `192.168.0.6`** (older notes and
+  `CLAUDE.md` still say `.7`). The Pi's feed drop-in hardcodes that address —
+  if it moves again, edit
+  `/etc/systemd/system/gateflame-node-agent.service.d/50-feed.conf`.
+- 🟡 The fleet dashboard is started by hand (`fleet/start-fleet.ps1`). It is not
+  a Windows service, so it dies with the terminal and does not survive a
+  reboot. Fine for now; make it a scheduled task or move it to always-on
+  hardware before it matters.
+- 🟡 Shield's `controlPlaneReachable` is **false** — Ionity's own exit servers
+  (headscale) do not exist yet, so every region currently offered is VPN Gate
+  (community, best-effort, never to be labelled "audited" or "no-logs").
 
 ```
 © 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM2
