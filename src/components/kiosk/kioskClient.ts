@@ -28,6 +28,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
+import type { VpnDeviceState, VpnDevicesResponse, VpnRegionsResponse } from '../../types/vpn';
 
 // ---------------------------------------------------------------------------
 // Where the node is
@@ -372,6 +373,19 @@ export const kioskApi = {
 
   releaseBounce: (address: string) =>
     nodeRequest<unknown>(`/firewall/bounce/${encodeURIComponent(address)}`, { method: 'DELETE' }),
+
+  // -------------------------------------------------------------------
+  // Gate^Flame Shield (per-device VPN). See node-agent/gateflame/vpn.py -
+  // the box never carries this traffic, it only issues per-device configs,
+  // so writes here are cheap and do not need the blocklists.py-style
+  // background-apply dance.
+  // -------------------------------------------------------------------
+
+  setVpnDevice: (mac: string, region: string | null, enabled: boolean) =>
+    nodeRequest<VpnDeviceState>(`/vpn/devices/${encodeURIComponent(mac)}`, {
+      method: 'PUT',
+      body: { region, enabled },
+    }),
 };
 
 // ---------------------------------------------------------------------------

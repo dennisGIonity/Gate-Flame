@@ -28,6 +28,11 @@ class Config:
     # route is not mounted AT ALL rather than mounted-and-empty, so a 404 means
     # "no kiosk installed" and never "installed but broken".
     kiosk_dir: str = os.environ.get("GATEFLAME_KIOSK_DIR", "/opt/gateflame/kiosk")
+    # Gate^Flame Shield (per-device VPN, see vpn.py). Absent means the control
+    # plane isn't deployed yet on this box - list_regions() then returns []
+    # honestly instead of a fault, same shape as pihole_api_url above.
+    headscale_url: str | None = os.environ.get("GATEFLAME_HEADSCALE_URL")
+    headscale_api_key: str | None = os.environ.get("GATEFLAME_HEADSCALE_API_KEY")
 
 
 config = Config()

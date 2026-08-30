@@ -1,0 +1,28 @@
+# Gate^Flame Shield - control plane (Headscale, open source, MIT licence).
+#
+# This is the ONLY piece that needs to run somewhere reachable - it hands out
+# WireGuard peer configs and knows which exit node is in which country. It
+# does not carry any customer's tunnelled traffic itself. Runs fine on the
+# smallest free-tier VPS that exists; it is a small Go binary with a SQLite
+# backing store, not a heavy service.
+#
+# Deploy: docker compose up -d, then see README.md in this folder for the
+# one-time `headscale users create` / API key step and how to register a
+# region's exit node.
+version: "3.8"
+
+services:
+  headscale:
+    image: headscale/headscale:0.23.0
+    container_name: gateflame-shield-control
+    restart: unless-stopped
+    command: headscale serve
+    volumes:
+      - ./config:/etc/headscale
+      - ./data:/var/lib/headscale
+    ports:
+      # gRPC/HTTP API and the WireGuard-over-DERP fallback. Only 8080 needs
+      # to be reachable from the internet; keep 50443 internal unless you
+      # need the gRPC admin API from off-box too.
+      - "8080:8080"
+      - "50443:50443"

@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import blocklists, content_categories, filtering_state, threat_level
+from . import blocklists, content_categories, filtering_state, threat_level, vpn
 from . import clients as clients_mod
 from . import pihole, services, telemetry, threats
 from .config import config
@@ -427,6 +427,11 @@ class PauseBody(BaseModel):
     reason: str | None = None
 
 
+class VpnDeviceBody(BaseModel):
+    region: str | None = None
+    enabled: bool = False
+
+
 def _filtering_state_payload() -> dict:
     """Everything a surface needs to render the filtering controls honestly."""
     settings = store.get_filter_settings()
@@ -602,3 +607,45 @@ def resume_filtering(request: Request, _=Depends(control_scope)):
     store.resume_filtering()
     blocklists.apply_async(store)
     return _filtering_state_payload()
+
+
+# ---------------------------------------------------------------------------
+# Gate^Flame Shield - per-device VPN. See vpn.py for the full design and why
+# the box is never in the tunnel's path on either edition.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/v1/vpn/regions")
+def get_vpn_regions(request: Request, _=Depends(read_scope)):
+    return {
+        "label": vpn.GATEFLAME_SHIELD_LABEL,
+        "controlPlaneReachable": vpn.control_plane_reachable(),
+        "regions": vpn.list_regions(),
+    }
+
+
+@app.get("/api/v1/vpn/devices")
+def get_vpn_devices(request: Request, _=Depends(read_scope)):
+    return {"devices": vpn.list_device_status(store)}
+
+
+@app.get("/api/v1/vpn/devices/{mac}")
+def get_vpn_device(mac: str, request: Request, _=Depends(read_scope)):
+    return vpn.device_status(store, mac.lower())
+
+
+@app.put("/api/v1/vpn/devices/{mac}")
+def put_vpn_device(
+    mac: str, body: VpnDeviceBody, request: Request, _=Depends(control_scope)
+):
+    ok = vpn.apply_device_region(store, mac.lower(), body.region, body.enabled)
+    result = vpn.device_status(store, mac.lower())
+    result["applying"] = vpn.is_applying()
+    result["lastError"] = vpn.last_error()
+    if not ok:
+        # Same shape as blocklists: the intent is still recorded (device_status
+        # reflects what was asked for), the write just did not fully land, and
+        # the caller gets a 200 with lastError set rather than a bare 4xx/5xx -
+        # the mobile screen needs to show WHAT didn't work, not just THAT it
+        # didn't.
+        pass
+    return result

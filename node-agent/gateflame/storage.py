@@ -73,6 +73,20 @@ CREATE TABLE IF NOT EXISTS filter_settings (
     pause_reason TEXT,
     updated_at REAL NOT NULL DEFAULT 0
 );
+
+-- Gate^Flame Shield (per-device VPN, see vpn.py). Keyed by MAC, same
+-- identity clients.py already uses for passive discovery - there is no
+-- separate device-registry concept to keep in sync with it. One row per
+-- device that has EVER touched Shield; a device the owner never used it on
+-- simply has no row, same "absence means never configured" shape as
+-- everything else in this file.
+CREATE TABLE IF NOT EXISTS vpn_devices (
+    mac TEXT PRIMARY KEY,
+    region TEXT,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    preauth_key TEXT,
+    updated_at REAL NOT NULL DEFAULT 0
+);
 """
 
 
@@ -404,3 +418,62 @@ class Store:
                 )
                 return True
             return False
+
+    # ---- Gate^Flame Shield (per-device VPN) -----------------------------
+
+    def list_vpn_devices(self) -> list[dict]:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT mac, region, enabled, preauth_key IS NOT NULL, updated_at "
+                "FROM vpn_devices ORDER BY updated_at DESC"
+            )
+            return [
+                {
+                    "mac": r[0],
+                    "region": r[1],
+                    "enabled": bool(r[2]),
+                    "peerRegistered": bool(r[3]),
+                    "updatedAt": r[4],
+                }
+                for r in cur.fetchall()
+            ]
+
+    def get_vpn_device(self, mac: str) -> dict | None:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT mac, region, enabled, preauth_key IS NOT NULL, updated_at "
+                "FROM vpn_devices WHERE mac = ?",
+                (mac,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return {
+                "mac": row[0],
+                "region": row[1],
+                "enabled": bool(row[2]),
+                "peerRegistered": bool(row[3]),
+                "updatedAt": row[4],
+            }
+
+    def set_vpn_device(self, mac: str, region: str | None, enabled: bool) -> None:
+        """The owner's choice for one device. Recorded even if applying it
+        against the control plane then fails - vpn.py keeps the intent
+        separate from whether it has been made real yet, same split
+        filter_settings makes between 'enabled' and whether gravity actually
+        holds the domains that implies."""
+        now = time.time()
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO vpn_devices (mac, region, enabled, updated_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(mac) DO UPDATE SET region = ?, enabled = ?, updated_at = ?",
+                (mac, region, int(enabled), now, region, int(enabled), now),
+            )
+
+    def set_vpn_device_preauth(self, mac: str, preauth_key: str | None) -> None:
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE vpn_devices SET preauth_key = ?, updated_at = ? WHERE mac = ?",
+                (preauth_key, time.time(), mac),
+            )

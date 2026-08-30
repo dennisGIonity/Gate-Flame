@@ -19,17 +19,31 @@
  */
 
 import { useState } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, ShieldCheck } from 'lucide-react';
 
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
-import { kioskApi, num, type Polled } from '../../components/kiosk/kioskClient';
+import type { VpnDevicesResponse, VpnRegionsResponse } from '../../types/vpn';
+import { kioskApi, num, usePolled, type LanClient, type Polled } from '../../components/kiosk/kioskClient';
 import { CH, Meter } from '../../components/kiosk/charts';
 import { Card, Chip, Gap, Screen, ScreenTitle, Warning } from '../mobileUi';
+
+interface ClientsResponse {
+  clients: LanClient[];
+}
 
 export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState> }) {
   const f = filtering.data;
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+
+  // Gate^Flame Shield (per-device VPN). Regions barely change and this list
+  // is not on the household's critical path the way filtering is, so a
+  // slower interval than the 6s filtering poll is enough - no reason to
+  // wake the box every few seconds for a list that changes when Ionity adds
+  // a country, not when anyone touches a toggle.
+  const shieldRegions = usePolled<VpnRegionsResponse>('/vpn/regions', 20000);
+  const shieldDevices = usePolled<VpnDevicesResponse>('/vpn/devices', 20000);
+  const lanClients = usePolled<ClientsResponse>('/clients', 20000);
 
   /**
    * Run a write, then refresh from the node rather than trusting our own
@@ -268,7 +282,162 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
         )}
       </Card>
 
+      {/* --------------------------------------------------------- shield
+          Gate^Flame Shield - per-device VPN. Region selection is per LISTED
+          DEVICE, not "this phone": a phone's own real network hardware
+          address is hidden from web/webview code by every current mobile
+          OS for privacy reasons, so the one thing this screen cannot
+          reliably do is ask the handset it's running on for its own MAC.
+          The box already knows every device on the LAN by MAC
+          (clients.py) - the owner picks a device from that list instead,
+          exactly like every other control here changes a HOUSEHOLD
+          setting from any one paired phone, not "this phone only". */}
+      <ShieldCard
+        regions={shieldRegions}
+        devices={shieldDevices}
+        clients={lanClients}
+        busy={busy}
+        setBusy={setBusy}
+        setProblem={setProblem}
+      />
+
       <Gap text={f.lastError} />
     </Screen>
+  );
+}
+
+interface ShieldRow {
+  mac: string;
+  label: string;
+  region: string | null;
+  enabled: boolean;
+  peerRegistered: boolean;
+}
+
+function ShieldCard({
+  regions,
+  devices,
+  clients,
+  busy,
+  setBusy,
+  setProblem,
+}: {
+  regions: Polled<VpnRegionsResponse>;
+  devices: Polled<VpnDevicesResponse>;
+  clients: Polled<ClientsResponse>;
+  busy: string | null;
+  setBusy: (v: string | null) => void;
+  setProblem: (v: string | null) => void;
+}) {
+  const r = regions.data;
+  const knownDevices = devices.data?.devices ?? [];
+  const lanList = clients.data?.clients ?? [];
+
+  // A device the box has seen counts even with no Shield row yet - it just
+  // reads as "off". A device with a Shield row but no longer on the LAN
+  // (a guest who left) still shows, since turning ITS tunnel off is still
+  // the owner's to do from here.
+  const byMac = new Map(knownDevices.map((d) => [d.mac, d]));
+  const rows: ShieldRow[] = [
+    ...lanList.map((c) => ({
+      mac: c.mac,
+      label: c.hostname || c.mac,
+      region: byMac.get(c.mac)?.region ?? null,
+      enabled: byMac.get(c.mac)?.enabled ?? false,
+      peerRegistered: byMac.get(c.mac)?.peerRegistered ?? false,
+    })),
+    ...knownDevices
+      .filter((d) => !lanList.some((c) => c.mac === d.mac))
+      .map((d) => ({
+        mac: d.mac,
+        label: d.mac,
+        region: d.region,
+        enabled: d.enabled,
+        peerRegistered: d.peerRegistered,
+      })),
+  ];
+
+  async function setDevice(mac: string, region: string | null, enabled: boolean) {
+    setBusy(`shield-${mac}`);
+    setProblem(null);
+    try {
+      const result = await kioskApi.setVpnDevice(mac, region, enabled);
+      if (result.lastError) setProblem(result.lastError);
+      devices.refresh();
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : 'That did not go through.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Card>
+      <div className="mb-1 flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-[#38BDF8]" />
+        <p className="text-sm font-semibold text-slate-100">
+          {r?.label ?? 'Gate^Flame Shield'}
+        </p>
+      </div>
+
+      {!r || !r.controlPlaneReachable ? (
+        <p className="text-xs leading-relaxed text-[#64748B]">
+          Not set up on this box yet. Nothing to turn on until it is.
+        </p>
+      ) : r.regions.length === 0 ? (
+        <p className="text-xs leading-relaxed text-[#64748B]">
+          Set up, but no regions are available yet.
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs leading-relaxed text-[#64748B]">
+          {clients.data ? 'No devices seen on your network yet.' : 'Reading your devices…'}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {rows.map((row) => (
+            <div key={row.mac} className="rounded-xl border border-[#1E293B] bg-[#0F1B2D] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-sm text-slate-200">{row.label}</span>
+                <button
+                  disabled={busy !== null}
+                  onClick={() => setDevice(row.mac, row.region ?? r.regions[0]?.code ?? null, !row.enabled)}
+                  className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+                    row.enabled ? 'bg-[#38BDF8]' : 'bg-[#334155]'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                      row.enabled ? 'left-[1.125rem]' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+              {row.enabled && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {r.regions.map((reg) => {
+                    const on = reg.code === row.region;
+                    return (
+                      <button
+                        key={reg.code}
+                        disabled={busy !== null || !reg.available}
+                        onClick={() => setDevice(row.mac, reg.code, true)}
+                        className={`rounded-lg border px-2.5 py-1 text-[11px] disabled:opacity-40 ${
+                          on
+                            ? 'border-[#38BDF8]/60 bg-[#38BDF8]/10 text-[#38BDF8]'
+                            : 'border-[#1E293B] bg-[#0B1420] text-slate-300'
+                        }`}
+                      >
+                        {reg.label}
+                        {!reg.available && ' (offline)'}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
