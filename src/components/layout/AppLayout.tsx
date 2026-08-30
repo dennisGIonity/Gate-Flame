@@ -5,12 +5,14 @@ import { cn } from '../../lib/utils';
 import { LiveBackground } from '../LiveBackground';
 import { motion } from 'motion/react';
 import { DataSourceBanner } from '../DataSourceBanner';
+import { count } from '../../lib/format';
 
 interface AppLayoutProps {
   currentView: AppViewMode;
   onSelectView: (view: AppViewMode) => void;
   protectionActive: boolean;
-  totalBlocked: number;
+  /** null, never 0, when Pi-hole hasn't supplied a real count yet — see lib/format.ts. */
+  totalBlocked: number | null;
   filterLevel: 'none' | 'low' | 'medium' | 'high';
   appTheme: 'dark' | 'light' | 'system';
   children: React.ReactNode;
@@ -114,7 +116,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <div className="h-px bg-black/10 dark:bg-white/10" />
             <div className="flex flex-col">
               <span className="text-[10px] text-slate-600 dark:text-slate-500 uppercase tracking-wider font-mono">Blocked Today</span>
-              <span className="text-xl font-bold font-mono tracking-tight text-black dark:text-white">{totalBlocked.toLocaleString()}</span>
+              <span className="text-xl font-bold font-mono tracking-tight text-black dark:text-white">{count(totalBlocked)}</span>
             </div>
           </div>
         </div>

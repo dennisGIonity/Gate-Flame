@@ -39,13 +39,18 @@ export interface NetworkOption {
 }
 
 export interface SystemTelemetry {
-  totalQueriesToday: number;
-  queriesBlockedToday: number;
-  blockPercentage: number;
-  domainsOnGravity: number;
-  activeClientsCount: number;
-  dataSavedMB: number;
-  avgLatencyMs: number;
+  // Each is null, never 0, when Pi-hole did not supply it — see
+  // lib/format.ts. A raw `number` type here is what let AppLayout.tsx,
+  // Header.tsx and DeviceOnboardingSimulator.tsx call `.toLocaleString()`
+  // straight on a null and crash the whole shell for any freshly paired
+  // handset whose box hadn't finished bringing Pi-hole up yet.
+  totalQueriesToday: number | null;
+  queriesBlockedToday: number | null;
+  blockPercentage: number | null;
+  domainsOnGravity: number | null;
+  activeClientsCount: number | null;
+  dataSavedMB: number | null;
+  avgLatencyMs: number | null;
   protectionStatus: 'active' | 'paused' | 'initializing' | 'failover_hotspot';
   filterLevel: 'none' | 'low' | 'medium' | 'high';
   pauseTimeRemainingSeconds: number;

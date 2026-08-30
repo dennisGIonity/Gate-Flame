@@ -11,12 +11,14 @@
 import React from 'react';
 import { AppViewMode } from '../types';
 import { ShieldCheck, Smartphone, Cpu, Server, Terminal, Lock, ExternalLink, Sparkles, Package, Box } from 'lucide-react';
+import { count } from '../lib/format';
 
 interface HeaderProps {
   currentView: AppViewMode;
   onSelectView: (view: AppViewMode) => void;
   protectionActive: boolean;
-  totalBlocked: number;
+  /** null, never 0, when Pi-hole hasn't supplied a real count yet — see lib/format.ts. */
+  totalBlocked: number | null;
   filterLevel: 'none' | 'low' | 'medium' | 'high';
 }
 
@@ -129,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="h-6 w-px bg-slate-800" />
           <div className="flex flex-col">
             <span className="text-[9px] text-slate-500 uppercase font-semibold tracking-wider">24h Purged</span>
-            <span className="text-emerald-400 font-bold">{totalBlocked.toLocaleString()}</span>
+            <span className="text-emerald-400 font-bold">{count(totalBlocked)}</span>
           </div>
         </div>
 

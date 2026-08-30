@@ -18,6 +18,7 @@ import {
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { DNSTrafficChart } from './DNSTrafficChart';
 import { cn, getFilterBorderColor } from '../lib/utils';
+import { count } from '../lib/format';
 import { LiveBackground } from './LiveBackground';
 
 interface DeviceOnboardingSimulatorProps {
@@ -527,7 +528,7 @@ export const DeviceOnboardingSimulator: React.FC = () => {
                         Infographic Screen 1 / 5: Traffic Time Series
                       </div>
                       <div className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mt-0.5">
-                        {telemetry.totalQueriesToday.toLocaleString()} Queries
+                        {count(telemetry.totalQueriesToday)} Queries
                       </div>
                     </div>
                     <span className="text-[10px] text-sky-400 bg-sky-500/10 px-2 py-1 rounded border border-sky-500/20 font-medium">
