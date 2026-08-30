@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import blocklists, content_categories, filtering_state, threat_level, vpn
+from . import blocklists, content_categories, filtering_state, threat_level, vpn, vpngate
 from . import clients as clients_mod
 from . import pihole, services, telemetry, threats
 from .config import config
@@ -430,6 +430,7 @@ class PauseBody(BaseModel):
 class VpnDeviceBody(BaseModel):
     region: str | None = None
     enabled: bool = False
+    provider: str = "headscale"
 
 
 def _filtering_state_payload() -> dict:
@@ -619,7 +620,12 @@ def get_vpn_regions(request: Request, _=Depends(read_scope)):
     return {
         "label": vpn.GATEFLAME_SHIELD_LABEL,
         "controlPlaneReachable": vpn.control_plane_reachable(),
-        "regions": vpn.list_regions(),
+        # True the moment VPN Gate's public list has ever been read successfully
+        # - distinct from controlPlaneReachable, which is specifically about
+        # Ionity's own (currently nonexistent) Headscale exit servers. A box
+        # can have zero of one and plenty of the other.
+        "vpnGateAvailable": vpngate.last_fetch_ok(),
+        "regions": vpn.list_all_regions(),
     }
 
 
@@ -637,7 +643,7 @@ def get_vpn_device(mac: str, request: Request, _=Depends(read_scope)):
 def put_vpn_device(
     mac: str, body: VpnDeviceBody, request: Request, _=Depends(control_scope)
 ):
-    ok = vpn.apply_device_region(store, mac.lower(), body.region, body.enabled)
+    ok = vpn.apply_device_region(store, mac.lower(), body.region, body.enabled, body.provider)
     result = vpn.device_status(store, mac.lower())
     result["applying"] = vpn.is_applying()
     result["lastError"] = vpn.last_error()
@@ -649,3 +655,13 @@ def put_vpn_device(
         # didn't.
         pass
     return result
+
+
+@app.get("/api/v1/vpn/devices/{mac}/vpngate-config")
+def get_vpngate_device_config(mac: str, request: Request, _=Depends(read_scope)):
+    """The actual .ovpn text for a device currently on the VPN Gate path -
+    fetched live each call, never persisted, since VPN Gate's own server list
+    rotates and a saved config can silently go stale. See vpn.py's
+    vpngate_config_for_device() and vpngate.py's own docstring for what this
+    network actually is and is not before wiring a "download" button to it."""
+    return vpn.vpngate_config_for_device(store, mac.lower())

@@ -45,6 +45,7 @@ import threading
 
 import httpx
 
+from . import vpngate
 from .config import config
 
 _TIMEOUT = 15.0
@@ -175,9 +176,34 @@ def list_regions() -> list[dict]:
                 regions[code] = {
                     "code": code,
                     "label": _region_label(code),
+                    "provider": "headscale",
                     "available": online,
                 }
     return sorted(regions.values(), key=lambda r: r["code"])
+
+
+def list_all_regions() -> list[dict]:
+    """Every region a device can pick from EITHER provider, merged.
+
+    Two tiers, honestly distinguished by the `provider` field on each entry
+    (never hidden from the owner, even though the customer-facing label on
+    both stays "Gate^Flame Shield"):
+
+      "headscale" - Ionity's own exit servers, once at least one is deployed
+                    and tagged. Verified, controlled, zero ongoing per-country
+                    cost concerns beyond running the box. [] until one exists.
+
+      "vpngate"   - the free public VPN Gate relay network (see vpngate.py's
+                    own docstring for the honesty caveats - logging retention,
+                    a published MitM research finding on volunteer nodes).
+                    Real countries, real servers, zero budget, available the
+                    moment this box can reach the internet. Best-effort, not
+                    a trust guarantee - never marketed as audited or no-logs.
+
+    A box with neither configured returns [] from both and this returns [] -
+    same honest-empty shape either provider already uses alone.
+    """
+    return list_regions() + vpngate.list_countries()
 
 
 # Human labels for the codes an operator would actually tag a box with.
@@ -211,7 +237,9 @@ def list_device_status(store) -> list[dict]:
     return store.list_vpn_devices()
 
 
-def apply_device_region(store, mac: str, region: str | None, enabled: bool) -> bool:
+def apply_device_region(
+    store, mac: str, region: str | None, enabled: bool, provider: str = "headscale"
+) -> bool:
     """Set one device's desired region/enabled state, then try to make it real.
 
     Synchronous by design, like blocklists.apply() - a WireGuard peer config
@@ -222,19 +250,36 @@ def apply_device_region(store, mac: str, region: str | None, enabled: bool) -> b
     means the device KEEPS its previous config working (or keeps having none)
     - Shield never silently drops a working tunnel because a later request to
     change it failed partway through.
+
+    `provider` picks which backend this request is against. The two paths
+    share nothing except the storage row: Headscale issues a pre-auth key
+    for the OS's Tailscale-compatible client; VPN Gate just confirms the
+    country is live right now (its list genuinely rotates) so the device can
+    then fetch a ready .ovpn file from GET .../devices/{mac}/vpngate-config.
     """
     global _applying, _last_error
 
     with _lock:
         _applying = True
     try:
-        store.set_vpn_device(mac, region=region, enabled=enabled)
+        store.set_vpn_device(mac, region=region, enabled=enabled, provider=provider)
 
         if not enabled or region is None:
-            # Disabling doesn't need the control plane to be reachable - the
-            # device simply stops being told to use a peer config. Any
-            # config already on the device is the device's own to remove;
-            # this box was never in that traffic path to begin with.
+            # Disabling doesn't need either provider reachable - the device
+            # simply stops being told to use a config. Any config already on
+            # the device is the device's own to remove; this box was never
+            # in that traffic path to begin with.
+            _last_error = None
+            return True
+
+        if provider == "vpngate":
+            countries = {c["code"]: c for c in vpngate.list_countries()}
+            if region not in countries:
+                if not vpngate.last_fetch_ok():
+                    _last_error = vpngate.last_error() or "VPN Gate's list is not reachable right now"
+                else:
+                    _last_error = f"'{region}' is not a country VPN Gate currently offers"
+                return False
             _last_error = None
             return True
 
@@ -265,3 +310,24 @@ def apply_device_region(store, mac: str, region: str | None, enabled: bool) -> b
     finally:
         with _lock:
             _applying = False
+
+
+def vpngate_config_for_device(store, mac: str) -> dict:
+    """The actual importable .ovpn text for a device's current VPN Gate
+    choice, fetched fresh - never cached against the device row, since VPN
+    Gate's own server list rotates and a stale saved config is worse than
+    asking again. Shaped as {available, error, ...config fields} rather than
+    raising, so main.py can return it as plain JSON either way.
+    """
+    row = store.get_vpn_device(mac)
+    if row is None or not row["enabled"] or row.get("provider") != "vpngate" or not row["region"]:
+        return {"available": False, "error": "this device has no active VPN Gate selection"}
+
+    config_data = vpngate.get_ovpn_config(row["region"])
+    if config_data is None:
+        reason = vpngate.last_error() if not vpngate.last_fetch_ok() else (
+            f"'{row['region']}' is not currently offered by VPN Gate"
+        )
+        return {"available": False, "error": reason}
+
+    return {"available": True, "error": None, **config_data}

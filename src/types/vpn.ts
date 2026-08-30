@@ -16,23 +16,57 @@
  * this file.
  */
 
+/**
+ * Two providers, one screen. "headscale" is Ionity's own exit servers, once
+ * at least one is deployed - verified, controlled, [] until it exists.
+ * "vpngate" is the free public VPN Gate relay network (node-agent's
+ * vpngate.py) - real countries at zero budget, but best-effort: VPN Gate is
+ * an academic project that discloses its own connection-metadata logging,
+ * and published research has documented a MitM risk on its volunteer nodes.
+ * NEVER render vpngate regions as "audited" or "no-logs" - that would be a
+ * false claim about the network underneath them. See docs/VPN-SHIELD-DESIGN.md.
+ */
+export type VpnProvider = 'headscale' | 'vpngate';
+
 export interface VpnRegion {
-  /** e.g. "uk", "us" — whatever the exit node was tagged with at setup. */
+  /** e.g. "uk" for headscale, "US"/"JP" for vpngate — provider-specific. */
   code: string;
   /** Friendly name if the node recognises the code, else the code itself. */
   label: string;
+  provider: VpnProvider;
   /** False means listed but not currently reachable - shown, not hidden. */
   available: boolean;
+  /** vpngate only - how many volunteer servers currently back this country. */
+  serverCount?: number;
 }
 
 export interface VpnRegionsResponse {
   /** The customer-facing name for this whole feature. Render this, not a
    * hardcoded string, so one change on the node relabels every screen. */
   label: string;
-  /** False before the control plane exists at all - distinct from having
-   * zero regions on an otherwise-working control plane. */
+  /** False before Ionity's own control plane exists at all - distinct from
+   * having zero regions on an otherwise-working control plane. */
   controlPlaneReachable: boolean;
+  /** True once VPN Gate's public list has been read successfully at least
+   * once. Independent of controlPlaneReachable - a box can have plenty of
+   * one and none of the other. */
+  vpnGateAvailable: boolean;
   regions: VpnRegion[];
+}
+
+/** One device's live VPN Gate config, fetched fresh each time - never cached
+ * against the device, since VPN Gate's own server list rotates. */
+export interface VpnGateConfigResponse {
+  available: boolean;
+  error: string | null;
+  countryCode?: string;
+  countryName?: string;
+  hostname?: string;
+  ip?: string;
+  score?: number | null;
+  pingMs?: number | null;
+  speedMbps?: number | null;
+  configText?: string;
 }
 
 export interface VpnDeviceState {
@@ -42,6 +76,7 @@ export interface VpnDeviceState {
   /** Whether the box has actually issued this device a working peer config,
    * as opposed to merely recording the owner's choice. */
   peerRegistered: boolean;
+  provider?: VpnProvider;
   updatedAt?: number;
   /** Present only on a write response. A rebuild/registration is running. */
   applying?: boolean;

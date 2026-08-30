@@ -22,7 +22,7 @@ import { useState } from 'react';
 import { Check, Loader2, ShieldCheck } from 'lucide-react';
 
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
-import type { VpnDevicesResponse, VpnRegionsResponse } from '../../types/vpn';
+import type { VpnDevicesResponse, VpnGateConfigResponse, VpnProvider, VpnRegionsResponse } from '../../types/vpn';
 import { kioskApi, num, usePolled, type LanClient, type Polled } from '../../components/kiosk/kioskClient';
 import { CH, Meter } from '../../components/kiosk/charts';
 import { Card, Chip, Gap, Screen, ScreenTitle, Warning } from '../mobileUi';
@@ -312,6 +312,7 @@ interface ShieldRow {
   region: string | null;
   enabled: boolean;
   peerRegistered: boolean;
+  provider: VpnProvider;
 }
 
 function ShieldCard({
@@ -345,6 +346,7 @@ function ShieldCard({
       region: byMac.get(c.mac)?.region ?? null,
       enabled: byMac.get(c.mac)?.enabled ?? false,
       peerRegistered: byMac.get(c.mac)?.peerRegistered ?? false,
+      provider: byMac.get(c.mac)?.provider ?? 'headscale',
     })),
     ...knownDevices
       .filter((d) => !lanList.some((c) => c.mac === d.mac))
@@ -354,18 +356,53 @@ function ShieldCard({
         region: d.region,
         enabled: d.enabled,
         peerRegistered: d.peerRegistered,
+        provider: d.provider ?? 'headscale',
       })),
   ];
 
-  async function setDevice(mac: string, region: string | null, enabled: boolean) {
+  const [configFor, setConfigFor] = useState<string | null>(null);
+  const [configResult, setConfigResult] = useState<VpnGateConfigResponse | null>(null);
+
+  async function setDevice(mac: string, region: string | null, enabled: boolean, provider: VpnProvider) {
     setBusy(`shield-${mac}`);
     setProblem(null);
+    setConfigFor(null);
     try {
-      const result = await kioskApi.setVpnDevice(mac, region, enabled);
+      const result = await kioskApi.setVpnDevice(mac, region, enabled, provider);
       if (result.lastError) setProblem(result.lastError);
       devices.refresh();
     } catch (err) {
       setProblem(err instanceof Error ? err.message : 'That did not go through.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // vpngate-only: fetch the live .ovpn text and hand it to the browser as a
+  // download. Fetched fresh on demand rather than kept in state from any
+  // earlier poll, since VPN Gate's own server list rotates - a config more
+  // than a few minutes old could already point at a server that's gone.
+  async function downloadConfig(mac: string) {
+    setBusy(`shield-config-${mac}`);
+    setConfigResult(null);
+    try {
+      const result = await kioskApi.getVpnGateConfig(mac);
+      setConfigResult(result);
+      setConfigFor(mac);
+      if (result.available && result.configText) {
+        const blob = new Blob([result.configText], { type: 'application/x-openvpn-profile' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gateflame-shield-${(result.countryCode ?? 'region').toLowerCase()}.ovpn`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      setConfigResult({ available: false, error: err instanceof Error ? err.message : 'That did not go through.' });
+      setConfigFor(mac);
     } finally {
       setBusy(null);
     }
@@ -380,13 +417,11 @@ function ShieldCard({
         </p>
       </div>
 
-      {!r || !r.controlPlaneReachable ? (
+      {!r || r.regions.length === 0 ? (
         <p className="text-xs leading-relaxed text-[#64748B]">
-          Not set up on this box yet. Nothing to turn on until it is.
-        </p>
-      ) : r.regions.length === 0 ? (
-        <p className="text-xs leading-relaxed text-[#64748B]">
-          Set up, but no regions are available yet.
+          {!r || (!r.controlPlaneReachable && !r.vpnGateAvailable)
+            ? 'Not set up on this box yet. Nothing to turn on until it is.'
+            : 'Set up, but no regions are available right now.'}
         </p>
       ) : rows.length === 0 ? (
         <p className="text-xs leading-relaxed text-[#64748B]">
@@ -400,7 +435,15 @@ function ShieldCard({
                 <span className="min-w-0 truncate text-sm text-slate-200">{row.label}</span>
                 <button
                   disabled={busy !== null}
-                  onClick={() => setDevice(row.mac, row.region ?? r.regions[0]?.code ?? null, !row.enabled)}
+                  onClick={() => {
+                    const fallback = r.regions[0];
+                    setDevice(
+                      row.mac,
+                      row.region ?? fallback?.code ?? null,
+                      !row.enabled,
+                      row.region ? row.provider : fallback?.provider ?? 'headscale',
+                    );
+                  }}
                   className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
                     row.enabled ? 'bg-[#38BDF8]' : 'bg-[#334155]'
                   }`}
@@ -413,26 +456,50 @@ function ShieldCard({
                 </button>
               </div>
               {row.enabled && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {r.regions.map((reg) => {
-                    const on = reg.code === row.region;
-                    return (
+                <>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {r.regions.map((reg) => {
+                      const on = reg.code === row.region && reg.provider === row.provider;
+                      return (
+                        <button
+                          key={`${reg.provider}-${reg.code}`}
+                          disabled={busy !== null || !reg.available}
+                          onClick={() => setDevice(row.mac, reg.code, true, reg.provider)}
+                          className={`rounded-lg border px-2.5 py-1 text-[11px] disabled:opacity-40 ${
+                            on
+                              ? 'border-[#38BDF8]/60 bg-[#38BDF8]/10 text-[#38BDF8]'
+                              : 'border-[#1E293B] bg-[#0B1420] text-slate-300'
+                          }`}
+                        >
+                          {reg.label}
+                          {reg.provider === 'vpngate' && (
+                            <span className="text-[#64748B]"> · community</span>
+                          )}
+                          {!reg.available && ' (offline)'}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {row.provider === 'vpngate' && row.region && (
+                    <div className="mt-2">
                       <button
-                        key={reg.code}
-                        disabled={busy !== null || !reg.available}
-                        onClick={() => setDevice(row.mac, reg.code, true)}
-                        className={`rounded-lg border px-2.5 py-1 text-[11px] disabled:opacity-40 ${
-                          on
-                            ? 'border-[#38BDF8]/60 bg-[#38BDF8]/10 text-[#38BDF8]'
-                            : 'border-[#1E293B] bg-[#0B1420] text-slate-300'
-                        }`}
+                        disabled={busy !== null}
+                        onClick={() => downloadConfig(row.mac)}
+                        className="rounded-lg border border-[#1E293B] bg-[#0B1420] px-2.5 py-1 text-[11px] text-[#38BDF8] disabled:opacity-40"
                       >
-                        {reg.label}
-                        {!reg.available && ' (offline)'}
+                        {busy === `shield-config-${row.mac}` ? 'Fetching…' : 'Get connection file'}
                       </button>
-                    );
-                  })}
-                </div>
+                      {configFor === row.mac && configResult && (
+                        <p className="mt-1 text-[11px] leading-relaxed text-[#64748B]">
+                          {configResult.available
+                            ? `Saved. Open it with your phone's OpenVPN app to connect via ${configResult.hostname ?? 'the selected server'}.`
+                            : configResult.error ?? "That server isn't available right now."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}

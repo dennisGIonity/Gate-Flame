@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS vpn_devices (
     region TEXT,
     enabled INTEGER NOT NULL DEFAULT 0,
     preauth_key TEXT,
+    provider TEXT NOT NULL DEFAULT 'headscale',
     updated_at REAL NOT NULL DEFAULT 0
 );
 """
@@ -129,6 +130,22 @@ class Store:
         self._conn.executescript(SCHEMA)
         self._conn.commit()
         self._ensure_identity()
+        self._migrate_vpn_devices_provider()
+
+    def _migrate_vpn_devices_provider(self) -> None:
+        # `provider` was added after some boxes may already have a vpn_devices
+        # table from the Headscale-only version of Shield. CREATE TABLE IF NOT
+        # EXISTS does not retrofit columns onto an existing table, so this adds
+        # it once, idempotently. Every pre-existing row predates VPN Gate
+        # support and was therefore always the Headscale path - the DEFAULT
+        # 'headscale' on ALTER TABLE backfills that correctly for free.
+        with self._cursor() as cur:
+            cur.execute("PRAGMA table_info(vpn_devices)")
+            cols = {row[1] for row in cur.fetchall()}
+            if "provider" not in cols:
+                cur.execute(
+                    "ALTER TABLE vpn_devices ADD COLUMN provider TEXT NOT NULL DEFAULT 'headscale'"
+                )
 
     @contextmanager
     def _cursor(self):
@@ -424,7 +441,7 @@ class Store:
     def list_vpn_devices(self) -> list[dict]:
         with self._cursor() as cur:
             cur.execute(
-                "SELECT mac, region, enabled, preauth_key IS NOT NULL, updated_at "
+                "SELECT mac, region, enabled, preauth_key IS NOT NULL, provider, updated_at "
                 "FROM vpn_devices ORDER BY updated_at DESC"
             )
             return [
@@ -433,7 +450,8 @@ class Store:
                     "region": r[1],
                     "enabled": bool(r[2]),
                     "peerRegistered": bool(r[3]),
-                    "updatedAt": r[4],
+                    "provider": r[4] or "headscale",
+                    "updatedAt": r[5],
                 }
                 for r in cur.fetchall()
             ]
@@ -441,7 +459,7 @@ class Store:
     def get_vpn_device(self, mac: str) -> dict | None:
         with self._cursor() as cur:
             cur.execute(
-                "SELECT mac, region, enabled, preauth_key IS NOT NULL, updated_at "
+                "SELECT mac, region, enabled, preauth_key IS NOT NULL, provider, updated_at "
                 "FROM vpn_devices WHERE mac = ?",
                 (mac,),
             )
@@ -453,22 +471,31 @@ class Store:
                 "region": row[1],
                 "enabled": bool(row[2]),
                 "peerRegistered": bool(row[3]),
-                "updatedAt": row[4],
+                "provider": row[4] or "headscale",
+                "updatedAt": row[5],
             }
 
-    def set_vpn_device(self, mac: str, region: str | None, enabled: bool) -> None:
+    def set_vpn_device(
+        self, mac: str, region: str | None, enabled: bool, provider: str = "headscale"
+    ) -> None:
         """The owner's choice for one device. Recorded even if applying it
         against the control plane then fails - vpn.py keeps the intent
         separate from whether it has been made real yet, same split
         filter_settings makes between 'enabled' and whether gravity actually
-        holds the domains that implies."""
+        holds the domains that implies.
+
+        `provider` says which backend this region choice belongs to
+        (headscale or vpngate) - a code like "us" and a code like "US" both
+        exist independently per-provider, and this column is what keeps a
+        device's Headscale exit choice and its VPN Gate country choice from
+        ever being confused with one another."""
         now = time.time()
         with self._cursor() as cur:
             cur.execute(
-                "INSERT INTO vpn_devices (mac, region, enabled, updated_at) "
-                "VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(mac) DO UPDATE SET region = ?, enabled = ?, updated_at = ?",
-                (mac, region, int(enabled), now, region, int(enabled), now),
+                "INSERT INTO vpn_devices (mac, region, enabled, provider, updated_at) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(mac) DO UPDATE SET region = ?, enabled = ?, provider = ?, updated_at = ?",
+                (mac, region, int(enabled), provider, now, region, int(enabled), provider, now),
             )
 
     def set_vpn_device_preauth(self, mac: str, preauth_key: str | None) -> None:

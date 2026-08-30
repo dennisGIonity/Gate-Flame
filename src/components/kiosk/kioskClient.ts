@@ -28,7 +28,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
-import type { VpnDeviceState, VpnDevicesResponse, VpnRegionsResponse } from '../../types/vpn';
+import type {
+  VpnDeviceState,
+  VpnDevicesResponse,
+  VpnGateConfigResponse,
+  VpnProvider,
+  VpnRegionsResponse,
+} from '../../types/vpn';
 
 // ---------------------------------------------------------------------------
 // Where the node is
@@ -381,11 +387,16 @@ export const kioskApi = {
   // background-apply dance.
   // -------------------------------------------------------------------
 
-  setVpnDevice: (mac: string, region: string | null, enabled: boolean) =>
+  setVpnDevice: (mac: string, region: string | null, enabled: boolean, provider: VpnProvider = 'headscale') =>
     nodeRequest<VpnDeviceState>(`/vpn/devices/${encodeURIComponent(mac)}`, {
       method: 'PUT',
-      body: { region, enabled },
+      body: { region, enabled, provider },
     }),
+
+  // vpngate-backed devices only - the actual importable .ovpn text, fetched
+  // fresh (never cached) since VPN Gate's own server list rotates.
+  getVpnGateConfig: (mac: string) =>
+    nodeRequest<VpnGateConfigResponse>(`/vpn/devices/${encodeURIComponent(mac)}/vpngate-config`),
 };
 
 // ---------------------------------------------------------------------------
