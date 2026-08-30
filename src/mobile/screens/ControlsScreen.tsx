@@ -22,10 +22,64 @@ import { useState } from 'react';
 import { Check, Loader2, ShieldCheck } from 'lucide-react';
 
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
-import type { VpnDevicesResponse, VpnGateConfigResponse, VpnProvider, VpnRegionsResponse } from '../../types/vpn';
+import type {
+  VpnContinentsResponse,
+  VpnDevicesResponse,
+  VpnGateConfigResponse,
+  VpnProvider,
+  VpnRegionsResponse,
+} from '../../types/vpn';
 import { kioskApi, num, usePolled, type LanClient, type Polled } from '../../components/kiosk/kioskClient';
 import { CH, Meter } from '../../components/kiosk/charts';
 import { Card, Chip, Gap, Screen, ScreenTitle, Warning } from '../mobileUi';
+
+/**
+ * Hand a decoded .ovpn's text to whatever the platform offers, best option
+ * first. On the actual phone app (Capacitor native), this writes a temp file
+ * and opens the OS share sheet - the owner picks their installed OpenVPN app
+ * directly, no hunting through Downloads for a file they don't recognise. In
+ * a plain browser (the kiosk console preview, `npm run dev`, or a device
+ * where Capacitor's native layer isn't present), Filesystem/Share fall back
+ * to their own web implementations; if even those are unavailable this
+ * degrades to a plain blob download rather than failing silently - the
+ * "never claim success without proving it" habit this repo already keeps
+ * elsewhere, applied to a UI affordance instead of a network call.
+ */
+async function handOffConfigFile(filename: string, configText: string): Promise<'shared' | 'downloaded'> {
+  try {
+    const [{ Filesystem, Directory, Encoding }, { Share }] = await Promise.all([
+      import('@capacitor/filesystem'),
+      import('@capacitor/share'),
+    ]);
+    const written = await Filesystem.writeFile({
+      path: filename,
+      data: configText,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+    });
+    await Share.share({
+      title: 'Gate^Flame Shield connection file',
+      text: 'Open with your OpenVPN app to connect.',
+      url: written.uri,
+      dialogTitle: 'Open with…',
+    });
+    return 'shared';
+  } catch {
+    // Filesystem/Share unavailable or the user dismissed the share sheet
+    // without an error worth surfacing - either way, the file itself is
+    // real and still worth getting to the owner some way.
+    const blob = new Blob([configText], { type: 'application/x-openvpn-profile' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return 'downloaded';
+  }
+}
 
 interface ClientsResponse {
   clients: LanClient[];
@@ -42,6 +96,7 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
   // wake the box every few seconds for a list that changes when Ionity adds
   // a country, not when anyone touches a toggle.
   const shieldRegions = usePolled<VpnRegionsResponse>('/vpn/regions', 20000);
+  const shieldContinents = usePolled<VpnContinentsResponse>('/vpn/continents', 20000);
   const shieldDevices = usePolled<VpnDevicesResponse>('/vpn/devices', 20000);
   const lanClients = usePolled<ClientsResponse>('/clients', 20000);
 
@@ -294,6 +349,7 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
           setting from any one paired phone, not "this phone only". */}
       <ShieldCard
         regions={shieldRegions}
+        continents={shieldContinents}
         devices={shieldDevices}
         clients={lanClients}
         busy={busy}
@@ -317,6 +373,7 @@ interface ShieldRow {
 
 function ShieldCard({
   regions,
+  continents,
   devices,
   clients,
   busy,
@@ -324,6 +381,7 @@ function ShieldCard({
   setProblem,
 }: {
   regions: Polled<VpnRegionsResponse>;
+  continents: Polled<VpnContinentsResponse>;
   devices: Polled<VpnDevicesResponse>;
   clients: Polled<ClientsResponse>;
   busy: string | null;
@@ -331,8 +389,10 @@ function ShieldCard({
   setProblem: (v: string | null) => void;
 }) {
   const r = regions.data;
+  const continentList = continents.data?.continents ?? [];
   const knownDevices = devices.data?.devices ?? [];
   const lanList = clients.data?.clients ?? [];
+  const [showExactFor, setShowExactFor] = useState<string | null>(null);
 
   // A device the box has seen counts even with no Shield row yet - it just
   // reads as "off". A device with a Shield row but no longer on the LAN
@@ -378,27 +438,24 @@ function ShieldCard({
     }
   }
 
-  // vpngate-only: fetch the live .ovpn text and hand it to the browser as a
-  // download. Fetched fresh on demand rather than kept in state from any
-  // earlier poll, since VPN Gate's own server list rotates - a config more
-  // than a few minutes old could already point at a server that's gone.
+  // vpngate-only: fetch the live .ovpn text and hand it off (share sheet on
+  // native, download fallback otherwise). Fetched fresh on demand rather than
+  // kept in state from any earlier poll, since VPN Gate's own server list
+  // rotates - a config more than a few minutes old could already point at a
+  // server that's gone.
+  const [handoff, setHandoff] = useState<'shared' | 'downloaded' | null>(null);
+
   async function downloadConfig(mac: string) {
     setBusy(`shield-config-${mac}`);
     setConfigResult(null);
+    setHandoff(null);
     try {
       const result = await kioskApi.getVpnGateConfig(mac);
       setConfigResult(result);
       setConfigFor(mac);
       if (result.available && result.configText) {
-        const blob = new Blob([result.configText], { type: 'application/x-openvpn-profile' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `gateflame-shield-${(result.countryCode ?? 'region').toLowerCase()}.ovpn`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        const filename = `gateflame-shield-${(result.countryCode ?? 'region').toLowerCase()}.ovpn`;
+        setHandoff(await handOffConfigFile(filename, result.configText));
       }
     } catch (err) {
       setConfigResult({ available: false, error: err instanceof Error ? err.message : 'That did not go through.' });
@@ -457,29 +514,74 @@ function ShieldCard({
               </div>
               {row.enabled && (
                 <>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {r.regions.map((reg) => {
-                      const on = reg.code === row.region && reg.provider === row.provider;
-                      return (
-                        <button
-                          key={`${reg.provider}-${reg.code}`}
-                          disabled={busy !== null || !reg.available}
-                          onClick={() => setDevice(row.mac, reg.code, true, reg.provider)}
-                          className={`rounded-lg border px-2.5 py-1 text-[11px] disabled:opacity-40 ${
-                            on
-                              ? 'border-[#38BDF8]/60 bg-[#38BDF8]/10 text-[#38BDF8]'
-                              : 'border-[#1E293B] bg-[#0B1420] text-slate-300'
-                          }`}
-                        >
-                          {reg.label}
-                          {reg.provider === 'vpngate' && (
-                            <span className="text-[#64748B]"> · community</span>
-                          )}
-                          {!reg.available && ' (offline)'}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {/* Ionity's own regions (headscale), once any exist - a small,
+                      curated set with no continent concept, so always shown
+                      directly rather than behind the "exact country" toggle
+                      below, which exists only to keep VPN Gate's much longer
+                      country list from cluttering this row by default. */}
+                  {r.regions.some((reg) => reg.provider === 'headscale') && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {r.regions
+                        .filter((reg) => reg.provider === 'headscale')
+                        .map((reg) => (
+                          <RegionChip
+                            key={`${reg.provider}-${reg.code}`}
+                            label={reg.label}
+                            active={reg.code === row.region && reg.provider === row.provider}
+                            available={reg.available}
+                            disabled={busy !== null}
+                            onClick={() => setDevice(row.mac, reg.code, true, reg.provider)}
+                          />
+                        ))}
+                    </div>
+                  )}
+
+                  {/* VPN Gate, grouped by continent - Dennis's own ask: picking
+                      "Europe" beats picking one of fifteen European countries.
+                      Tapping a continent resolves straight to its current best
+                      country; nothing downstream needs to know continents exist. */}
+                  {continentList.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {continentList.map((c) => (
+                        <RegionChip
+                          key={c.code}
+                          label={c.label}
+                          active={row.provider === 'vpngate' && row.region === c.bestCountryCode}
+                          available={c.available}
+                          disabled={busy !== null}
+                          onClick={() => setDevice(row.mac, c.bestCountryCode, true, 'vpngate')}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {continentList.length > 0 && (
+                    <button
+                      disabled={busy !== null}
+                      onClick={() => setShowExactFor(showExactFor === row.mac ? null : row.mac)}
+                      className="mt-2 text-[11px] text-[#64748B] underline decoration-dotted disabled:opacity-40"
+                    >
+                      {showExactFor === row.mac ? 'Hide exact countries' : 'Choose an exact country instead'}
+                    </button>
+                  )}
+
+                  {(showExactFor === row.mac || continentList.length === 0) && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {r.regions
+                        .filter((reg) => reg.provider === 'vpngate')
+                        .map((reg) => (
+                          <RegionChip
+                            key={`${reg.provider}-${reg.code}`}
+                            label={reg.label}
+                            active={reg.code === row.region && reg.provider === row.provider}
+                            available={reg.available}
+                            disabled={busy !== null}
+                            onClick={() => setDevice(row.mac, reg.code, true, reg.provider)}
+                            community
+                          />
+                        ))}
+                    </div>
+                  )}
 
                   {row.provider === 'vpngate' && row.region && (
                     <div className="mt-2">
@@ -493,7 +595,9 @@ function ShieldCard({
                       {configFor === row.mac && configResult && (
                         <p className="mt-1 text-[11px] leading-relaxed text-[#64748B]">
                           {configResult.available
-                            ? `Saved. Open it with your phone's OpenVPN app to connect via ${configResult.hostname ?? 'the selected server'}.`
+                            ? handoff === 'shared'
+                              ? `Pick your OpenVPN app from the share sheet to connect via ${configResult.hostname ?? 'the selected server'}.`
+                              : `Saved. Open it with your phone's OpenVPN app to connect via ${configResult.hostname ?? 'the selected server'}.`
                             : configResult.error ?? "That server isn't available right now."}
                         </p>
                       )}
@@ -506,5 +610,39 @@ function ShieldCard({
         </div>
       )}
     </Card>
+  );
+}
+
+function RegionChip({
+  label,
+  active,
+  available,
+  disabled,
+  onClick,
+  community = false,
+}: {
+  label: string;
+  active: boolean;
+  available: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  /** Small, honest "not audited infrastructure" tag - see vpngate.py's own
+   * docstring for why this is never omitted for a VPN Gate entry. */
+  community?: boolean;
+}) {
+  return (
+    <button
+      disabled={disabled || !available}
+      onClick={onClick}
+      className={`rounded-lg border px-2.5 py-1 text-[11px] disabled:opacity-40 ${
+        active
+          ? 'border-[#38BDF8]/60 bg-[#38BDF8]/10 text-[#38BDF8]'
+          : 'border-[#1E293B] bg-[#0B1420] text-slate-300'
+      }`}
+    >
+      {label}
+      {community && <span className="text-[#64748B]"> · community</span>}
+      {!available && ' (offline)'}
+    </button>
   );
 }

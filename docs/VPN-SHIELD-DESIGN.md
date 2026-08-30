@@ -88,15 +88,40 @@ labels every vpngate-sourced region in the API and UI with `"provider":
 "vpngate"` plus a small "· community" tag in the region chip — small,
 honest, not alarmist, not hidden.
 
-Onboarding a device onto this path is a config download, not an in-app
+Onboarding a device onto this path is a config handoff, not an in-app
 tunnel: `GET /api/v1/vpn/devices/{mac}/vpngate-config` fetches the current
 best server for that device's chosen country live (never cached — VPN Gate's
 list genuinely rotates), decodes its OpenVPN config, and the mobile screen
-offers it as a `.ovpn` file download for the owner to open with their
-phone's own OpenVPN client. See "What isn't built yet" below for why this is
-a handoff rather than a fully embedded tunnel today.
+hands the file to the OS's own share sheet (`@capacitor/filesystem` +
+`@capacitor/share`, both official Capacitor plugins - no bespoke native code)
+so the owner picks their installed OpenVPN app directly, rather than hunting
+through Downloads for a file they don't recognise. Falls back to a plain
+browser download if those plugins aren't available in the current context
+(e.g. a desktop browser preview). See "What isn't built yet" below for why
+this is a handoff rather than a fully embedded tunnel today.
+
+**Picking a continent instead of a country.** Fifteen individual European
+countries is a worse product than one "Europe" tile, so
+`GET /api/v1/vpn/continents` groups VPN Gate's live country list by
+continent and already resolves each one to its own current best-scoring
+country (`bestCountryCode`). This is display-and-selection sugar only - no
+new storage concept exists for it. Tapping a continent tile calls the exact
+same `apply_device_region`/`setVpnDevice` path as tapping a specific country
+directly; a "choose an exact country instead" toggle underneath still
+reaches the full per-country list for anyone who needs a specific one (BBC
+iPlayer wants the UK specifically, not "wherever in Europe scores highest").
 
 ## What isn't built yet, and why
+
+**Note on verification:** the continent grouping and the storage/API changes
+underneath it were exercised directly (real CSV parsing, real grouping, real
+route registration) the same way the rest of this feature was. The share-
+sheet handoff itself was only verified by type-checking
+(`tsc --noEmit`) - `@capacitor/filesystem` and `@capacitor/share` were not
+run on an actual Android/iOS build in this pass, so the on-device behaviour
+(does the share sheet actually list an installed OpenVPN app, does the
+cache-directory file get cleaned up sensibly) needs confirming on a real
+device before this ships, not assumed from the code alone.
 
 **A fully in-app, one-tap tunnel.** Gate^Flame's mobile shell is a Capacitor/
 React app (see `src/mobile/`), not a native VPN client. Embedding a real

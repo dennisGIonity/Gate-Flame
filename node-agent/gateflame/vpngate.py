@@ -94,6 +94,39 @@ def _country_label(code: str) -> str:
     return _COUNTRY_LABELS.get(code.upper(), code.upper())
 
 
+# Continent grouping - lets the mobile screen offer "Europe" instead of
+# making someone pick between fifteen individual European countries. Static
+# geography, not something that goes stale the way server lists do. Any code
+# missing from this map still works - it just falls back to "Other", grouped
+# rather than dropped, so a country VPN Gate adds tomorrow is never silently
+# excluded from the picker.
+_CONTINENT_MAP = {
+    "DZ": "Africa", "AO": "Africa", "EG": "Africa", "ET": "Africa", "GH": "Africa",
+    "KE": "Africa", "MA": "Africa", "NG": "Africa", "ZA": "Africa", "TN": "Africa",
+    "TZ": "Africa", "UG": "Africa",
+    "CA": "North America", "US": "North America", "MX": "North America",
+    "CR": "North America", "PA": "North America", "CU": "North America",
+    "AR": "South America", "BR": "South America", "CL": "South America",
+    "CO": "South America", "PE": "South America", "VE": "South America",
+    "EC": "South America", "UY": "South America",
+    "GB": "Europe", "DE": "Europe", "FR": "Europe", "NL": "Europe", "IT": "Europe",
+    "ES": "Europe", "SE": "Europe", "CH": "Europe", "PL": "Europe", "UA": "Europe",
+    "RU": "Europe", "PT": "Europe", "BE": "Europe", "AT": "Europe", "IE": "Europe",
+    "NO": "Europe", "DK": "Europe", "FI": "Europe", "GR": "Europe", "RO": "Europe",
+    "CZ": "Europe", "HU": "Europe", "BG": "Europe", "SK": "Europe", "HR": "Europe",
+    "LT": "Europe", "LV": "Europe", "EE": "Europe", "IS": "Europe", "LU": "Europe",
+    "JP": "Asia", "KR": "Asia", "CN": "Asia", "TW": "Asia", "HK": "Asia",
+    "IN": "Asia", "VN": "Asia", "TH": "Asia", "ID": "Asia", "MY": "Asia",
+    "SG": "Asia", "PH": "Asia", "TR": "Asia", "IL": "Asia", "AE": "Asia",
+    "SA": "Asia", "PK": "Asia", "BD": "Asia", "KZ": "Asia", "MN": "Asia",
+    "AU": "Oceania", "NZ": "Oceania",
+}
+
+
+def _continent(code: str) -> str:
+    return _CONTINENT_MAP.get(code.upper(), "Other")
+
+
 def last_fetch_ok() -> bool:
     """False until the first successful fetch, or if the most recent one failed
     AND there is no earlier good cache to fall back on."""
@@ -194,6 +227,54 @@ def list_countries() -> list[dict]:
             ),
         })
     return sorted(countries, key=lambda c: c["code"])
+
+
+def list_continents() -> list[dict]:
+    """One tile per continent that currently has at least one server, each
+    naming the single best-scoring country within it right now.
+
+    This exists because asking someone to pick the right one of fifteen
+    European countries is a worse product than asking them to pick "Europe" -
+    Dennis's own ask. It resolves to a concrete country immediately rather
+    than inventing a new stored concept: the mobile screen calls
+    apply_device_region with `bestCountryCode` exactly as if the owner had
+    picked that country directly, so nothing downstream (storage, the config
+    endpoint) needs to know "continent" exists at all - it is a display and
+    selection convenience only, resolved once at pick time.
+    """
+    _refresh()
+    with _lock:
+        rows = list(_cache)
+
+    def _score(r: dict) -> float:
+        try:
+            return float(r.get("Score") or 0)
+        except ValueError:
+            return 0.0
+
+    groups: dict[str, list[dict]] = {}
+    for row in rows:
+        code = (row.get("CountryShort") or "").strip().upper()
+        if not code:
+            continue
+        groups.setdefault(_continent(code), []).append(row)
+
+    continents = []
+    for name, group_rows in groups.items():
+        best = max(group_rows, key=_score)
+        best_code = (best.get("CountryShort") or "").strip().upper()
+        countries = sorted({(r.get("CountryShort") or "").strip().upper() for r in group_rows})
+        continents.append({
+            "code": name.lower().replace(" ", "-"),
+            "label": name,
+            "provider": "vpngate",
+            "available": True,
+            "bestCountryCode": best_code,
+            "bestCountryLabel": _country_label(best_code),
+            "countryCount": len(countries),
+            "serverCount": len(group_rows),
+        })
+    return sorted(continents, key=lambda c: c["label"])
 
 
 def get_ovpn_config(country_code: str) -> dict | None:

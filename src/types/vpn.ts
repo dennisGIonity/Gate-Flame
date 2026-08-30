@@ -54,6 +54,27 @@ export interface VpnRegionsResponse {
   regions: VpnRegion[];
 }
 
+/**
+ * One tile per continent that currently has at least one VPN Gate server,
+ * already resolved to its own best country - picking a continent tile is
+ * exactly picking `bestCountryCode` directly, nothing downstream needs to
+ * know continents exist. See vpngate.py's list_continents().
+ */
+export interface VpnContinent {
+  code: string;
+  label: string;
+  provider: 'vpngate';
+  available: boolean;
+  bestCountryCode: string;
+  bestCountryLabel: string;
+  countryCount: number;
+  serverCount: number;
+}
+
+export interface VpnContinentsResponse {
+  continents: VpnContinent[];
+}
+
 /** One device's live VPN Gate config, fetched fresh each time - never cached
  * against the device, since VPN Gate's own server list rotates. */
 export interface VpnGateConfigResponse {

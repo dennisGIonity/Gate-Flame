@@ -657,6 +657,15 @@ def put_vpn_device(
     return result
 
 
+@app.get("/api/v1/vpn/continents")
+def get_vpn_continents(request: Request, _=Depends(read_scope)):
+    """Coarser than /vpn/regions on purpose - one tile per continent, each
+    already resolved to its own best country right now. See
+    vpngate.list_continents() for why this doesn't need its own storage
+    concept."""
+    return {"continents": vpngate.list_continents()}
+
+
 @app.get("/api/v1/vpn/devices/{mac}/vpngate-config")
 def get_vpngate_device_config(mac: str, request: Request, _=Depends(read_scope)):
     """The actual .ovpn text for a device currently on the VPN Gate path -
