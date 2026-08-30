@@ -99,6 +99,28 @@ CREATE TABLE IF NOT EXISTS console_lockout (
     failed_attempts INTEGER NOT NULL DEFAULT 0,
     locked_until REAL
 );
+
+-- Names the OWNER typed for the devices on their LAN.
+--
+-- On a side-car box this is the ONLY source of a real device name: the router
+-- runs DHCP, so we never see a hostname, and most phones now randomise their
+-- MAC so there is no vendor to fall back on either (device_names.py). Without
+-- this table the Shield screen can only ever list raw MACs, which is what the
+-- owner reported as unreadable.
+--
+-- Keyed by MAC because that is what survives a DHCP renew. A device that
+-- randomises its MAC per network keeps the same one for THIS network, so the
+-- name sticks - but it will look like a new device on someone else's Wi-Fi,
+-- which is the privacy feature working as intended and not a bug to fix.
+--
+-- Deliberately NOT part of the health feed: a name is household data, and
+-- PAIRING-AND-TELEMETRY.md 4.1 keeps names, domains and client IPs off the
+-- wire entirely. It stays on the box.
+CREATE TABLE IF NOT EXISTS device_names (
+    mac TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
 """
 
 
@@ -316,6 +338,44 @@ class Store:
                 (attempts, locked_until),
             )
         return attempts, locked_until
+
+    # ---- LAN device names -------------------------------------------------
+    #
+    # See the device_names table comment. These are household-only and never
+    # leave the box.
+
+    #
+
+    # Long enough for "Mom's iPad in the kitchen", short enough that a pasted
+    # essay cannot bloat the row or the screen that renders it.
+    DEVICE_NAME_MAX = 48
+
+    def device_names(self) -> dict[str, str]:
+        """mac -> owner-chosen name, for every named device."""
+        with self._cursor() as cur:
+            cur.execute("SELECT mac, name FROM device_names")
+            return {row[0]: row[1] for row in cur.fetchall()}
+
+    def set_device_name(self, mac: str, name: str | None) -> None:
+        """Name a device, or clear the name by passing None/blank.
+
+        Clearing is a real operation, not a no-op: it puts the device back to
+        showing its vendor or MAC, which is the honest fallback. Storing an
+        empty string instead would leave a device with a blank label and no
+        way to identify it.
+        """
+        mac = mac.lower().strip()
+        cleaned = (name or "").strip()[: self.DEVICE_NAME_MAX]
+        with self._cursor() as cur:
+            if not cleaned:
+                cur.execute("DELETE FROM device_names WHERE mac = ?", (mac,))
+            else:
+                cur.execute(
+                    "INSERT INTO device_names (mac, name, updated_at) VALUES (?, ?, ?) "
+                    "ON CONFLICT(mac) DO UPDATE SET name = excluded.name, "
+                    "updated_at = excluded.updated_at",
+                    (mac, cleaned, time.time()),
+                )
 
     # ---- devices ----------------------------------------------------------
 

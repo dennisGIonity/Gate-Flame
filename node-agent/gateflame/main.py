@@ -12,6 +12,7 @@ or via the systemd unit in install.sh on the Pi.
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import time
 
@@ -242,7 +243,41 @@ def get_threats(limit: int = 20, _=Depends(read_scope)):
 
 @app.get("/api/v1/clients")
 def get_clients(_=Depends(read_scope)):
-    return {"clients": clients_mod.list_clients()}
+    # Owner-typed names are merged in here rather than inside clients.py so
+    # that module stays a pure reader of the system - it does no I/O against
+    # our own database, which keeps it testable without a Store.
+    return {"clients": clients_mod.list_clients(store.device_names())}
+
+
+class DeviceNameBody(BaseModel):
+    # None or "" clears the name and puts the device back to showing its
+    # vendor or MAC. That is a deliberate operation, not an error.
+    name: str | None = None
+
+
+@app.put("/api/v1/clients/{mac}/name")
+def set_client_name(mac: str, body: DeviceNameBody, _=Depends(control_scope)):
+    """Name a device on the LAN so it stops reading as a bare MAC.
+
+    `control` scope, not `kiosk`: naming your own TV is exactly the kind of
+    thing the paired phone should do from the sofa, and it changes nothing
+    about protection. It is also household data that never leaves the box -
+    see the device_names table comment and PAIRING-AND-TELEMETRY.md 4.1.
+
+    Returns the refreshed client list so the caller re-reads the box's own
+    answer rather than trusting an optimistic local edit - same rule the
+    filtering writes follow.
+    """
+    normalised = mac.lower().strip()
+    # Reject anything that is not a MAC before it reaches the database. A
+    # path parameter is attacker-controlled even on a LAN-scoped route.
+    if not re.fullmatch(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}", normalised):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "bad_mac", "advisory": "That is not a MAC address."},
+        )
+    store.set_device_name(normalised, body.name)
+    return {"clients": clients_mod.list_clients(store.device_names())}
 
 
 # ---- Modules / services -----------------------------------------------------

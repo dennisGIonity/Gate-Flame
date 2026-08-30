@@ -68,7 +68,9 @@ export function ShieldPanel({ authority, active }: PanelContext) {
   const rows: ShieldRow[] = [
     ...lanList.map((c) => ({
       mac: c.mac,
-      label: c.hostname || c.mac,
+      // Computed on the node (device_names.py) so this console and the phone
+      // always call a device the same thing. Falls back for older agents.
+      label: c.label || c.hostname || c.mac,
       region: byMac.get(c.mac)?.region ?? null,
       enabled: byMac.get(c.mac)?.enabled ?? false,
       peerRegistered: byMac.get(c.mac)?.peerRegistered ?? false,

@@ -85,11 +85,34 @@ interface ClientsResponse {
 
 interface ShieldRow {
   mac: string;
+  /** What to show. The node decides this (device_names.py) so the phone and
+   * the wall console can never disagree about what a device is called. */
   label: string;
+  /** Shown small under the label, so the MAC is still there when someone
+   * needs it without being the thing they have to read. */
+  detail: string;
+  ownerName: string | null;
   region: string | null;
   enabled: boolean;
   peerRegistered: boolean;
   provider: VpnProvider;
+}
+
+/**
+ * The second line under a device's name.
+ *
+ * A named device shows what it actually is underneath - vendor and address -
+ * so naming something never hides the identifying detail. An unnamed device
+ * shows why it has no better name yet: a randomised MAC genuinely has no
+ * vendor to look up, and saying so beats an empty space that reads like a
+ * failed lookup.
+ */
+function detailFor(c: { mac: string; vendor?: string | null; randomisedMac?: boolean; ownerName?: string | null }): string {
+  const bits: string[] = [];
+  if (c.vendor) bits.push(c.vendor);
+  else if (c.randomisedMac) bits.push('private address');
+  bits.push(c.mac);
+  return bits.join(' · ');
 }
 
 export function ShieldScreen({ active }: { active: boolean }) {
@@ -110,6 +133,10 @@ export function ShieldScreen({ active }: { active: boolean }) {
   const [configResult, setConfigResult] = useState<VpnGateConfigResponse | null>(null);
   const [handoff, setHandoff] = useState<'shared' | 'downloaded' | null>(null);
 
+  // Which device is being renamed, and the text so far. Null = nobody.
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState('');
+
   const r = regions.data;
   const continentList = continents.data?.continents ?? [];
   const knownDevices = devices.data?.devices ?? [];
@@ -123,7 +150,11 @@ export function ShieldScreen({ active }: { active: boolean }) {
   const rows: ShieldRow[] = [
     ...lanList.map((c) => ({
       mac: c.mac,
-      label: c.hostname || c.mac,
+      // `label` is computed on the node. Falling back through hostname to the
+      // MAC keeps this working against an older agent that predates it.
+      label: c.label || c.hostname || c.mac,
+      detail: detailFor(c),
+      ownerName: c.ownerName ?? null,
       region: byMac.get(c.mac)?.region ?? null,
       enabled: byMac.get(c.mac)?.enabled ?? false,
       peerRegistered: byMac.get(c.mac)?.peerRegistered ?? false,
@@ -134,12 +165,32 @@ export function ShieldScreen({ active }: { active: boolean }) {
       .map((d) => ({
         mac: d.mac,
         label: d.mac,
+        // Shield knows this device but the box cannot see it on the LAN right
+        // now — a guest who left, or a phone that is off. Said plainly,
+        // because its tunnel can still be switched off from here.
+        detail: 'not on the network right now',
+        ownerName: null,
         region: d.region,
         enabled: d.enabled,
         peerRegistered: d.peerRegistered,
         provider: d.provider ?? 'headscale',
       })),
   ];
+
+  async function saveName(mac: string) {
+    setBusy(`name-${mac}`);
+    setProblem(null);
+    try {
+      await kioskApi.setClientName(mac, draftName);
+      clients.refresh();
+      setRenaming(null);
+      setDraftName('');
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : 'That name did not save.');
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function setDevice(mac: string, region: string | null, enabled: boolean, provider: VpnProvider) {
     setBusy(`shield-${mac}`);
@@ -215,8 +266,58 @@ export function ShieldScreen({ active }: { active: boolean }) {
           <div className="flex flex-col gap-2.5">
             {rows.map((row) => (
               <div key={row.mac} className="rounded-xl border border-[#1E293B] bg-[#0F1B2D] p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm text-slate-200">{row.label}</span>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    {renaming === row.mac ? (
+                      /* Renaming replaces the label in place rather than
+                         opening a dialog: on a phone a modal for one short
+                         field is more ceremony than the edit is worth. */
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={draftName}
+                          maxLength={48}
+                          onChange={(e) => setDraftName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') void saveName(row.mac);
+                            if (e.key === 'Escape') setRenaming(null);
+                          }}
+                          placeholder="e.g. Kyle's tablet"
+                          className="min-w-0 flex-1 rounded-lg border border-[#38BDF8]/60 bg-[#0B1420] px-2.5 py-1.5 text-sm text-slate-100 outline-none placeholder:text-[#475569]"
+                        />
+                        <button
+                          disabled={busy !== null}
+                          onClick={() => void saveName(row.mac)}
+                          className="shrink-0 rounded-lg bg-[#38BDF8] px-2.5 py-1.5 text-[11px] font-semibold text-[#081018] disabled:opacity-60"
+                        >
+                          {busy === `name-${row.mac}` ? '…' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => setRenaming(null)}
+                          className="shrink-0 rounded-lg border border-[#1E293B] px-2.5 py-1.5 text-[11px] text-[#64748B]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setRenaming(row.mac);
+                          // Seed with the existing name only. Pre-filling a
+                          // vendor guess would turn "Apple 1CCB" into a name
+                          // the owner never chose the moment they hit save.
+                          setDraftName(row.ownerName ?? '');
+                        }}
+                        className="block w-full text-left"
+                      >
+                        <span className="block truncate text-sm text-slate-200">{row.label}</span>
+                        <span className="mt-0.5 block truncate font-mono text-[10px] text-[#475569]">
+                          {row.detail}
+                          <span className="ml-1.5 text-[#38BDF8]">rename</span>
+                        </span>
+                      </button>
+                    )}
+                  </div>
                   <button
                     disabled={busy !== null}
                     onClick={() => {
@@ -228,7 +329,7 @@ export function ShieldScreen({ active }: { active: boolean }) {
                         row.region ? row.provider : (fallback?.provider ?? 'headscale'),
                       );
                     }}
-                    className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+                    className={`relative mt-1 h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
                       row.enabled ? 'bg-[#38BDF8]' : 'bg-[#334155]'
                     }`}
                   >

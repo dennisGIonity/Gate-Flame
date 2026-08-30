@@ -157,9 +157,26 @@ export interface TelemetrySummary {
 export interface LanClient {
   ip: string;
   mac: string;
-  /** Frequently null. IP is the primary identifier; never invent a name. */
+  /** From the DHCP lease file. ALWAYS null on a side-car box - the router
+   * runs DHCP, so we never see one. Kept for premium/in-path boxes. */
   hostname: string | null;
   interface: string;
+  /** Every interface this device was seen on. The box is dual-homed, so one
+   * device legitimately appears on both eth0 and wlan0; clients.py merges
+   * them into a single entry and records both here. */
+  interfaces?: string[];
+  /** The name the owner typed, or null. The only source that can be right
+   * for a phone - see device_names.py. */
+  ownerName?: string | null;
+  /** IEEE OUI vendor, or null. Null for a randomised MAC, where no vendor
+   * exists to look up rather than the lookup having failed. */
+  vendor?: string | null;
+  /** True when the device randomises its MAC for privacy. Explains, rather
+   * than hides, why there is no vendor to show. */
+  randomisedMac?: boolean;
+  /** What to render: ownerName > hostname > "Vendor ABCD" > raw MAC.
+   * Decided on the node so the phone and the console cannot disagree. */
+  label?: string;
 }
 
 export type ModuleStatus = 'running' | 'stopped' | 'degraded' | 'not_implemented' | 'starting' | 'stopping' | 'failed';
@@ -431,6 +448,20 @@ export const kioskApi = {
   // fresh (never cached) since VPN Gate's own server list rotates.
   getVpnGateConfig: (mac: string) =>
     nodeRequest<VpnGateConfigResponse>(`/vpn/devices/${encodeURIComponent(mac)}/vpngate-config`),
+
+  /**
+   * Name a device on the LAN. Passing null or '' clears the name and puts it
+   * back to its vendor or MAC — a real operation, not a cancel.
+   *
+   * Returns the node's refreshed client list rather than echoing the write,
+   * so the caller renders what the box now believes instead of an optimistic
+   * guess. Same rule the filtering writes follow.
+   */
+  setClientName: (mac: string, name: string | null) =>
+    nodeRequest<{ clients: LanClient[] }>(`/clients/${encodeURIComponent(mac)}/name`, {
+      method: 'PUT',
+      body: { name },
+    }),
 };
 
 // ---------------------------------------------------------------------------
