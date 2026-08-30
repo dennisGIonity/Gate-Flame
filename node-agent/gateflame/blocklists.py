@@ -34,7 +34,7 @@ import httpx
 
 from . import content_categories, threat_level
 from .config import config
-from .pihole import _get, _session, _base, summary
+from .pihole import _base, _get, _session, summary
 
 _TIMEOUT = 30.0
 
@@ -131,7 +131,7 @@ def apply(settings: dict) -> bool:
     which is a safe place to fail: protection does not drop, it just does not
     change.
     """
-    global _applying, _last_error
+    global _last_error
 
     wanted = set(desired_lists(settings))
     existing = current_lists()
@@ -168,7 +168,7 @@ def apply(settings: dict) -> bool:
         # `?type=block` is 201. The delete call below has always used the query
         # form; only the add was wrong, and because its return value was
         # discarded the 400 was invisible for eight days.
-        if _post(f"/api/lists?type=block", {"address": url, "enabled": True}) is None:
+        if _post("/api/lists?type=block", {"address": url, "enabled": True}) is None:
             failed.append(f"Pi-hole rejected {url}")
 
     if failed:

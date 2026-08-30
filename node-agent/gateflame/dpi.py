@@ -234,7 +234,7 @@ def parse_frame(frame: bytes) -> Observation | None:
         return _parse_frame_inner(frame)
     except _Reader._Truncated:
         return None
-    except Exception:  # noqa: BLE001 — a parser bug must not kill the module
+    except Exception:
         logger.debug("frame parse failed", exc_info=True)
         return None
 
@@ -392,10 +392,12 @@ def capability(has_cap_net_raw=None) -> tuple[bool, str | None]:
         if not probe():
             return (
                 False,
-                "no CAP_NET_RAW — grant it to the unit "
-                "(AmbientCapabilities=CAP_NET_RAW in gateflame.service), never run as root",
+                (
+                    "no CAP_NET_RAW — grant it to the unit "
+                    "(AmbientCapabilities=CAP_NET_RAW in gateflame.service), never run as root"
+                ),
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — this must never raise, only report a gap
         return False, f"cannot determine packet capture capability: {exc}"
     return True, None
 
