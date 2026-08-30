@@ -1,109 +1,412 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Gate^Flame Fleet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0b0f14; --panel: #121821; --border: #232c38; --text: #e8edf3; --muted: #8ba0b6;
-    --green: #34c77b; --amber: #f5b942; --red: #f2545b;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
-  header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; justify-content: space-between; }
-  h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: 0.3px; }
-  #summary { color: var(--muted); font-size: 13px; }
-  main { padding: 24px; }
-  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
-  tr:last-child td { border-bottom: none; }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-  .dot.online { background: var(--green); }
-  .dot.stale { background: var(--amber); }
-  .dot.offline { background: var(--red); }
-  .mod { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; margin-right: 4px; border: 1px solid var(--border); }
-  .mod.running { color: var(--green); }
-  .mod.degraded { color: var(--amber); }
-  .mod.stopped { color: var(--red); }
-  .empty { color: var(--muted); padding: 40px; text-align: center; }
-  code { color: var(--muted); }
+/*
+ * Gate^Flame Fleet — styled to the product's own design language, lifted from
+ * src/index.css and the console: Outfit/Jakarta/JetBrains Mono, near-black
+ * slate, sky-500 glass borders with a glow, rounded-3xl panels.
+ *
+ * The fonts are loaded from Google with real fallback stacks behind them, so
+ * a box with no internet still renders correctly — just in system faces.
+ *
+ * THE RULE FROM THE REST OF THIS PROJECT APPLIES HERE TOO: nothing on this
+ * page is invented. Every figure comes from /api/v1/nodes, which comes from
+ * what a node actually posted. A value the API did not return renders as an
+ * em-dash, never as a zero — a missing reading and a real zero mean opposite
+ * things. There are no placeholder rows, no demo node, no sample data.
+ */
+:root {
+  --bg:        #050505;
+  --panel:     rgba(0,0,0,0.60);
+  --panel-2:   #0a0a0a;
+  --line:      #262626;
+  --text:      #f8fafc;
+  --muted:     #8ba0b6;
+  --dim:       #64748b;
+
+  --sky-400:   #38bdf8;
+  --sky-500:   #0ea5e9;
+
+  --green:     #10b981;
+  --amber:     #f59e0b;
+  --red:       #f43f5e;
+  --purple:    #a855f7;
+
+  --glass-border: rgba(14,165,233,0.60);
+  --glass-glow:   0 0 16px 2px rgba(14,165,233,0.25);
+
+  --font-display: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans:    "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  overflow-x: hidden;
+}
+/* The console's radial glow. Atmosphere only — it encodes nothing, which is
+   the sole reason a screen this literal is allowed any decoration at all. */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% -10%, rgba(14,165,233,0.13) 0%, transparent 55%);
+}
+.wrap { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 28px 56px; }
+
+/* ---------------------------------------------------------------- header */
+header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 24px; flex-wrap: wrap;
+  padding: 34px 0 26px;
+}
+.brand { display: flex; align-items: center; gap: 16px; }
+.mark {
+  width: 46px; height: 46px; border-radius: 14px;
+  display: grid; place-items: center;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.mark svg { width: 24px; height: 24px; color: var(--sky-500); }
+h1 {
+  font-family: var(--font-display);
+  font-size: 30px; font-weight: 200; letter-spacing: -0.5px;
+  margin: 0; line-height: 1.1;
+}
+h1 b { font-weight: 700; }
+h1 .caret { color: var(--sky-500); font-weight: 400; }
+.sub {
+  margin-top: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.2em;
+  color: #475569;
+}
+.pulse {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.14em;
+  color: var(--sky-400); font-weight: 700;
+  padding: 10px 16px; border-radius: 16px;
+  background: var(--panel); backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border); box-shadow: var(--glass-glow);
+}
+.pulse .beat {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--sky-400); box-shadow: 0 0 10px var(--sky-400);
+  animation: beat 2.4s ease-in-out infinite;
+}
+@keyframes beat { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .pulse .beat { animation: none; } }
+
+/* ------------------------------------------------------------ stat tiles */
+.tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px; margin-bottom: 22px;
+}
+.tile {
+  background: var(--panel); backdrop-filter: blur(24px);
+  border: 1px solid var(--line); border-radius: 20px;
+  padding: 18px 20px;
+}
+.tile .k {
+  font-family: var(--font-mono); font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: 0.19em; color: var(--dim);
+}
+.tile .v {
+  font-family: var(--font-display); font-weight: 300;
+  font-size: 34px; line-height: 1.15; margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.tile .v small { font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+.tile.good .v { color: var(--green); }
+.tile.warn .v { color: var(--amber); }
+.tile.bad  .v { color: var(--red); }
+
+/* ----------------------------------------------------------- node cards */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; }
+.node {
+  background: var(--panel); backdrop-filter: blur(28px);
+  border: 1px solid var(--glass-border); box-shadow: var(--glass-glow);
+  border-radius: 24px; padding: 22px 24px 20px;
+}
+.node.stale   { border-color: rgba(245,158,11,0.55); box-shadow: 0 0 16px 2px rgba(245,158,11,0.18); }
+.node.offline { border-color: rgba(244,63,94,0.55);  box-shadow: 0 0 16px 2px rgba(244,63,94,0.18); }
+
+.node-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.node-id { font-family: var(--font-mono); font-size: 17px; font-weight: 700; letter-spacing: 0.02em; }
+.node-meta { margin-top: 4px; font-family: var(--font-mono); font-size: 10.5px; color: var(--dim); }
+.pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.14em;
+  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+}
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+.pill.online  { color: var(--green);  background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.35); }
+.pill.online .dot  { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.pill.stale   { color: var(--amber);  background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.35); }
+.pill.stale .dot   { background: var(--amber); }
+.pill.offline { color: var(--red);    background: rgba(244,63,94,0.10);  border: 1px solid rgba(244,63,94,0.35); }
+.pill.offline .dot { background: var(--red); }
+
+/* meters */
+.meters { margin-top: 20px; display: grid; gap: 13px; }
+.meter .row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-mono); font-size: 10.5px; margin-bottom: 6px;
+}
+.meter .row .lbl { text-transform: uppercase; letter-spacing: 0.16em; color: var(--dim); }
+.meter .row .val { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.bar { height: 5px; border-radius: 999px; background: #141414; overflow: hidden; }
+.bar span { display: block; height: 100%; border-radius: 999px; transition: width .6s ease; }
+/* An unknown reading draws no bar at all rather than a zero-length one — an
+   empty bar and a genuine 0% must not look the same. */
+.bar.unknown { background: repeating-linear-gradient(90deg,#141414 0 6px,transparent 6px 12px); }
+
+.facts { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px 22px; font-family: var(--font-mono); font-size: 11px; }
+.facts span { color: var(--dim); }
+.facts b { color: var(--text); font-weight: 500; }
+
+.mods { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+.mod {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em;
+  padding: 4px 9px; border-radius: 8px;
+  background: #0a0a0a; border: 1px solid var(--line); color: var(--muted);
+}
+.mod.running   { color: var(--green);  border-color: rgba(16,185,129,0.35); }
+.mod.degraded  { color: var(--amber);  border-color: rgba(245,158,11,0.35); }
+.mod.stopped   { color: var(--dim); }
+.mod.failed    { color: var(--red);    border-color: rgba(244,63,94,0.35); }
+
+.gap {
+  margin-top: 14px; padding: 10px 13px; border-radius: 12px;
+  background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.28);
+  color: #fbbf24; font-size: 11.5px; line-height: 1.55;
+}
+.gap b { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; display: block; margin-bottom: 3px; }
+
+/* ---------------------------------------------------------- empty/error */
+.state {
+  border: 1px dashed var(--line); border-radius: 24px;
+  padding: 64px 32px; text-align: center; background: rgba(0,0,0,0.35);
+}
+.state h2 { font-family: var(--font-display); font-weight: 300; font-size: 22px; margin: 0 0 10px; }
+.state p { color: var(--muted); margin: 0 auto; max-width: 560px; font-size: 13.5px; line-height: 1.65; }
+.state code { font-family: var(--font-mono); font-size: 12px; color: var(--sky-400); }
+.state.fault { border-style: solid; border-color: rgba(244,63,94,0.45); }
+.state.fault h2 { color: var(--red); }
+
+footer {
+  margin-top: 34px; padding-top: 18px; border-top: 1px solid #141414;
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  font-family: var(--font-mono); font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: 0.22em; color: #334155;
+}
+
+/* ---------------------------------------------------------------- narrow
+   On a phone the tiles stacked one-per-row pushed every actual node below
+   the fold - four screens of summary before a single device. Two-up keeps
+   the summary to one glance, which is the only thing it is for. */
+@media (max-width: 640px) {
+  .wrap { padding: 0 16px 40px; }
+  header { padding: 24px 0 20px; }
+  h1 { font-size: 23px; }
+  .tiles { grid-template-columns: 1fr 1fr; gap: 11px; }
+  .tile { padding: 13px 14px; border-radius: 16px; }
+  .tile .v { font-size: 25px; margin-top: 5px; }
+  .tile .v small { font-size: 12px; }
+  .grid { grid-template-columns: 1fr; }
+  .node { padding: 18px 17px 16px; border-radius: 20px; }
+  .node-id { font-size: 15px; }
+  footer { justify-content: flex-start; gap: 6px 16px; }
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>Gate^Flame Fleet</h1>
-  <span id="summary">loading…</span>
-</header>
-<main>
-  <table id="tbl">
-    <thead>
-      <tr>
-        <th>Status</th><th>Node</th><th>Agent</th><th>Last seen</th><th>Uptime</th>
-        <th>CPU</th><th>Mem</th><th>Disk</th><th>Temp</th><th>Pi-hole</th>
-        <th>Modules</th><th>Errors/24h</th><th>Restarts/24h</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</main>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div>
+        <h1>GATE<span class="caret">^</span><b>FLAME</b> Fleet</h1>
+        <div class="sub" id="sub">connecting…</div>
+      </div>
+    </div>
+    <div class="pulse"><span class="beat"></span><span id="pulse">loading</span></div>
+  </header>
+
+  <div class="tiles" id="tiles" hidden></div>
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <span>Ionity Gate^Flame</span>
+    <span id="foot">health fields only · no domains, no client IPs</span>
+    <span>Building Tomorrow, Today.</span>
+  </footer>
+</div>
+
 <script>
+const DASH = '—';
+
 function fmtDuration(s) {
-  if (s == null) return '—';
+  if (s == null) return DASH;
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
   if (d > 0) return `${d}d ${h}h`;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
 function fmtAgo(s) {
+  if (s == null) return DASH;
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s/60)}m ago`;
   if (s < 86400) return `${Math.floor(s/3600)}h ago`;
   return `${Math.floor(s/86400)}d ago`;
 }
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* Colour follows the reading, not the label: the same meter goes green ->
+   amber -> red as the number gets worse, so the card is legible from across
+   a room without reading a single digit. */
+function tone(pct, warn, bad) {
+  if (pct == null) return 'var(--dim)';
+  if (pct >= bad)  return 'var(--red)';
+  if (pct >= warn) return 'var(--amber)';
+  return 'var(--green)';
+}
+function meter(label, pct, text, warn = 75, bad = 90) {
+  const known = pct != null && !Number.isNaN(pct);
+  const w = known ? Math.max(0, Math.min(100, pct)) : 0;
+  return `<div class="meter">
+    <div class="row"><span class="lbl">${label}</span><span class="val">${text}</span></div>
+    <div class="bar ${known ? '' : 'unknown'}">${known ? `<span style="width:${w}%;background:${tone(pct, warn, bad)}"></span>` : ''}</div>
+  </div>`;
+}
+
+function nodeCard(n) {
+  const h = n.host || {}, c = n.counters || {};
+  const memPct = (h.memUsedMB != null && h.memTotalMB) ? (100 * h.memUsedMB / h.memTotalMB) : null;
+  // 80C is where a Pi throttles hard; 70C is worth noticing. Scaled so the
+  // bar is readable rather than pinned at the bottom of a 0-100 range.
+  const tempPct = h.tempC != null ? (h.tempC / 85) * 100 : null;
+
+  const mods = (n.modules || []).map(m =>
+    `<span class="mod ${esc(m.status)}" title="${esc(m.gap || m.status || '')}">${esc((m.id || '').replace('module_',''))}</span>`
+  ).join('');
+
+  // A module that reported a reason for being unhappy gets that reason shown
+  // verbatim. The node already writes honest gap text; hiding it here would
+  // undo that work.
+  const gaps = (n.modules || []).filter(m => m.gap).map(m =>
+    `<div class="gap"><b>${esc((m.id || '').replace('module_',''))}</b>${esc(m.gap)}</div>`
+  ).join('');
+
+  return `<article class="node ${esc(n.status)}">
+    <div class="node-top">
+      <div>
+        <div class="node-id">${esc(n.nodeId)}</div>
+        <div class="node-meta">agent ${esc(n.agentVersion || DASH)} &middot; up ${fmtDuration(n.uptimeSeconds)} &middot; ${fmtAgo(n.lastSeenAgoSeconds)}</div>
+      </div>
+      <span class="pill ${esc(n.status)}"><span class="dot"></span>${esc(n.status)}</span>
+    </div>
+
+    <div class="meters">
+      ${meter('Processor', h.cpuPercent, h.cpuPercent != null ? h.cpuPercent.toFixed(0) + '%' : DASH)}
+      ${meter('Memory', memPct, (h.memUsedMB != null && h.memTotalMB)
+          ? `${(h.memUsedMB/1024).toFixed(1)} / ${(h.memTotalMB/1024).toFixed(1)} GB` : DASH)}
+      ${meter('Storage', h.diskUsedPercent, h.diskUsedPercent != null ? h.diskUsedPercent + '%' : DASH)}
+      ${meter('Temperature', tempPct, h.tempC != null ? h.tempC.toFixed(1) + ' °C' : DASH, 82, 94)}
+    </div>
+
+    <div class="facts">
+      <span>DNS filter <b style="color:${n.piholeReachable ? 'var(--green)' : 'var(--red)'}">${n.piholeReachable ? 'reachable' : 'unreachable'}</b></span>
+      <span>throttle <b>${esc(h.throttleFlags || DASH)}</b></span>
+      <span>errors/24h <b>${c.errors24h ?? DASH}</b></span>
+      <span>restarts/24h <b>${c.restarts24h ?? DASH}</b></span>
+    </div>
+
+    ${mods ? `<div class="mods">${mods}</div>` : ''}
+    ${gaps}
+  </article>`;
+}
+
 async function refresh() {
+  const grid  = document.getElementById('grid');
+  const tiles = document.getElementById('tiles');
+  const sub   = document.getElementById('sub');
+  const pulse = document.getElementById('pulse');
+
   let nodes;
   try {
     const res = await fetch('/api/v1/nodes', { cache: 'no-store' });
-    if (!res.ok) { document.getElementById('summary').textContent = `error ${res.status}`; return; }
+    if (!res.ok) {
+      pulse.textContent = 'error ' + res.status;
+      tiles.hidden = true;
+      grid.innerHTML = `<div class="state fault"><h2>The fleet server answered ${res.status}</h2>
+        <p>This page is reachable but the API refused it. If that is a 401, the browser session needs the dashboard login again.</p></div>`;
+      return;
+    }
     nodes = await res.json();
   } catch (e) {
-    document.getElementById('summary').textContent = 'unreachable';
+    // Unreachable is stated, never papered over with the last good numbers.
+    pulse.textContent = 'unreachable';
+    tiles.hidden = true;
+    grid.innerHTML = `<div class="state fault"><h2>Fleet server unreachable</h2>
+      <p>Nothing on this page would describe the fleet as it is now, so nothing is shown.
+      Check that <code>start-fleet.ps1</code> is still running on the workstation.</p></div>`;
     return;
   }
-  const online = nodes.filter(n => n.status === 'online').length;
-  document.getElementById('summary').textContent =
-    `${nodes.length} device${nodes.length === 1 ? '' : 's'} · ${online} online · refreshed ${new Date().toLocaleTimeString()}`;
 
-  const tbody = document.querySelector('#tbl tbody');
+  const online  = nodes.filter(n => n.status === 'online').length;
+  const stale   = nodes.filter(n => n.status === 'stale').length;
+  const offline = nodes.filter(n => n.status === 'offline').length;
+  const now = new Date().toLocaleTimeString('en-ZA', { hour12: false });
+
+  sub.textContent = `${nodes.length} device${nodes.length === 1 ? '' : 's'} registered`;
+  pulse.textContent = `updated ${now}`;
+
   if (nodes.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="13" class="empty">No devices have reported in yet.</td></tr>`;
+    tiles.hidden = true;
+    grid.innerHTML = `<div class="state"><h2>No devices have reported in yet</h2>
+      <p>A node appears here the moment it posts its first health check-in. Nothing is shown
+      until one does &mdash; there is no sample device on this page.</p></div>`;
     return;
   }
-  tbody.innerHTML = nodes.map(n => {
-    const h = n.host || {};
-    const c = n.counters || {};
-    const mods = (n.modules || []).map(m =>
-      `<span class="mod ${m.status}" title="${m.gap || ''}">${m.id.replace('module_', '')}</span>`
-    ).join('');
-    return `<tr>
-      <td><span class="dot ${n.status}"></span>${n.status}</td>
-      <td><code>${n.nodeId}</code></td>
-      <td>${n.agentVersion || '—'}</td>
-      <td>${fmtAgo(n.lastSeenAgoSeconds)}</td>
-      <td>${fmtDuration(n.uptimeSeconds)}</td>
-      <td>${h.cpuPercent != null ? h.cpuPercent.toFixed(0) + '%' : '—'}</td>
-      <td>${h.memUsedMB != null && h.memTotalMB ? Math.round(100*h.memUsedMB/h.memTotalMB) + '%' : '—'}</td>
-      <td>${h.diskUsedPercent != null ? h.diskUsedPercent + '%' : '—'}</td>
-      <td>${h.tempC != null ? h.tempC.toFixed(0) + '°C' : '—'}</td>
-      <td>${n.piholeReachable ? 'yes' : 'no'}</td>
-      <td>${mods || '—'}</td>
-      <td>${c.errors24h ?? '—'}</td>
-      <td>${c.restarts24h ?? '—'}</td>
-    </tr>`;
-  }).join('');
+
+  const temps = nodes.map(n => n.host && n.host.tempC).filter(v => v != null);
+  const hottest = temps.length ? Math.max(...temps) : null;
+  const filtering = nodes.filter(n => n.piholeReachable).length;
+
+  tiles.hidden = false;
+  tiles.innerHTML = `
+    <div class="tile"><div class="k">Devices</div><div class="v">${nodes.length}</div></div>
+    <div class="tile ${online === nodes.length ? 'good' : (online ? 'warn' : 'bad')}">
+      <div class="k">Online</div><div class="v">${online}<small>of ${nodes.length}</small></div></div>
+    <div class="tile ${filtering === nodes.length ? 'good' : 'warn'}">
+      <div class="k">DNS filter up</div><div class="v">${filtering}<small>of ${nodes.length}</small></div></div>
+    <div class="tile ${hottest == null ? '' : (hottest >= 80 ? 'bad' : hottest >= 70 ? 'warn' : 'good')}">
+      <div class="k">Hottest</div><div class="v">${hottest == null ? DASH : hottest.toFixed(1)}<small>°C</small></div></div>
+    ${(stale || offline) ? `<div class="tile bad"><div class="k">Not reporting</div><div class="v">${stale + offline}</div></div>` : ''}
+  `;
+
+  grid.innerHTML = nodes.map(nodeCard).join('');
 }
+
 refresh();
 setInterval(refresh, 15000);
 </script>
