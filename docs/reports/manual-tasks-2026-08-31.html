@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gate^Flame — Your Hands Only</title>
+<meta name="description" content="Every remaining task that needs Dennis's own account, passphrase or physical hands, in the order they should be done, with exact commands and a way to prove each one actually worked.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --ground:#070C14; --panel:#0E1723; --panel-2:#121D2C; --line:#1E2C3E;
+  --ink:#EEF4FB; --body:#A9BACC; --dim:#6C819A;
+  --brand:#006FD3; --signal:#38BDF8;
+  --live:#10B981; --watch:#F59E0B; --stop:#F43F5E;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --ground:#EDF2F7; --panel:#FFFFFF; --panel-2:#F5F8FB; --line:#D3DEE9;
+    --ink:#0A121C; --body:#3D5064; --dim:#63788C;
+    --brand:#005AAB; --signal:#0E7FB8;
+    --live:#047857; --watch:#B45309; --stop:#BE123C;
+  }
+}
+:root[data-theme="light"]{
+  --ground:#EDF2F7; --panel:#FFFFFF; --panel-2:#F5F8FB; --line:#D3DEE9;
+  --ink:#0A121C; --body:#3D5064; --dim:#63788C;
+  --brand:#005AAB; --signal:#0E7FB8;
+  --live:#047857; --watch:#B45309; --stop:#BE123C;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--body);
+  font-family:"Plus Jakarta Sans","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.62;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:900px;margin:0 auto;padding:52px 24px 90px}
+
+.eyebrow{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.22em;color:var(--signal);margin-bottom:16px}
+h1{font-family:"Outfit",sans-serif;font-weight:200;font-size:clamp(32px,5vw,48px);line-height:1.05;
+  letter-spacing:-.02em;color:var(--ink);margin:0 0 16px;text-wrap:balance}
+h1 b{font-weight:600}
+.lede{max-width:64ch;margin:0 0 30px}
+.mast{padding-bottom:28px;border-bottom:1px solid var(--line);margin-bottom:38px}
+
+h2{font-family:"Outfit",sans-serif;font-weight:300;font-size:23px;color:var(--ink);
+  margin:48px 0 4px;letter-spacing:-.01em}
+.h2sub{font-size:13.5px;color:var(--dim);margin:0 0 20px}
+
+/* Each task is a card. Numbering is real: this is a dependency order, and
+   item 1 genuinely gates item 5. */
+.task{background:var(--panel);border:1px solid var(--line);border-radius:15px;
+  padding:22px 24px;margin-bottom:16px}
+.task.critical{border-color:rgba(244,63,94,.45)}
+.task.warn{border-color:rgba(245,158,11,.35)}
+.thead{display:flex;align-items:flex-start;gap:14px;margin-bottom:12px}
+.tn{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:13px;font-weight:700;
+  color:var(--brand);padding-top:4px;flex-shrink:0;min-width:22px}
+.ttitle{flex:1;min-width:0}
+.ttitle h3{font-family:"Outfit",sans-serif;font-weight:500;font-size:19px;color:var(--ink);
+  margin:0 0 5px;text-wrap:balance}
+.meta{display:flex;flex-wrap:wrap;gap:7px}
+.tag{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.13em;padding:4px 9px;border-radius:6px;
+  border:1px solid currentColor}
+.tag.crit{color:var(--stop)} .tag.warn{color:var(--watch)}
+.tag.time{color:var(--dim)} .tag.blocks{color:var(--brand)}
+
+.task p{margin:0 0 11px;max-width:72ch}
+.task p:last-child{margin-bottom:0}
+.step{margin:12px 0 0;padding-left:0;list-style:none;counter-reset:s}
+.step li{position:relative;padding-left:26px;margin-bottom:9px;counter-increment:s}
+.step li::before{content:counter(s)".";position:absolute;left:0;top:0;
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11.5px;color:var(--dim)}
+pre{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;overflow-x:auto;margin:10px 0;
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;color:var(--ink);line-height:1.55}
+code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12.5px;
+  background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--ink)}
+pre code{background:none;border:none;padding:0}
+a{color:var(--signal)}
+
+/* The proof line. Every task has one, because "I did it" and "it worked" are
+   different claims and this project has been burned by the gap twice today. */
+.proof{margin-top:14px;padding:11px 14px;border-radius:10px;
+  background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.28)}
+.proof b{display:block;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:9px;
+  text-transform:uppercase;letter-spacing:.15em;color:var(--live);margin-bottom:5px}
+.proof p{font-size:13.5px;margin:0}
+.why{margin-top:12px;font-size:13.5px;color:var(--dim);
+  border-left:2px solid var(--line);padding-left:13px}
+.mine{background:var(--panel-2);border:1px dashed var(--line);border-radius:12px;
+  padding:16px 18px;margin-top:14px}
+.mine b{color:var(--ink)}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--dim)}
+
+@page{size:A4;margin:15mm 14mm}
+@media print{
+  :root{--ground:#fff;--panel:#fff;--panel-2:#F7FAFC;--line:#C9D6E2;
+    --ink:#0A121C;--body:#33445A;--dim:#5E7286;--brand:#005AAB;--signal:#0B6E9E;
+    --live:#046C4E;--watch:#96500A;--stop:#A8102F}
+  body{background:#fff;font-size:10.5pt}
+  .wrap{max-width:none;padding:0}
+  /* A task card can be most of a page on its own, so forcing it whole pushed
+     each one onto a fresh sheet and left the previous half empty - ten tasks,
+     ten pages. Let a long card flow; keep its heading attached to its body,
+     and never orphan a command block from the step that introduces it. */
+  .task{break-inside:auto}
+  .thead{break-after:avoid;page-break-after:avoid}
+  .proof,.why,.mine,pre{break-inside:avoid;page-break-inside:avoid}
+  .step li{break-inside:avoid}
+  h2{break-after:avoid}
+  .task{padding:16px 18px;margin-bottom:12px}
+  pre{white-space:pre-wrap;word-break:break-word}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mast">
+    <div class="eyebrow">Gate^Flame · 31 Aug 2026 · verified against the machine today</div>
+    <h1>Your Hands <b>Only</b></h1>
+    <p class="lede">Everything left that needs your account, your passphrase, or your
+      physical presence. In dependency order. Each one has a way to <em>prove</em> it worked —
+      because “I did it” and “it worked” are different claims, and the gap between them has
+      cost this project a morning twice today alone.</p>
+    <p class="lede" style="color:var(--dim);font-size:14px">Items already done have been
+      removed rather than left ticked. One thing previously on this list — the version-number
+      mismatch — is now genuinely resolved and is gone.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Do these first</h2>
+  <p class="h2sub">Irreversible or security-critical. Nothing else should jump the queue.</p>
+
+  <div class="task critical">
+    <div class="thead">
+      <div class="tn">01</div>
+      <div class="ttitle">
+        <h3>Prove the release keystore actually opens</h3>
+        <div class="meta">
+          <span class="tag crit">Critical</span>
+          <span class="tag time">5 min</span>
+          <span class="tag blocks">No recovery path</span>
+        </div>
+      </div>
+    </div>
+    <p>The file meant to hold your signing certificate’s details —
+      <code>~/.gateflame-signing/cert-info.txt</code> — instead contains this:</p>
+    <pre><code>keytool error: java.io.IOException: Keystore was tampered
+with, or password was incorrect
+Caused by: java.security.UnrecoverableKeyException:
+        Password verification failed</code></pre>
+    <p>So the keystore’s usability has never actually been demonstrated. It was created on
+      29 Aug; the verification step either failed or was run with the wrong password, and the
+      error was saved where the certificate should be.</p>
+    <ol class="step">
+      <li>Open a terminal and run the check yourself:
+        <pre><code>keytool -list -v -keystore "$env:USERPROFILE\.gateflame-signing\gateflame-release.jks"</code></pre>
+      </li>
+      <li>Enter the keystore password when prompted.</li>
+    </ol>
+    <div class="proof">
+      <b>Proof it worked</b>
+      <p>You see <code>Alias name:</code>, <code>Valid from:</code> and a SHA-256 fingerprint.
+        If you see the same “password was incorrect” error, the key is either lost or the
+        password you have is wrong — tell me immediately and <b>do not build anything with
+        it</b> until we know which.</p>
+    </div>
+    <div class="why">This is first because every other Play task depends on it, and because
+      it is the one asset that cannot be regenerated. A key you cannot open is the same as no
+      key — you would find out at first upload, after committing to a listing.</div>
+  </div>
+
+  <div class="task critical">
+    <div class="thead">
+      <div class="tn">02</div>
+      <div class="ttitle">
+        <h3>Get the keystore off this machine</h3>
+        <div class="meta">
+          <span class="tag crit">Critical</span>
+          <span class="tag time">10 min</span>
+          <span class="tag blocks">Depends on 01</span>
+        </div>
+      </div>
+    </div>
+    <p>There is exactly <b>one</b> copy, on the C: drive of one workstation. A failed disk
+      ends the app’s identity on Google Play permanently — every future update must be signed
+      by this key or it is a different app.</p>
+    <ol class="step">
+      <li>Copy <code>C:\Users\DGMic\.gateflame-signing\</code> — the whole folder — to two
+        places that are not this machine. An encrypted USB drive kept elsewhere, and a
+        password manager’s secure-file store, is enough.</li>
+      <li>Store the password separately from the file, in your password manager.</li>
+      <li>Write the date and the SHA-256 fingerprint from task 01 somewhere you will find it
+        in three years.</li>
+    </ol>
+    <div class="proof">
+      <b>Proof it worked</b>
+      <p>Open the backup copy from the second location and run the same <code>keytool -list -v</code>
+        against it. Copying a file proves the copy exists; opening it proves it survived.</p>
+    </div>
+    <div class="why">Do this only after 01 passes. Backing up a keystore nobody can open just
+      makes three copies of the same problem.</div>
+  </div>
+
+  <div class="task critical">
+    <div class="thead">
+      <div class="tn">03</div>
+      <div class="ttitle">
+        <h3>Revoke the exposed credentials</h3>
+        <div class="meta">
+          <span class="tag crit">Security</span>
+          <span class="tag time">10 min</span>
+        </div>
+      </div>
+    </div>
+    <p>These passed through a session transcript. A credential that has been transcribed is
+      compromised whether or not anyone used it — the only fix is revocation, and only you can
+      sign in to do it.</p>
+    <ol class="step">
+      <li><b>Gemini API key</b> — revoke at
+        <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a>.</li>
+      <li><b>Two GitHub personal access tokens</b> — revoke at
+        <a href="https://github.com/settings/personal-access-tokens">github.com/settings/personal-access-tokens</a>.</li>
+      <li>Delete the file that still holds the old key on disk — it is still there, I checked:
+        <pre><code>C:\Users\DGMic\GateFlame-Backup-2026-08-13\_fix-2026-08-13\ROTATE-ME.txt</code></pre>
+      </li>
+    </ol>
+    <div class="proof">
+      <b>Proof it worked</b>
+      <p>Each console lists the credential as revoked or no longer lists it at all, and
+        <code>ROTATE-ME.txt</code> no longer exists. Do not generate replacements unless you
+        actually need them — the app never read the Gemini key.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Blocks the first Play upload</h2>
+  <p class="h2sub">None of these affect the PoC, which runs before any store listing exists.
+    All of them block the subscription the PoC promises on day 15.</p>
+
+  <div class="task warn">
+    <div class="thead">
+      <div class="tn">04</div>
+      <div class="ttitle">
+        <h3>Wire the signing key into the build</h3>
+        <div class="meta">
+          <span class="tag warn">Blocks upload</span>
+          <span class="tag time">5 min</span>
+          <span class="tag blocks">Depends on 01</span>
+        </div>
+      </div>
+    </div>
+    <p><code>android/keystore.properties</code> does not exist, so
+      <code>npm run build:apk</code> cannot sign anything today. I have deliberately not
+      created it: it holds your keystore password, and I do not handle passwords.</p>
+    <ol class="step">
+      <li>Create <code>E:\Gateflame\android\keystore.properties</code> containing:
+        <pre><code>storeFile=C:/Users/DGMic/.gateflame-signing/gateflame-release.jks
+storePassword=&lt;your keystore password&gt;
+keyAlias=&lt;the alias from task 01&gt;
+keyPassword=&lt;your key password&gt;</code></pre>
+      </li>
+      <li>Confirm it is ignored by git before you save anything real into it:
+        <pre><code>cd E:\Gateflame
+git check-ignore -v android/keystore.properties</code></pre>
+      </li>
+    </ol>
+    <div class="proof">
+      <b>Proof it worked</b>
+      <p><code>git check-ignore</code> prints a matching rule (silence means it is NOT ignored
+        — stop and tell me). Then <code>npm run build:apk</code> produces
+        <code>release/GateFlame-Mobile.apk</code> without a signing error.</p>
+    </div>
+  </div>
+
+  <div class="task warn">
+    <div class="thead">
+      <div class="tn">05</div>
+      <div class="ttitle">
+        <h3>Publish a privacy notice at a public URL</h3>
+        <div class="meta">
+          <span class="tag warn">Blocks upload</span>
+          <span class="tag time">30 min</span>
+          <span class="tag blocks">Legal</span>
+        </div>
+      </div>
+    </div>
+    <p>Play will not accept a listing without one, and POPIA s18 requires it independently.
+      It must now say that <b>device identifiers are collected</b> — device names and hardware
+      (MAC) addresses leave the household for devices placed on a VPN region. That changed
+      today, at your instruction, and the old wording would be wrong.</p>
+    <ol class="step">
+      <li>Publish at a stable public address, e.g. <code>https://www.ionity.today/privacy</code>.</li>
+      <li>It must state: what is collected, why, who it goes to, how long it is kept, and how
+        someone asks for theirs to be deleted.</li>
+      <li>Say plainly what is <em>not</em> collected — no browsing history, no visited domains,
+        no per-device query logs. That part is unusually strong and worth stating.</li>
+    </ol>
+    <div class="proof">
+      <b>Proof it worked</b>
+      <p>The URL loads in a private browser window with no login. If it 404s for a stranger it
+        does not exist for Play’s reviewer either.</p>
+    </div>
+    <div class="mine">
+      <b>I can draft this.</b> Say the word and I will write it from
+      <code>docs/POPIA-REVIEW.md</code> and the corrected §9.2 of the PoC, so the notice, the
+      document and the code all describe the same product. You would only need to review and
+      publish it.
+    </div>
+  </div>
+
+  <div class="task warn">
+    <div class="thead">
+      <div class="tn">06</div>
+      <div class="ttitle">
+        <h3>Play Console: account, App Signing, data safety</h3>
+        <div class="meta">
+          <span class="tag warn">Blocks upload</span>
+          <span class="tag time">1–2 h</span>
+          <span class="tag blocks">Depends on 04, 05</span>
+        </div>
+      </div>
+    </div>
+    <ol class="step">
+      <li>Hook up the Play Console account (you said you would do this when a build was ready
+        — it now is, once 04 is done).</li>
+      <li><b>Enrol in Play App Signing at first upload.</b> This is the only recovery path if
+        the upload key is ever lost, and it cannot be added retrospectively as easily.</li>
+      <li>Complete the <b>data-safety form</b>. Declare: device identifiers (MAC address,
+        device name), device diagnostics (CPU, memory, temperature). Do <em>not</em> declare
+        browsing history or query logs — the box does not send them.</li>
+      <li>Check the current closed-testing rule for tester count and duration before you
+        start. It has added weeks to other launches, and it changes.</li>
+    </ol>
+    <div class="proof">
+      <b>Proof it worked</b>
+      <p>The Console shows App Signing enrolled, and the data-safety section shows “complete”
+        rather than a draft. A rejected data-safety answer is a resubmission cycle, not an edit.</p>
+    </div>
+    <div class="why">Filing the old “almost nothing leaves the LAN” answer would now be a
+      false declaration to Google. It is still a strong answer — just no longer “nothing.”</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Small, and they remove real friction</h2>
+  <p class="h2sub">Each is one command or one router screen. I have prepared what I can.</p>
+
+  <div class="task">
+    <div class="thead">
+      <div class="tn">07</div>
+      <div class="ttitle">
+        <h3>Tell the box which interface is the WAN</h3>
+        <div class="meta"><span class="tag time">2 min</span><span class="tag blocks">Clears the only open support finding</span></div>
+      </div>
+    </div>
+    <p>This is the single item the fleet console currently flags on your node. Data-cap
+      reporting is unavailable until it is set. The box deliberately does not guess — guessing
+      wrong bills LAN traffic against a customer’s cap.</p>
+    <ol class="step">
+      <li>On the Pi:
+        <pre><code>sudo systemctl edit gateflame-node-agent</code></pre></li>
+      <li>Add, in the editor that opens:
+        <pre><code>[Service]
+Environment=GATEFLAME_WAN_INTERFACES=eth0</code></pre></li>
+      <li>Then:
+        <pre><code>sudo systemctl daemon-reload
+sudo systemctl restart gateflame-node-agent</code></pre></li>
+    </ol>
+    <div class="proof">
+      <b>Proof it worked</b>
+      <p>Refresh the fleet console’s Support view for GF-72TYTITQ. The “WAN audit is degraded”
+        finding should be gone, leaving zero findings. If it persists, <code>eth0</code> is the
+        wrong interface name for that box.</p>
+    </div>
+  </div>
+
+  <div class="task">
+    <div class="thead">
+      <div class="tn">08</div>
+      <div class="ttitle">
+        <h3>Pin this workstation’s IP address</h3>
+        <div class="meta"><span class="tag time">5 min</span><span class="tag blocks">Stops a recurring outage</span></div>
+      </div>
+    </div>
+    <p>The workstation’s address has moved three times — <code>.7</code> → <code>.6</code> →
+      <code>.3</code>. Each move silently broke the Pi’s health feed, because the address is
+      written into the Pi’s config. The Pi logs “timed out”, which looks exactly like a
+      firewall problem and is not.</p>
+    <ol class="step">
+      <li>In the TP-Link EX511 admin, add a DHCP reservation binding this workstation’s Wi-Fi
+        MAC to <code>192.168.0.3</code>.</li>
+      <li>Leave the Pi at <code>192.168.0.10</code> — it already matches what everything expects.</li>
+    </ol>
+    <div class="proof">
+      <b>Proof it worked</b>
+      <p>Reboot the workstation, then run:
+        <pre><code>powershell -File E:\Gateflame\tools\fleet-verify.ps1</code></pre>
+        It should still say <b>FRESH</b>. That proves the address survived a reboot, which is
+        the only thing that has ever broken it.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Decisions, not tasks</h2>
+  <p class="h2sub">Yours to call. I am not going to make these on your behalf.</p>
+
+  <div class="task">
+    <div class="thead">
+      <div class="tn">09</div>
+      <div class="ttitle">
+        <h3>What happens to <code>fix/mobile-dns-drops</code></h3>
+        <div class="meta"><span class="tag time">Your call</span></div>
+      </div>
+    </div>
+    <p>Everything from today sits on that branch and is pushed. <code>main</code> is behind it
+      by a substantial amount. Merging is a decision about your release history, not a
+      mechanical step, so I have left it.</p>
+    <p>If you want it merged, say so explicitly and I will — using
+      <code>git branch -f</code> plus a push rather than a checkout, because checking
+      <code>main</code> out on this machine has half-completed before and nearly ate a day’s work.</p>
+  </div>
+
+  <div class="task">
+    <div class="thead">
+      <div class="tn">10</div>
+      <div class="ttitle">
+        <h3>Build a second box</h3>
+        <div class="meta"><span class="tag time">Your call</span><span class="tag blocks">Gates every scale claim</span></div>
+      </div>
+    </div>
+    <p>Every figure in the capability ledger comes from one appliance. The fleet console,
+      per-box credentials and the history rollups are built for hundreds and have never seen
+      two. The 30-day and 90-day graphs are empty because that data does not exist yet.</p>
+    <p>Until a second box exists, “works at scale” is a design intention rather than an
+      observation — and per-box authentication would have broken every deployed unit when it
+      shipped, caught only because the test was written before the code.</p>
+  </div>
+
+  <footer>
+    Gate^Flame · Ionity (Pty) Ltd · state verified against the machine 31 Aug 2026 ·
+    items already completed have been removed, not ticked
+  </footer>
+
+</div>
+</body>
+</html>

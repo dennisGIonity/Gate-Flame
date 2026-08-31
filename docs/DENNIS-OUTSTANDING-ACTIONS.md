@@ -1,3 +1,12 @@
+> **SUPERSEDED 2026-08-31.** Most of this is now done and some of it is
+> actively wrong - it says SSH is broken and commits are unpushed, both of
+> which were fixed on 31 Aug. The current list, verified against the machine
+> that day, is `docs/reports/manual-tasks-2026-08-31.html`.
+>
+> Kept rather than deleted because the reasoning in it (why no session
+> generates a keystore for you, why a transcribed credential is compromised)
+> is still correct and worth reading once.
+
 # Outstanding actions — only you can do these
 
 Everything below needs your hands, your passphrase, or your account — not
