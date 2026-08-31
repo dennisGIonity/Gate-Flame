@@ -21,7 +21,27 @@ if not exist %BASH% (
   pause
   exit /b 1
 )
-%BASH% -c "eval \"$(ssh-agent -a ~/.ssh/agent.sock -s)\" >/dev/null 2>&1 || eval \"$(ssh-agent -s)\" >/dev/null 2>&1; ssh-add ~/.ssh/id_ed25519 && echo && echo '  KEY LOADED OK' && ssh-add -l"
+
+REM ----------------------------------------------------------------------
+REM WHY THIS IS NOT A ONE-LINER ANY MORE
+REM
+REM When the agent dies (reboot, crash), the SOCKET FILE it created is left
+REM behind at ~/.ssh/agent.sock. `ssh-agent -a <path>` then refuses to start,
+REM because something already occupies that path. The old version of this
+REM script fell through to a bare `ssh-agent -s`, which puts its socket at a
+REM RANDOM temp path known only inside that one bash process - so the key was
+REM genuinely loaded, into an agent that nothing afterwards could find.
+REM
+REM The screen said KEY LOADED OK. Every push still failed with
+REM "Permission denied (publickey)". That is this project's oldest mistake -
+REM claiming success without reading back - committed by the very script
+REM meant to make the setup reliable.
+REM
+REM So: probe the socket, clear it ONLY if it is dead, then verify against
+REM GitHub itself before saying anything worked.
+REM ----------------------------------------------------------------------
+%BASH% -lc "bash tools/load-key.sh"
+
 echo.
 echo  ------------------------------------------------------------
 echo   Stays loaded until Windows restarts. Then run this again.
