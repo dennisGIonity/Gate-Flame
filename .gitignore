@@ -79,3 +79,9 @@ node-agent/venv/
 fleet/fleet.db
 fleet/fleet.env.ps1
 fleet/venv/
+
+# Generated .docx copies of docs/*.md (tools rebuild them from the markdown,
+# which stays the source of truth). ~7 MB of binaries that would otherwise
+# grow with every regeneration; the four hand-curated .docx deliverables
+# already committed in docs/ are unaffected.
+docs/docx/
