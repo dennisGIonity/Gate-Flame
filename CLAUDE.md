@@ -122,6 +122,17 @@ about. Advertising ourselves narrows the gap; it never closes it.
   not save cost this household days.
 - **Tests are the pinning mechanism.** Behavioural fixes get a test, and the test
   gets checked for non-vacuity by reintroducing the bug.
+- **"Cannot reach it" and "reached it, nothing there" must never share a sentence.**
+  They read the same to a customer and need opposite actions. Shield told owners
+  "Not set up on this box yet" whenever the region list came back empty — while
+  the feature was installed and running. A screen that says a working feature
+  does not exist is the same class of error as one showing invented data.
+- **A route's STATUS CODE settles deployment questions without SSH.** From any
+  LAN machine: `404` = never installed on that box, `401/403` = installed and
+  refusing an unauthenticated caller. `http://192.168.0.10:8080/api/v1/<route>`.
+  This is the cheap way to honour "confirm the route answers on the box the
+  customer has" when the SSH key is not loaded. `/system/status` answers 200
+  unauthenticated and reports `nodeId` and `provisioned`.
 
 ---
 
@@ -144,7 +155,8 @@ about. Advertising ourselves narrows the gap; it never closes it.
 ## The live estate
 
 - **Pi**: `raspberrypi`, user `wabapi`, Pi 5 16GB, Trixie, node `GF-72TYTITQ`, agent 0.1.0,
-  **`provisioned: false` — never paired**. Dual-homed on one /24: eth0 `192.168.0.10`,
+  **`provisioned: true`** as of 2026-08-31 (it now reports paired; the old note
+  here said "never paired" and was stale). Dual-homed on one /24: eth0 `192.168.0.10`,
   wlan0 `192.168.0.13`. Port 53 is on `.10` only, so `.13` serves the API and no DNS.
 - **Router**: **TP-Link EX511 v2.0**, AX3000 Wi-Fi 6, Linux 4.4.60. Identified from
   its real UPnP description (`:1900/…/gatedesc.xml`), which is now a test fixture.

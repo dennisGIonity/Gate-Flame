@@ -207,11 +207,18 @@ export function AreaChart({
   const values = samples.map((s) => s.v).filter((v): v is number => v !== null);
   if (values.length < 2) {
     return (
+      /* Shows the wait instead of captioning it. The dashed frame is kept
+         deliberately: a shimmer inside a SOLID frame reads as a chart that is
+         loading, which would be a lie - there is no data behind this, only
+         too few points to draw a line. The label stays for screen readers,
+         which cannot see the difference the dashes are making. */
       <div
-        className={`flex items-center justify-center rounded-xl border border-dashed border-[#1E293B] text-[11px] text-slate-600 ${className}`}
+        className={`overflow-hidden rounded-xl border border-dashed border-[#1E293B] ${className}`}
         style={{ height }}
+        role="img"
+        aria-label="Not enough samples to draw this yet"
       >
-        collecting samples…
+        <div className="gf-shimmer h-full w-full opacity-40" />
       </div>
     );
   }
@@ -470,7 +477,11 @@ export function RingGauge({
           fill={value === null ? CH.muted : '#F1F5F9'}
           fontSize={size / 4.4}
         >
-          {value === null ? DASH : `${Math.round(clamped)}%`}
+          {/* Small shares keep one decimal. Rounding 0.5 to "1%" next to a
+              stat card reading "0.5%" makes one number look like two, and the
+              ring is the more prominent of the pair - so it is the one that
+              has to agree. Ten and over rounds, where a decimal is noise. */}
+          {value === null ? DASH : `${clamped < 10 ? Number(clamped.toFixed(1)) : Math.round(clamped)}%`}
         </text>
         {sub && (
           <text

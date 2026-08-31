@@ -29,7 +29,7 @@ import type {
   VpnRegionsResponse,
 } from '../../types/vpn';
 import { kioskApi, usePolled, type LanClient } from '../../components/kiosk/kioskClient';
-import { Card, Screen, ScreenTitle } from '../mobileUi';
+import { Card, Screen, ScreenTitle, Skeleton } from '../mobileUi';
 
 /**
  * Hand a decoded .ovpn's text to whatever the platform offers, best option
@@ -252,17 +252,35 @@ export function ShieldScreen({ active }: { active: boolean }) {
           <p className="text-sm font-semibold text-slate-100">{r?.label ?? 'Gate^Flame Shield'}</p>
         </div>
 
-        {!r || r.regions.length === 0 ? (
+        {/* Four states, deliberately kept apart. "We could not ask the box"
+            and "we asked and there were no regions" look the same to a
+            customer if they share one sentence, but they need opposite
+            actions - one is a network fault, the other is provider or setup.
+            Collapsing them is how a working feature comes to read as one that
+            was never installed. */}
+        {regions.error ? (
           <p className="text-xs leading-relaxed text-[#64748B]">
-            {!r || (!r.controlPlaneReachable && !r.vpnGateAvailable)
-              ? 'Not set up on this box yet.'
-              : 'No regions available right now.'}
+            Could not ask the box just now. Trying again every 20 seconds.
           </p>
-        ) : rows.length === 0 ? (
+        ) : !r ? (
+          <Skeleton className="h-3 w-2/3" />
+        ) : r.regions.length === 0 ? (
+          <p className="text-xs leading-relaxed text-[#64748B]">
+            {!r.controlPlaneReachable && !r.vpnGateAvailable
+              ? 'No Shield provider is switched on for this box.'
+              : 'The region list came back empty. Nothing to pick yet.'}
+          </p>
+        ) : null}
+
+        {/* Devices show whether or not a region is on offer. Without this the
+            screen went completely blank the moment the provider list was
+            empty, taking renaming and the on/off state with it - and none of
+            that depends on there being a region to pick. */}
+        {r && rows.length === 0 ? (
           <p className="text-xs leading-relaxed text-[#64748B]">
             {clients.data ? 'No devices seen on your network yet.' : 'Reading your devices…'}
           </p>
-        ) : (
+        ) : r ? (
           <div className="flex flex-col gap-2.5">
             {rows.map((row) => (
               <div key={row.mac} className="rounded-xl border border-[#1E293B] bg-[#0F1B2D] p-3">
@@ -437,7 +455,7 @@ export function ShieldScreen({ active }: { active: boolean }) {
               </div>
             ))}
           </div>
-        )}
+        ) : null}
       </Card>
     </Screen>
   );

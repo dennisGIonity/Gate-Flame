@@ -218,8 +218,14 @@ export function Sparkline({
   const values = samples.map((s) => s.v).filter((v): v is number => v !== null);
   if (values.length < 2) {
     return (
-      <div className={`flex items-center text-xs text-slate-600 ${className}`} style={{ height }}>
-        collecting samples…
+      /* Same reasoning as charts.tsx: show the wait, don't caption it. */
+      <div
+        className={`overflow-hidden rounded-lg ${className}`}
+        style={{ height }}
+        role="img"
+        aria-label="Not enough samples to draw this yet"
+      >
+        <div className="gf-shimmer h-full w-full opacity-30" />
       </div>
     );
   }
