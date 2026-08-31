@@ -2,7 +2,7 @@
 ========================================================================================
 GATE^FLAME — 📌 PINNED STATE / RESUME HERE
 Author: Dennis Grobler (Wabakipi) | Ionity Global (Pty) Ltd | AEDI
-Document ID: DOC-2026-08-013-STATE | Version: 10.0 | Updated: 2026-08-30 SAST
+Document ID: DOC-2026-08-013-STATE | Version: 11.0 | Updated: 2026-08-31 SAST
 Governance: Policy 986 AED | License: AED 900 | CC BY-NC-SA 4.0 where stated
 (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - All Rights Reserved - TM2
 Web: https://www.ionity.today | https://www.ionity.world | Ref: https://www.ionity.co.za
@@ -10,9 +10,81 @@ Classification: PUBLIC | Building Tomorrow, Today. | Anything is Possible with G
 ========================================================================================
 ```
 
-> Dennis asked to pin this and carry the conversation over to a different
-> model (Opus). Everything below is accurate as of the moment this was
-> written — read this first, it is the actual state, not a plan.
+> Pinned at end of day, 2026-08-31. Everything below is accurate as of the
+> moment it was written — read this first, it is the actual state, not a plan.
+
+---
+
+## 📌 END OF 2026-08-31 — START HERE TOMORROW
+
+**Everything is pushed.** Branch `fix/mobile-dns-drops`, head `683d4d8`, one
+git identity throughout. `main` is behind and that is deliberate — merging is
+Dennis's call, and on this machine use `git branch -f` + push, never a
+checkout of main (it has half-completed before).
+
+### The one thing that should worry us
+
+`~/.gateflame-signing/cert-info.txt` contains a **keytool failure**, not a
+certificate:
+
+    Keystore was tampered with, or password was incorrect
+
+The release signing key's usability has never been demonstrated. It is the
+only asset with no recovery path. Dennis has the 5-minute check as item 01 of
+`docs/reports/manual-tasks-2026-08-31.html`. **Do not build a release APK
+until that check passes**, and if it fails again, stop and say so — a key that
+cannot be opened is the same as no key.
+
+### Fixed today, all with non-vacuity-checked tests
+
+| What was wrong | Root cause |
+|---|---|
+| Shield showed "Not set up on this box yet" | Copy collapsed *unreachable*, *unconfigured* and *empty* into one sentence, on a feature that was installed and running |
+| Shield had no regions | `/vpn/regions` blocked 24.1 s on a live VPN Gate fetch against a 4 s client timeout — and warmed the cache on its way out, so the next caller got 2 ms. That intermittency is why it "worked yesterday" |
+| Regions still empty after the fix | 1.3 MB at ~41 KB/s against a flat 12 s timeout — the download could never finish. Split into connect 10 s / read 120 s |
+| Ring read "1%" beside a card reading "0.5%" | One number rendered two ways |
+| `load-key.cmd` printed KEY LOADED OK, pushes still failed | Dead agent's socket file blocked `ssh-agent -a`; the fallback bound a random temp path. Now probes, clears only a dead socket, and verifies against GitHub |
+| Installer printed ALL CHECKS PASSED | Its kiosk check had no `-L` on a redirect and never asserted — it only ever echoed |
+| Fleet showed the node offline | The dashboard was not running. Windows *drops* to a closed port, so "nothing listening" and "firewalled" look identical from the far end |
+
+### Added today
+
+- **Ionibot on the wall console** (was mobile-only). Loopback probes keep
+  answering when the household Wi-Fi is the broken thing. Lazily loaded.
+- **Per-device Shield state now leaves the box** — Dennis's explicit decision.
+  MAC + owner's name + region. `health_feed.py`'s docstring promised the
+  opposite and was rewritten rather than left lying.
+- **Fleet: Shield panel + support view** that turns reported module gaps into
+  what to tell the customer, naming the field each finding came from.
+- **PoC v0.5** — §9.2 corrected (v0.1–v0.4 told clients only hardware health
+  leaves the LAN; that is no longer true), plus §4.3 Shield, §4.4 assistance,
+  §4.5 operator console, §8.1.1 measured figures, §12.4 blocking items.
+
+### Live numbers, read off the box at 15:48
+
+41 274 lookups today · 5 164 blocked (12.5%) · 425 410 domains on gravity ·
+9 household devices · 8 VPN countries / 99 servers · node online, feed fresh.
+
+### Blocking, and it is commercial not technical
+
+Per-device Shield state means **device identifiers now leave the household**.
+POPIA s18 needs the privacy notice updated and Google Play's data-safety form
+must declare them. **This blocks the first Play upload.** Claude offered to
+draft the notice from `POPIA-REVIEW.md` + the corrected §9.2 — Dennis has not
+said yes yet.
+
+### Two documents that are the current truth
+
+- `docs/reports/capability-ledger-2026-08-31.html` — every function, active or
+  not, with real volumes. **Carries one stale claim**: it says the version
+  numbers disagree. They do not any more (1.0.2 / code 12). Fix on next touch.
+- `docs/reports/manual-tasks-2026-08-31.html` — the 10 things only Dennis can
+  do, in dependency order, each with a proof step.
+
+`docs/DENNIS-OUTSTANDING-ACTIONS.md` is superseded and banner-marked.
+
+---
+
 
 # ⭐ READ `CLAUDE.md` FIRST. RULE ZERO IS NOT OPTIONAL.
 
