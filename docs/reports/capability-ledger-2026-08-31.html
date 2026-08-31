@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gate^Flame Capability Ledger</title>
+<meta name="description" content="Every customer-facing Gate^Flame function, whether it is running, what it has handled, and what is still needed before launch. Figures read live from node GF-72TYTITQ on 2026-08-31.">
+<meta name="author" content="Johan Wilhelm van Antwerp | Ionity (Pty) Ltd | AEDI">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+
+/* ---------------------------------------------------------------------------
+   Dark-first, deliberately: this is the appliance's own palette, taken from
+   src/components/kiosk/kioskUi.tsx rather than invented for the report. The
+   light theme is a consistent swap of the same tokens, not an inversion.
+   --------------------------------------------------------------------------- */
+:root{
+  --ground:#070C14; --panel:#0E1723; --panel-2:#121D2C; --line:#1E2C3E;
+  --ink:#EEF4FB; --body:#A9BACC; --dim:#6C819A;
+  --brand:#006FD3; --signal:#38BDF8;
+  --live:#10B981; --watch:#F59E0B; --idle:#5A6E86; --stop:#F43F5E;
+  --tile:rgba(255,255,255,.02);
+  --shadow:0 1px 0 rgba(255,255,255,.03) inset;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --ground:#EDF2F7; --panel:#FFFFFF; --panel-2:#F5F8FB; --line:#D3DEE9;
+    --ink:#0A121C; --body:#3D5064; --dim:#6C819A;
+    --brand:#005AAB; --signal:#0E7FB8;
+    --live:#047857; --watch:#B45309; --idle:#64748B; --stop:#BE123C;
+    --tile:rgba(10,18,28,.02);
+    --shadow:0 1px 0 rgba(10,18,28,.03) inset;
+  }
+}
+:root[data-theme="light"]{
+  --ground:#EDF2F7; --panel:#FFFFFF; --panel-2:#F5F8FB; --line:#D3DEE9;
+  --ink:#0A121C; --body:#3D5064; --dim:#6C819A;
+  --brand:#005AAB; --signal:#0E7FB8;
+  --live:#047857; --watch:#B45309; --idle:#64748B; --stop:#BE123C;
+  --tile:rgba(10,18,28,.02);
+  --shadow:0 1px 0 rgba(10,18,28,.03) inset;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--body);
+  font-family:"Plus Jakarta Sans","Segoe UI",system-ui,sans-serif;
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:56px 26px 96px}
+
+/* ---- masthead ---------------------------------------------------------- */
+.mast{display:flex;flex-direction:column;gap:18px;
+  padding-bottom:30px;border-bottom:1px solid var(--line);margin-bottom:40px}
+.eyebrow{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.22em;color:var(--signal)}
+h1{font-family:"Outfit","Segoe UI",sans-serif;font-weight:200;font-size:clamp(34px,5.5vw,54px);
+  line-height:1.04;letter-spacing:-.02em;color:var(--ink);margin:0;text-wrap:balance}
+h1 b{font-weight:600}
+h1 .k{color:var(--brand);font-weight:300}
+.lede{max-width:64ch;font-size:16px;color:var(--body);margin:0}
+.stamp{display:flex;flex-wrap:wrap;gap:8px 22px;
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;color:var(--dim)}
+.stamp b{color:var(--body);font-weight:500}
+
+/* ---- volume tiles ------------------------------------------------------ */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  gap:14px;margin-bottom:14px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:18px 20px;box-shadow:var(--shadow)}
+.tile .k{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.17em;color:var(--dim);display:block;margin-bottom:9px}
+.tile .v{font-family:"Outfit",sans-serif;font-weight:300;font-size:33px;line-height:1;
+  color:var(--ink);font-variant-numeric:tabular-nums}
+.tile .u{font-size:12.5px;color:var(--dim);margin-top:7px}
+.tile.accent .v{color:var(--signal)}
+
+/* ---- sections ---------------------------------------------------------- */
+section{margin-top:52px}
+h2{font-family:"Outfit",sans-serif;font-weight:300;font-size:26px;letter-spacing:-.01em;
+  color:var(--ink);margin:0 0 6px}
+.sub{font-size:14px;color:var(--dim);margin:0 0 20px;max-width:70ch}
+
+/* ---- the ledger -------------------------------------------------------- */
+.group{margin-bottom:30px}
+.gtitle{display:flex;align-items:baseline;gap:12px;margin-bottom:11px}
+.gtitle h3{font-family:"Outfit",sans-serif;font-weight:400;font-size:17px;
+  color:var(--ink);margin:0}
+.gtitle span{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;
+  color:var(--dim);text-transform:uppercase;letter-spacing:.14em}
+.rows{display:flex;flex-direction:column;gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row{display:grid;grid-template-columns:1.6fr auto 1.15fr;gap:18px;align-items:center;
+  background:var(--panel);padding:14px 19px}
+.row .fn{min-width:0}
+.row .fn b{display:block;font-weight:600;font-size:14.5px;color:var(--ink)}
+.row .fn i{display:block;font-style:normal;font-size:12.5px;color:var(--dim);margin-top:2px}
+.row .num{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12.5px;
+  color:var(--body);text-align:right;font-variant-numeric:tabular-nums}
+.row .num s{display:block;text-decoration:none;font-size:10px;color:var(--dim);margin-top:3px}
+
+/* State is a chip AND a colour, so it reads before the words do. */
+.st{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:9.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.13em;padding:5px 10px;border-radius:7px;
+  border:1px solid currentColor;white-space:nowrap}
+.st.live{color:var(--live)} .st.watch{color:var(--watch)}
+.st.idle{color:var(--idle)} .st.stop{color:var(--stop)}
+
+/* ---- endpoint list ----------------------------------------------------- */
+/* Numbered because this genuinely IS a dependency order - 01 must land before
+   02 can be attempted. Numbering anything unordered would be decoration. */
+.step{display:grid;grid-template-columns:auto 1fr;gap:20px;padding:20px 0;
+  border-bottom:1px solid var(--line)}
+.step:last-child{border-bottom:none}
+.step .n{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;font-weight:700;
+  color:var(--brand);padding-top:3px}
+.step h4{font-family:"Outfit",sans-serif;font-weight:500;font-size:17px;color:var(--ink);
+  margin:0 0 6px;text-wrap:balance}
+.step p{margin:0 0 8px;font-size:14px;max-width:72ch}
+.step .why{font-size:13px;color:var(--dim);border-left:2px solid var(--line);
+  padding-left:13px;margin-top:10px}
+.blocks{display:inline-block;font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:9.5px;text-transform:uppercase;letter-spacing:.13em;color:var(--stop);
+  border:1px solid currentColor;border-radius:6px;padding:3px 8px;margin-bottom:9px}
+
+/* ---- notes ------------------------------------------------------------- */
+.note{background:var(--panel-2);border:1px solid var(--line);border-radius:14px;
+  padding:20px 22px;margin-top:22px}
+.note h4{font-family:"Outfit",sans-serif;font-weight:500;font-size:15px;color:var(--ink);margin:0 0 8px}
+.note p{margin:0;font-size:13.5px;max-width:74ch}
+.note p + p{margin-top:9px}
+
+footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--dim);
+  display:flex;flex-wrap:wrap;gap:6px 20px}
+
+@media (max-width:680px){
+  .row{grid-template-columns:1fr auto;gap:10px}
+  .row .num{grid-column:1/-1;text-align:left}
+  .row .num s{display:inline;margin-left:8px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+
+/* ---- print ---------------------------------------------------------------
+   A PDF of this goes to people who will read it on paper or in a viewer that
+   paints white behind it, so print forces the LIGHT token set regardless of
+   the reader's theme. A dark PDF is not a design choice on paper, it is a
+   solid block of ink.
+   -------------------------------------------------------------------------- */
+@page{ size:A4; margin:15mm 14mm 16mm; }
+@media print{
+  :root{
+    --ground:#FFFFFF; --panel:#FFFFFF; --panel-2:#F7FAFC; --line:#C9D6E2;
+    --ink:#0A121C; --body:#33445A; --dim:#5E7286;
+    --brand:#005AAB; --signal:#0B6E9E;
+    --live:#046C4E; --watch:#96500A; --idle:#5A6B7D; --stop:#A8102F;
+    --tile:transparent; --shadow:none;
+  }
+  body{background:#fff;font-size:10.5pt;line-height:1.5}
+  .wrap{max-width:none;padding:0}
+  h1{font-size:30pt}
+  .tile .v{font-size:22pt}
+  .lede{font-size:11pt}
+
+  /* Nothing that reads as one unit may be split across a page. A capability
+     row whose state chip lands on the next page is worse than a short page. */
+  /* A ROW is atomic - a capability whose state chip lands on the next page is
+     worse than a short page. A GROUP is not: making it unbreakable pushed any
+     group that would not fit whole onto a fresh page and left half of the
+     previous one blank. Let groups flow, keep rows together. */
+  .row,.step,.note,.tile{break-inside:avoid;page-break-inside:avoid}
+  .group{break-inside:auto}
+  .gtitle{break-after:avoid;page-break-after:avoid}
+
+  /* Screen padding is sized for a pointer; paper does not need the tap room. */
+  .row{padding:9px 14px}
+  .row .fn b{font-size:10.5pt}
+  .row .fn i{font-size:8.8pt}
+  .row .num{font-size:9pt}
+  .row .num s{font-size:7.5pt}
+  .st{font-size:7pt;padding:3px 7px}
+  section{margin-top:26px}
+  .group{margin-bottom:18px}
+  h2,h3{break-after:avoid;page-break-after:avoid}
+  section{break-before:auto}
+  footer{break-before:avoid}
+
+  /* Borders survive printer colour management better than backgrounds do. */
+  /* repeat(auto-fit,...) is unimplemented in the PDF renderer, which silently
+     stacks the tiles one per row. Explicit tracks for print only - the screen
+     rule above still reflows on narrow windows. */
+  .tiles{grid-template-columns:repeat(4,1fr);gap:9px}
+  .tile{padding:13px 14px}
+  .tile .v{font-size:19pt}
+  .tile .k{font-size:7.5pt}
+  .tile .u{font-size:8.5pt}
+
+  /* On screen the hairlines between rows are a 1px flex GAP showing the
+     container's background through. The PDF renderer does not implement flex
+     gap, so it fell back to spacing that made every row about three times
+     taller than its content - five rows filling a page that should hold
+     twelve. Print draws real borders instead and drops the flex entirely. */
+  .rows{display:block;gap:0;background:transparent;border:1px solid var(--line)}
+  .row{display:grid;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:none}
+}
+
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+
+  <div class="mast">
+    <div class="eyebrow">Node GF-72TYTITQ · measured, not estimated</div>
+    <h1>Gate<span class="k">^</span><b>Flame</b> Capability Ledger</h1>
+    <p class="lede">Every function the product puts in front of a customer, whether it is
+      running right now, and what it has actually handled. Every number below was read off
+      the live box at the time stamped — none are projected, rounded up, or carried over
+      from an earlier run.</p>
+    <div class="stamp">
+      <span>Read <b>2026-08-31 15:48 SAST</b></span>
+      <span>Agent <b>0.1.0</b></span>
+      <span>Box up <b>6h 44m</b></span>
+      <span>Sample <b>one household</b></span>
+    </div>
+  </div>
+
+  <div class="tiles">
+    <div class="tile">
+      <span class="k">DNS queries today</span>
+      <div class="v">41 274</div>
+      <div class="u">from 11 devices</div>
+    </div>
+    <div class="tile accent">
+      <span class="k">Blocked today</span>
+      <div class="v">5 164</div>
+      <div class="u">12.5% of all lookups</div>
+    </div>
+    <div class="tile">
+      <span class="k">Domains on blocklist</span>
+      <div class="v">425 410</div>
+      <div class="u">at threat level “low”</div>
+    </div>
+    <div class="tile">
+      <span class="k">VPN exit countries</span>
+      <div class="v">8</div>
+      <div class="u">99 servers, live list</div>
+    </div>
+  </div>
+  <p class="sub">6 h 44 m of uptime produced those figures, so “today” is most of a working
+    day rather than a full one. At this rate the box is answering roughly <b>6 100 lookups an
+    hour</b> and refusing about <b>760</b> of them.</p>
+
+  <!-- ==================================================================== -->
+  <section>
+    <h2>What the customer gets</h2>
+    <p class="sub">Grouped by where the customer touches it. “Handled” is a real reading
+      from this box; where a function has nothing to count, it says what it does instead.</p>
+
+    <div class="group">
+      <div class="gtitle"><h3>Protection</h3><span>on the box</span></div>
+      <div class="rows">
+        <div class="row">
+          <div class="fn"><b>DNS filtering</b><i>Ads, trackers and malware refused before the request leaves the house</i></div>
+          <span class="st live">Active</span>
+          <div class="num">5 164 blocked<s>of 41 274 today</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Threat levels</b><i>Low / medium / high, switched by the owner</i></div>
+          <span class="st live">Active</span>
+          <div class="num">Low — 3 lists<s>up to 9 at “high”</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Content categories</b><i>Adult, gambling, social media, misinformation</i></div>
+          <span class="st live">Active</span>
+          <div class="num">2 of 4 on<s>adult + gambling</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Pause protection</b><i>Five durations, two needing confirmation</i></div>
+          <span class="st live">Active</span>
+          <div class="num">Not paused<s>5 durations offered</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Blocklist reconcile on boot</b><i>Re-checks reality against intent after every power cut</i></div>
+          <span class="st live">Active</span>
+          <div class="num">425 410 domains<s>verified this boot</s></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gtitle"><h3>Visibility</h3><span>phone + wall console</span></div>
+      <div class="rows">
+        <div class="row">
+          <div class="fn"><b>Live activity</b><i>Queries, blocks and share, refreshed continuously</i></div>
+          <span class="st live">Active</span>
+          <div class="num">55 samples<s>5-minute resolution</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Blocked-domain log</b><i>What was refused, and for which device</i></div>
+          <span class="st live">Active</span>
+          <div class="num">33 in last 200<s>scanned window</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Device discovery</b><i>Everything on the network, vendor-identified where possible</i></div>
+          <span class="st live">Active</span>
+          <div class="num">9 devices<s>from 17 raw rows</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Device naming</b><i>Owner’s own names, shared across phone, console and support</i></div>
+          <span class="st live">Active</span>
+          <div class="num">1 named<s>2 by vendor, 6 by MAC</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Health &amp; hardware</b><i>Processor, memory, storage, temperature, throttling</i></div>
+          <span class="st live">Active</span>
+          <div class="num">50.7 °C · 39.8%<s>temp · disk used</s></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gtitle"><h3>Gate^Flame Shield</h3><span>per-device VPN</span></div>
+      <div class="rows">
+        <div class="row">
+          <div class="fn"><b>Country picker</b><i>Pick a device, then a region — live server list</i></div>
+          <span class="st live">Active</span>
+          <div class="num">8 countries<s>99 servers</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Continent shortcut</b><i>“Asia” instead of choosing between fifteen countries</i></div>
+          <span class="st live">Active</span>
+          <div class="num">2 continents<s>Asia 86 · Europe 13</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Connection file handoff</b><i>Fetches a fresh .ovpn and opens the share sheet</i></div>
+          <span class="st live">Active</span>
+          <div class="num">4 devices set<s>0 switched on</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Ionity exit servers</b><i>Our own control plane, instead of a community pool</i></div>
+          <span class="st stop">Not built</span>
+          <div class="num">—<s>Shield runs on VPN Gate only</s></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gtitle"><h3>Help &amp; support</h3><span>phone, console, operator</span></div>
+      <div class="rows">
+        <div class="row">
+          <div class="fn"><b>Guided troubleshooting</b><i>Floating help that diagnoses the network and walks the fix</i></div>
+          <span class="st live">Active</span>
+          <div class="num">5 probes<s>7 outcome states</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Same help on the wall console</b><i>Loopback probes keep answering when the Wi-Fi is the problem</i></div>
+          <span class="st live">Active</span>
+          <div class="num">Deferred load<s>~30 kB, on demand</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Support view of a box</b><i>Turns what the box reported into what to tell the customer</i></div>
+          <span class="st live">Active</span>
+          <div class="num">1 finding open<s>WAN audit degraded</s></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gtitle"><h3>Operator</h3><span>fleet console</span></div>
+      <div class="rows">
+        <div class="row">
+          <div class="fn"><b>Fleet health</b><i>Every box, online state, temperature, module status</i></div>
+          <span class="st live">Active</span>
+          <div class="num">1 of 1 online<s>reports every 5 min</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>History &amp; trend</b><i>24 h / 7 d / 30 d / 90 d, downsampled to hourly</i></div>
+          <span class="st watch">Thin</span>
+          <div class="num">55 points<s>30 d and 90 d still empty</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Shield state per box</b><i>Which devices are on which region</i></div>
+          <span class="st live">Active</span>
+          <div class="num">4 devices<s>0 enabled</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Admin &amp; support log</b><i>Tags, billing state, customer reference, notes</i></div>
+          <span class="st live">Active</span>
+          <div class="num">3 tags<s>billing: active</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Per-box credentials</b><i>Each box gets its own token instead of a shared secret</i></div>
+          <span class="st live">Active</span>
+          <div class="num">1 issued<s>enrolled on contact</s></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gtitle"><h3>Not switched on</h3><span>and why</span></div>
+      <div class="rows">
+        <div class="row">
+          <div class="fn"><b>Firewall bounce</b><i>Premium tier — in-path enforcement</i></div>
+          <span class="st idle">By design</span>
+          <div class="num">Stopped<s>correct on a standard box</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Deep packet inspection</b><i>Premium tier — traffic-level analysis</i></div>
+          <span class="st idle">By design</span>
+          <div class="num">Stopped<s>correct on a standard box</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Zero trust</b><i>Premium tier — per-device policy</i></div>
+          <span class="st idle">By design</span>
+          <div class="num">Stopped<s>correct on a standard box</s></div>
+        </div>
+        <div class="row">
+          <div class="fn"><b>Data-cap reporting</b><i>Tracks the household against its WAN budget</i></div>
+          <span class="st watch">Needs setup</span>
+          <div class="num">Degraded<s>WAN interface not declared</s></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <h4>Two numbers that look wrong and are not</h4>
+      <p><b>11 devices vs 9.</b> The filter counts 11 clients; the device list shows 9. The
+        two extra are the box’s own interfaces. The list is filtered so a customer sees their
+        household, not our plumbing.</p>
+      <p><b>Four devices set, none switched on.</b> Shield regions have been chosen during
+        testing but no tunnel is currently active — the picker works, nothing is routed
+        through it right now.</p>
+    </div>
+  </section>
+
+  <!-- ==================================================================== -->
+  <section>
+    <h2>What is still needed</h2>
+    <p class="sub">In dependency order — each one has to land before the next can be
+      attempted. The first four are what stand between this and a paying customer.</p>
+
+    <div class="step">
+      <div class="n">01</div>
+      <div>
+        <span class="blocks">Blocks Play upload</span>
+        <h4>Privacy notice and data-safety declaration</h4>
+        <p>Shield state now leaves the box carrying device names and MAC addresses. POPIA
+          s18 requires the privacy notice to say so, and Google Play’s data-safety form must
+          declare device identifiers.</p>
+        <div class="why">This was a deliberate trade, not an oversight — per-device Shield
+          state is what lets support answer “which of my devices is on Japan?”. But the
+          honest data-safety answer was a selling point, and it is a smaller one now.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">02</div>
+      <div>
+        <span class="blocks">Blocks Play upload</span>
+        <h4>Signed release build</h4>
+        <p>The keystore exists, but <code>keystore.properties</code> has never been written,
+          so a release APK cannot be signed today. Play App Signing must be enrolled at first
+          upload — it is the only recovery path if the upload key is lost.</p>
+        <div class="why">Version numbers also disagree: tag v1.0.2 against VERSION_NAME
+          1.0.1. Play rejects a reused version code, so this has to be settled before the
+          first upload rather than after.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">03</div>
+      <div>
+        <span class="blocks">Blocks first install</span>
+        <h4>The customer’s own router step</h4>
+        <p>The box works by being the router’s upstream DNS. Today that field is changed by
+          hand. A customer needs one guided screen that makes the change and then re-reads
+          the router to prove it took.</p>
+        <div class="why">The credentialed router login is deliberately unbuilt. A router that
+          reports “saved” without saving has already cost this household days — the guided
+          flow must verify, not trust.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">04</div>
+      <div>
+        <h4>A second box, then a tenth</h4>
+        <p>Everything above is measured on one appliance. The fleet console, per-box tokens
+          and rollups are built for hundreds but have never seen two. 30-day and 90-day
+          history are empty because the data does not exist yet.</p>
+        <div class="why">Per-node auth would have broken every deployed box when it shipped —
+          caught only because the test was written first. Scale assumptions stay unproven
+          until a second box exists to disprove them.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">05</div>
+      <div>
+        <h4>Ionity’s own exit servers</h4>
+        <p>Shield currently runs entirely on VPN Gate, a volunteer pool whose server list
+          rotates and whose countries come and go. The control plane for Ionity-run exits is
+          designed and unbuilt.</p>
+        <div class="why">Live proof of the difference: the eight countries available right
+          now are not the eight that were available this morning.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">06</div>
+      <div>
+        <h4>Support access to a customer’s box</h4>
+        <p>The fleet console reads what each box reports and cannot reach into one. A
+          persistent tunnel per box is the agreed direction; it does not exist yet.</p>
+        <div class="why">Until it does, every diagnosis is limited to what the last check-in
+          happened to contain — which is why the support view names the field each finding
+          came from.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">07</div>
+      <div>
+        <h4>Self-hosted fonts on the console</h4>
+        <p>The wall console deliberately loads no remote fonts, so it falls back to system
+          faces. Shipping the three families locally finishes the look without sending a
+          request off the LAN.</p>
+        <div class="why">Small, but it is the one place the console visibly differs from the
+          design — on a product whose promise is that almost nothing leaves the house.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Ionity (Pty) Ltd · AEDI</span>
+    <span>Node GF-72TYTITQ · agent 0.1.0</span>
+    <span>Tests: 556 backend · 191 frontend · 9 fleet</span>
+    <span>Figures read live 2026-08-31 15:48 SAST</span>
+  </footer>
+
+</div>
+
+</body>
+</html>
