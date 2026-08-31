@@ -138,6 +138,11 @@ export function ShieldScreen({ active }: { active: boolean }) {
   const [draftName, setDraftName] = useState('');
 
   const r = regions.data;
+  // Regions and devices are INDEPENDENT. My first pass still rendered the
+  // device list only when `r` had arrived, so a slow or failed region fetch
+  // blanked the devices too - the same dead-end this screen was being fixed
+  // for. Defaulting to [] lets rows render with no picker rather than no rows.
+  const regionList = r?.regions ?? [];
   const continentList = continents.data?.continents ?? [];
   const knownDevices = devices.data?.devices ?? [];
   const lanList = clients.data?.clients ?? [];
@@ -264,23 +269,34 @@ export function ShieldScreen({ active }: { active: boolean }) {
           </p>
         ) : !r ? (
           <Skeleton className="h-3 w-2/3" />
-        ) : r.regions.length === 0 ? (
-          <p className="text-xs leading-relaxed text-[#64748B]">
-            {!r.controlPlaneReachable && !r.vpnGateAvailable
-              ? 'No Shield provider is switched on for this box.'
-              : 'The region list came back empty. Nothing to pick yet.'}
-          </p>
+        ) : regionList.length === 0 ? (
+          r.refreshing ? (
+            /* The box is fetching VPN Gate's list right now. Saying "nothing
+               to offer" here would be wrong within seconds - and saying it
+               once is enough to make someone stop coming back. */
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-3 w-32" />
+              <span className="text-[11px] text-[#475569]">fetching regions</span>
+            </div>
+          ) : (
+            <p className="text-xs leading-relaxed text-[#64748B]">
+              {!r.controlPlaneReachable && !r.vpnGateAvailable
+                ? 'No Shield provider is switched on for this box.'
+                : 'The region list came back empty. Nothing to pick yet.'}
+            </p>
+          )
         ) : null}
 
-        {/* Devices show whether or not a region is on offer. Without this the
-            screen went completely blank the moment the provider list was
-            empty, taking renaming and the on/off state with it - and none of
-            that depends on there being a region to pick. */}
-        {r && rows.length === 0 ? (
+        {/* Devices show whether or not a region is on offer, and whether or
+            not the region call succeeded. Gating them on `r` - as the first
+            version of this fix did - recreated the dead end it was meant to
+            remove: a slow region fetch took renaming and the on/off state
+            down with it, though neither depends on regions at all. */}
+        {rows.length === 0 ? (
           <p className="text-xs leading-relaxed text-[#64748B]">
             {clients.data ? 'No devices seen on your network yet.' : 'Reading your devices…'}
           </p>
-        ) : r ? (
+        ) : (
           <div className="flex flex-col gap-2.5">
             {rows.map((row) => (
               <div key={row.mac} className="rounded-xl border border-[#1E293B] bg-[#0F1B2D] p-3">
@@ -339,7 +355,7 @@ export function ShieldScreen({ active }: { active: boolean }) {
                   <button
                     disabled={busy !== null}
                     onClick={() => {
-                      const fallback = r.regions[0];
+                      const fallback = regionList[0];
                       setDevice(
                         row.mac,
                         row.region ?? fallback?.code ?? null,
@@ -365,9 +381,9 @@ export function ShieldScreen({ active }: { active: boolean }) {
                         directly rather than behind the "exact country" toggle
                         below, which exists only to keep VPN Gate's much longer
                         country list from cluttering this row by default. */}
-                    {r.regions.some((reg) => reg.provider === 'headscale') && (
+                    {regionList.some((reg) => reg.provider === 'headscale') && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {r.regions
+                        {regionList
                           .filter((reg) => reg.provider === 'headscale')
                           .map((reg) => (
                             <RegionChip
@@ -414,7 +430,7 @@ export function ShieldScreen({ active }: { active: boolean }) {
 
                     {(showExactFor === row.mac || continentList.length === 0) && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {r.regions
+                        {regionList
                           .filter((reg) => reg.provider === 'vpngate')
                           .map((reg) => (
                             <RegionChip
@@ -455,7 +471,7 @@ export function ShieldScreen({ active }: { active: boolean }) {
               </div>
             ))}
           </div>
-        ) : null}
+        )}
       </Card>
     </Screen>
   );

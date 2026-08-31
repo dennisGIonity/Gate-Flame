@@ -74,6 +74,10 @@ _lock = threading.Lock()
 _cache: list[dict] = []
 _cache_at: float = 0.0
 _last_error: str | None = None
+# True while a background refresh is in flight. Exposed through the API so the
+# screen can say "still fetching" instead of "nothing to offer" - those are
+# different facts and only one of them is a reason to give up.
+_refreshing: bool = False
 
 # Friendly names for the ISO-ish country codes VPN Gate's CSV actually uses.
 # Unknown codes still work - they just show as their own code, honest rather
@@ -163,11 +167,16 @@ def _parse_csv(text: str) -> list[dict]:
 
 
 def _refresh(force: bool = False) -> None:
-    global _cache, _cache_at, _last_error
+    """Fetch VPN Gate's list. BLOCKS - only ever call this off the request path.
+
+    Callers serving an HTTP request want ensure_fresh() instead.
+    """
+    global _cache, _cache_at, _last_error, _refreshing
     with _lock:
         stale = (time.time() - _cache_at) > _CACHE_TTL
         if not (force or stale):
             return
+        _refreshing = True
     try:
         r = httpx.get(VPNGATE_CSV_URL, timeout=_TIMEOUT)
         if r.status_code != 200:
@@ -188,6 +197,62 @@ def _refresh(force: bool = False) -> None:
         # blank out a list that was working a minute ago.
         with _lock:
             _last_error = f"could not reach VPN Gate: {exc}"
+    finally:
+        with _lock:
+            _refreshing = False
+
+
+def ensure_fresh() -> None:
+    """Start a refresh if the list is stale, and RETURN IMMEDIATELY.
+
+    WHY THIS EXISTS
+    _refresh() ran inline at the top of every list_* call, so once the cache
+    passed its 10-minute TTL the next HTTP request to /vpn/regions blocked on
+    a live fetch of VPN Gate's CSV. Measured on the real box: 24.1 seconds,
+    against a 4-second client timeout. The phone aborted every time, and the
+    Shield screen reported the feature as unavailable - while the box was
+    fetching a perfectly good list that arrived twenty seconds too late.
+
+    Worse, it was intermittent by construction: whoever asked next got the
+    now-warm cache in 2ms. That is why this looked like it "worked yesterday".
+
+    A household screen must never wait on someone else's server. Serve what we
+    have, refresh behind it, and let the caller say the list is being fetched.
+    """
+    global _refreshing
+    with _lock:
+        if _refreshing:
+            return
+        if (time.time() - _cache_at) <= _CACHE_TTL:
+            return
+        # Claim the slot inside the same lock we checked under, so several
+        # concurrent requests cannot each start their own fetch.
+        _refreshing = True
+
+    def _run() -> None:
+        global _refreshing
+        try:
+            with _lock:
+                _refreshing = False
+            _refresh(force=True)
+        except Exception:  # noqa: BLE001 - a daemon thread must never die loudly
+            with _lock:
+                _refreshing = False
+
+    threading.Thread(target=_run, name="vpngate-refresh", daemon=True).start()
+
+
+def is_refreshing() -> bool:
+    with _lock:
+        return _refreshing
+
+
+def cache_age_seconds() -> float | None:
+    """None when the list has never been fetched at all."""
+    with _lock:
+        if not _cache_at:
+            return None
+        return time.time() - _cache_at
 
 
 def list_countries() -> list[dict]:
@@ -197,7 +262,7 @@ def list_countries() -> list[dict]:
     Returns [] honestly if the feed has never been reached successfully - same
     "nothing to offer today, not a fault" shape as vpn.list_regions().
     """
-    _refresh()
+    ensure_fresh()
     with _lock:
         rows = list(_cache)
 
@@ -242,7 +307,7 @@ def list_continents() -> list[dict]:
     endpoint) needs to know "continent" exists at all - it is a display and
     selection convenience only, resolved once at pick time.
     """
-    _refresh()
+    ensure_fresh()
     with _lock:
         rows = list(_cache)
 
@@ -285,7 +350,7 @@ def get_ovpn_config(country_code: str) -> dict | None:
     offered - never a stale/guessed config, since VPN Gate's volunteer list
     genuinely rotates and an expired entry is worse than an honest failure.
     """
-    _refresh()
+    ensure_fresh()
     code = country_code.strip().upper()
     with _lock:
         rows = list(_cache)

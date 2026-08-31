@@ -51,6 +51,11 @@ export interface VpnRegionsResponse {
    * once. Independent of controlPlaneReachable - a box can have plenty of
    * one and none of the other. */
   vpnGateAvailable: boolean;
+  /** The box is fetching VPN Gate's list right now. Lets a screen tell "still
+   * loading" apart from "nothing on offer" instead of guessing - an empty
+   * `regions` means both, and guessing wrong told owners a working feature
+   * had never been installed. Optional: an older agent will not send it. */
+  refreshing?: boolean;
   regions: VpnRegion[];
 }
 

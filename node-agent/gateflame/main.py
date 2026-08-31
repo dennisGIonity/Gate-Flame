@@ -53,6 +53,13 @@ control_scope = ScopeChecker(store, ("control", "kiosk"))
 def _startup() -> None:
     feed_loop.start()
 
+    # Warm the VPN Gate list in the background so the first owner to open
+    # Shield after a reboot is not the one who pays for the fetch. Non-blocking
+    # by construction - see vpngate.ensure_fresh() for why that matters. Load
+    # shedding makes reboots weekly here, so "first request after boot" is a
+    # common case, not an edge one.
+    vpngate.ensure_fresh()
+
     # An "until_reboot" pause has to actually END at reboot, or the phrase is a
     # lie: the box would come back up still unprotected with no indication that
     # what the owner asked for had not happened.
@@ -730,6 +737,10 @@ def get_vpn_regions(request: Request, _=Depends(read_scope)):
         # Ionity's own (currently nonexistent) Headscale exit servers. A box
         # can have zero of one and plenty of the other.
         "vpnGateAvailable": vpngate.last_fetch_ok(),
+        # Lets the screen distinguish "we are still fetching the list" from
+        # "there is nothing on offer". Before this the two were indistinguishable
+        # to the caller, and the screen guessed - wrongly.
+        "refreshing": vpngate.is_refreshing(),
         "regions": vpn.list_all_regions(),
     }
 

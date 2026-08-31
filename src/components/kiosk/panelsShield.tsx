@@ -132,15 +132,33 @@ export function ShieldPanel({ authority, active }: PanelContext) {
       >
         {!canWrite && <ViewerNotice what="Gate^Flame Shield" />}
 
-        {!r || r.regions.length === 0 ? (
+        {/* Same four states as the phone, for the same reason: "we could not
+            ask", "still fetching", "no provider configured" and "provider had
+            nothing" are four different facts, and only one of them means the
+            owner should stop waiting. The old copy printed the harshest of the
+            four - "Not set up on this box yet" - for all of them, while Shield
+            was installed and running. */}
+        {regions.error ? (
+          <EmptyState
+            title="Cannot reach the box"
+            detail="The console could not read the Shield status just now. It keeps retrying."
+          />
+        ) : !r ? (
+          <EmptyState title="Reading Shield status…" detail="Asking the box what it can offer." />
+        ) : r.regions.length === 0 && r.refreshing ? (
+          <EmptyState
+            title="Fetching regions…"
+            detail="The box is reading VPN Gate’s current server list. This finishes on its own."
+          />
+        ) : r.regions.length === 0 ? (
           <EmptyState
             title={
-              !r || (!r.controlPlaneReachable && !r.vpnGateAvailable)
-                ? 'Not set up on this box yet'
+              !r.controlPlaneReachable && !r.vpnGateAvailable
+                ? 'No provider switched on'
                 : 'No regions available right now'
             }
             detail={
-              !r || (!r.controlPlaneReachable && !r.vpnGateAvailable)
+              !r.controlPlaneReachable && !r.vpnGateAvailable
                 ? 'Nothing to turn on until Ionity’s control plane or VPN Gate is reachable from this box.'
                 : 'The box is configured, but neither provider has an available region at the moment.'
             }
