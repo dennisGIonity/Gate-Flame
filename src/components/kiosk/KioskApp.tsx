@@ -59,6 +59,8 @@ import ConsoleLock from './ConsoleLock';
 import { FilteringPanel, NetworkPanel, OverviewPanel, ThreatsPanel, type PanelContext } from './panels';
 import { FirewallPanel, ModulesPanel, SystemPanel, WanPanel } from './panelsSystem';
 import { ShieldPanel, SHIELD_TAB_ICON } from './panelsShield';
+import Ionibot, { defaultDeps } from '../../ionibot';
+import { buildKioskIonibotContext, learnKioskGateway } from './kioskIonibot';
 
 type TabId = 'overview' | 'filtering' | 'threats' | 'shield' | 'network' | 'modules' | 'firewall' | 'wan' | 'system';
 
@@ -88,6 +90,20 @@ export default function KioskApp() {
   // LAN-gated like /system/status, so it answers even when every scoped read is
   // refused. That makes it the one thing worth showing on the refusal screen.
   const kioskMount = usePolled<KioskMount>('/system/kiosk', 60000);
+
+  // Asked once and cached. The Ionibot screens that need the gateway are the
+  // ones a customer reaches when the network is already broken, so the value
+  // has to be in hand BEFORE it is needed rather than fetched at that moment.
+  const [gateway, setGateway] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void learnKioskGateway().then((g) => {
+      if (!cancelled) setGateway(g);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Writes return the new state, so the control surface updates from the
   // node's answer rather than from an optimistic guess about what it did.
@@ -351,6 +367,23 @@ export default function KioskApp() {
           }}
         />
       )}
+
+      {/* ---- Help ---------------------------------------------------------
+          Ionibot, mounted on the wall console as well as the phone.
+
+          This is the better home for it. Its probes talk to the node over
+          HTTP; from a phone that crosses the LAN and so depends on the very
+          Wi-Fi the customer is asking about - least reachable exactly when
+          most needed. Here the same probes are loopback and still answer
+          while the household network is the broken thing.
+
+          Rendered last so its sheet sits above the panels, and outside the
+          scrolling region so the button does not drift off a long tab. */}
+      <Ionibot
+        ctx={buildKioskIonibotContext(gateway)}
+        contactUrl="mailto:info@ionity.today"
+        probeDeps={defaultDeps}
+      />
     </div>
   );
 }

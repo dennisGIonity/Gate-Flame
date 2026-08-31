@@ -5,7 +5,26 @@ Governance: Policy 986 AED | (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - 
 Approval: DOC-2026-08-004 | Spec: DOC-2026-08-003 | Dependencies: DOC-2026-08-002
 ========================================================================================
 
-MOBILE APP ONLY. THE KIOSK IS NOT TOUCHED.
+MOUNTED ON BOTH THE MOBILE APP AND THE WALL CONSOLE (since 2026-08-31).
+
+This file used to open "MOBILE APP ONLY. THE KIOSK IS NOT TOUCHED." That was
+true of the moment it was written, not a property of the component - it imports
+its own types and nothing else, which is exactly what made adding the kiosk a
+context object rather than a rewrite. The note is corrected rather than deleted
+because the reasoning below changed with it.
+
+THE KIOSK IS ARGUABLY THE BETTER HOME FOR IT. These probes talk to the node
+over HTTP. From a phone that crosses the LAN, so the help sheet depends on the
+very Wi-Fi the customer is asking about - least reachable exactly when it is
+most needed. On the console the same probes are loopback and keep working
+while the household network is the broken thing.
+
+  mobile: src/services/ionibotContext.ts   -> buildIonibotContext()
+  kiosk:  src/components/kiosk/kioskIonibot.ts -> buildKioskIonibotContext()
+
+The kiosk context differs in two ways, both deliberate and both documented at
+that file's head: `paired` is always true (the console is not a paired device,
+it IS the box), and `startPairing` is not wired to "forget the node".
 
 Drop `ionibot/` into `src/` of the Capacitor app and mount it once, at the app root,
 inside whatever provider/router tree already exists:

@@ -452,6 +452,168 @@ def _status_for(age: float) -> str:
     return "offline"
 
 
+# ------------------------------------------------------- support assistant
+#
+# WHAT THIS IS, AND WHAT IT DELIBERATELY IS NOT
+#
+# It is a reader of what the node ALREADY reported, turned into something a
+# support person can act on: what is wrong, what it means for the customer,
+# what to check next.
+#
+# It is NOT the mobile app's Ionibot. Ionibot probes the box live over the LAN,
+# which a support console physically cannot do for a customer three provinces
+# away. Shipping Ionibot here would have produced a screen full of confident
+# "cannot reach" panels that say nothing about the customer and everything
+# about where the browser is sitting.
+#
+# So every finding below is traceable to a field in the last check-in. Nothing
+# here infers, guesses, or fills a gap with a plausible sentence - if the node
+# did not report it, this says nothing about it. `evidence` names the field the
+# finding came from precisely so a support person can tell "the box told us
+# this" from "the console worked this out".
+
+# Per-module translation. Keyed by the module ids in services.MODULE_DEFS.
+_MODULE_HELP: dict[str, dict] = {
+    "module_dns_filter": {
+        "name": "DNS filtering",
+        "customer": "Ads and trackers are not being blocked for this household.",
+        "check": "This is the product. Treat a stopped or degraded filter as urgent.",
+    },
+    "module_telemetry": {
+        "name": "Telemetry",
+        "customer": "Their app and wall console will show gaps in the numbers.",
+        "check": "Protection itself is unaffected - do not alarm the customer about blocking.",
+    },
+    "module_passive_discovery": {
+        "name": "Device discovery",
+        "customer": "Their device list will be empty or stale, so Shield has nothing to pick from.",
+        "check": "Usually a missing iproute2 or a permissions change on the box.",
+    },
+    "module_wan_audit": {
+        "name": "WAN audit",
+        "customer": "No effect they can see. Data-cap reporting is unavailable.",
+        "check": "Needs GATEFLAME_WAN_INTERFACES set. Deliberately not guessed - guessing "
+                 "wrong bills LAN traffic against the customer's cap.",
+    },
+    "module_firewall_bounce": {
+        "name": "Firewall bounce",
+        "customer": "None. Premium-tier only.",
+        "check": "Expected to be stopped on a standard box. Not a fault.",
+    },
+    "module_dpi_flow": {
+        "name": "DPI flow",
+        "customer": "None. Premium-tier only.",
+        "check": "Expected to be stopped on a standard box. Not a fault.",
+    },
+    "module_zero_trust": {
+        "name": "Zero trust",
+        "customer": "None. Premium-tier only.",
+        "check": "Expected to be stopped on a standard box. Not a fault.",
+    },
+}
+
+# Modules that are SUPPOSED to be off on a standard box. Reporting these as
+# problems would bury the one finding that matters under three that never did.
+_PREMIUM_ONLY = {"module_firewall_bounce", "module_dpi_flow", "module_zero_trust"}
+
+
+def _support_findings(detail: dict) -> list[dict]:
+    """Read one node's last check-in and say what is worth a human's attention.
+
+    Ordered worst-first, because a support person reads the top of a list.
+    """
+    findings: list[dict] = []
+    status = detail.get("status")
+    age = detail.get("lastSeenAgoSeconds")
+
+    if status != "online":
+        findings.append({
+            "severity": "critical" if status == "offline" else "warning",
+            "title": f"Box has not checked in for {_human_age(age)}",
+            "customer": "Their protection may still be working - this box reports OUTWARD, "
+                        "so silence here does not prove the household is unprotected.",
+            "check": "Power, internet, or the agent service. Ask before assuming an outage: "
+                     "load shedding explains most of these.",
+            "evidence": f"lastSeenAgoSeconds={age}",
+        })
+
+    if not detail.get("piholeReachable", True):
+        findings.append({
+            "severity": "critical",
+            "title": "The box cannot reach its own filter",
+            "customer": "Filtering is likely down for the whole household right now.",
+            "check": "Pi-hole container or service on the box. This is the product not working.",
+            "evidence": "piholeReachable=false",
+        })
+
+    for m in detail.get("modules") or []:
+        mid = m.get("id", "")
+        mstatus = m.get("status")
+        if mstatus == "running":
+            continue
+        if mid in _PREMIUM_ONLY and mstatus == "stopped":
+            continue  # correct on a standard box, not a finding
+        help_ = _MODULE_HELP.get(mid, {})
+        findings.append({
+            "severity": "critical" if mid == "module_dns_filter" else "warning",
+            "title": f"{help_.get('name', mid)} is {mstatus}",
+            "customer": help_.get("customer", "Effect on the customer is not documented for this module."),
+            # The node's own gap text is the most specific thing available and
+            # is written for exactly this moment - so it wins over our generic
+            # advice rather than being summarised away.
+            "check": m.get("gap") or help_.get("check", "No further detail was reported."),
+            "evidence": f"modules[{mid}].status={mstatus}",
+        })
+
+    host = detail.get("host") or {}
+    disk = host.get("diskUsedPercent")
+    if isinstance(disk, (int, float)) and disk >= 85:
+        findings.append({
+            "severity": "critical" if disk >= 95 else "warning",
+            "title": f"Disk {disk:.0f}% full",
+            "customer": "Nothing yet. A full disk will stop blocklist updates and logging.",
+            "check": "Usually log growth. Safe to clear journald first.",
+            "evidence": f"host.diskUsedPercent={disk}",
+        })
+    temp = host.get("tempC")
+    if isinstance(temp, (int, float)) and temp >= 75:
+        findings.append({
+            "severity": "warning",
+            "title": f"Running hot at {temp:.0f}C",
+            "customer": "They may notice slowdowns as the board throttles.",
+            "check": "Ventilation or enclosure. Check host.throttleFlags for whether it "
+                     "has actually throttled yet.",
+            "evidence": f"host.tempC={temp}",
+        })
+
+    shield = detail.get("shield")
+    if shield is None and detail.get("shieldReported"):
+        findings.append({
+            "severity": "warning",
+            "title": "The box could not read its own Shield state",
+            "customer": "Their VPN picker may be empty even though Shield is installed.",
+            "check": "Not the same as Shield being unconfigured - the box tried and failed.",
+            "evidence": "shield=null",
+        })
+
+    order = {"critical": 0, "warning": 1, "info": 2}
+    findings.sort(key=lambda f: order.get(f["severity"], 3))
+    return findings
+
+
+def _human_age(seconds) -> str:
+    if not isinstance(seconds, (int, float)):
+        return "an unknown time"
+    s = int(seconds)
+    if s < 90:
+        return f"{s}s"
+    if s < 5400:
+        return f"{s // 60} min"
+    if s < 172800:
+        return f"{s // 3600} hours"
+    return f"{s // 86400} days"
+
+
 def _admin_rows(conn) -> dict[str, dict]:
     out = {}
     for r in conn.execute("SELECT * FROM node_admin").fetchall():
@@ -623,8 +785,7 @@ def node_detail(node_id: str, authorization: str | None = Header(None)) -> JSONR
         enrolled = conn.execute("SELECT issued_at FROM tokens WHERE node_id = ?", (node_id,)).fetchone()
 
     payload = json.loads(row["payload_json"])
-    return JSONResponse(
-        {
+    detail = {
             "nodeId": node_id,
             "label": admin.get("label"),
             "customerRef": admin.get("customerRef"),
@@ -639,10 +800,26 @@ def node_detail(node_id: str, authorization: str | None = Header(None)) -> JSONR
             "host": payload.get("host", {}),
             "modules": payload.get("modules", []),
             "counters": payload.get("counters", {}),
+            # Per-device Shield state. Only on the DETAIL view, never on the
+            # list: a support person opening one customer's box is a different
+            # act from scrolling every device in the fleet, and the API should
+            # not make the second one a side effect of building the first.
+            #
+            # Three-valued on purpose:
+            #   dict  - the box reported Shield state
+            #   None  - the box tried and could not read it
+            #   absent-> {} below only when the agent predates the field
+            # Collapsing those would repeat the mistake that had Shield telling
+            # owners a working feature was never installed.
+            "shield": payload.get("shield", {}) if "shield" in payload else None,
+            "shieldReported": "shield" in payload,
             "notes": notes,
             "tokenIssuedAt": enrolled["issued_at"] if enrolled else None,
-        }
-    )
+    }
+    # Computed from the detail above and nothing else, so every finding is
+    # traceable to a field the node actually reported.
+    detail["findings"] = _support_findings(detail)
+    return JSONResponse(detail)
 
 
 @app.get("/api/v1/nodes/{node_id}/history")

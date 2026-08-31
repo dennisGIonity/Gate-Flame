@@ -1,8 +1,36 @@
-"""Outbound-only health feed. Health fields only — see PAIRING-AND-TELEMETRY.md §4.
+"""Outbound-only health feed — see PAIRING-AND-TELEMETRY.md §4.
 
-Never touches domains, client IPs, hostnames, threat logs or DPI output —
-those aren't imported into this module at all, not just excluded at
-serialization, so a future edit can't accidentally wire one in.
+WHAT LEAVES THE HOUSEHOLD, STATED PLAINLY
+=========================================
+Health fields, PLUS per-device Shield state: for each device the owner has
+put on a VPN region, its MAC, the name the owner gave it, the region, and
+whether it is on.
+
+That last part is a DEVICE IDENTIFIER leaving the LAN, and it is here by an
+explicit product decision (Dennis, 2026-08-31) so that support can answer
+"which of my devices is on Japan?" without asking the customer to read a
+screen to them.
+
+This docstring used to promise the exact opposite:
+
+    "Never touches domains, client IPs, hostnames, threat logs or DPI output"
+
+That promise no longer holds in full, so it does not get to stay written. A
+module whose comments describe a stricter system than the one it implements is
+worse than one with no comments, because the next reader trusts it.
+
+WHAT STILL NEVER LEAVES
+-----------------------
+Domains, per-query threat logs, DPI output and client IP addresses are still
+not imported into this module at all - not merely filtered at serialization -
+so a future edit cannot wire one in by accident. Only the Shield rows cross,
+and only the four fields named above.
+
+OBLIGATIONS THIS CREATES (see docs/, and the Play listing)
+----------------------------------------------------------
+  * POPIA s18 - the privacy notice must say device identifiers are collected.
+  * Google Play data safety - must declare device identifiers. CLAUDE.md
+    calls the honest answer here a selling point; it is now a smaller one.
 
 Off by default (`GATEFLAME_FEED_ENABLED`). Batched to one POST per interval
 (default 15 min), fails silent — a feed outage must never touch protection.
@@ -16,7 +44,7 @@ import time
 
 import httpx
 
-from . import services, telemetry
+from . import device_names, services, telemetry, vpn
 from .config import config
 from .storage import Store
 
@@ -41,7 +69,50 @@ def build_payload(store: Store) -> dict:
         ],
         "counters": {"errors24h": 0, "restarts24h": 0, "wanBudgetUsedPercent": None},
         "piholeReachable": telemetry.pihole.reachable(),
+        "shield": _shield_snapshot(store),
     }
+
+
+def _shield_snapshot(store: Store) -> dict:
+    """Shield state for this box, including per-device rows.
+
+    Only devices the owner has actually configured appear - list_vpn_devices()
+    returns rows that exist because somebody chose a region, not every device
+    ever seen on the LAN. A household that has never touched Shield sends
+    `devices: []`, which is a meaningfully different thing from "we looked and
+    there is nothing to report" and is why `configured` is sent alongside.
+
+    Wrapped in its own try: this is a REPORTING feature, and it must never be
+    the reason a health check-in fails. A box whose Shield table is somehow
+    unreadable should still tell the fleet its CPU and its module states.
+    """
+    try:
+        names = store.device_names()
+        rows = []
+        for d in vpn.list_device_status(store):
+            mac = d.get("mac", "")
+            rows.append(
+                {
+                    "mac": mac,
+                    # The same label the owner sees on the phone and the wall
+                    # console, computed the same way, so support and customer
+                    # are never looking at two different names for one device.
+                    "label": device_names.display_label(mac, names.get(mac), None),
+                    "region": d.get("region"),
+                    "enabled": bool(d.get("enabled")),
+                    "provider": d.get("provider"),
+                }
+            )
+        return {
+            "configured": bool(rows),
+            "enabledCount": sum(1 for r in rows if r["enabled"]),
+            "devices": rows,
+        }
+    except Exception:  # noqa: BLE001 - reporting must never break the check-in
+        logger.warning("could not read Shield state for the feed", exc_info=True)
+        # None, not {} - "we could not read this" and "there is nothing here"
+        # must not arrive at the dashboard looking identical.
+        return None
 
 
 # Where the node's own feed credential lives once the server has issued one.
