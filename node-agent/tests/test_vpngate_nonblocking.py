@@ -29,12 +29,14 @@ def _reset_module_state():
         vpngate._cache_at = 0.0
         vpngate._last_error = None
         vpngate._refreshing = False
+        vpngate._refresh_started_at = 0.0
     yield
     with vpngate._lock:
         vpngate._cache = []
         vpngate._cache_at = 0.0
         vpngate._last_error = None
         vpngate._refreshing = False
+        vpngate._refresh_started_at = 0.0
 
 
 class _SlowUpstream:
@@ -142,6 +144,65 @@ def test_is_refreshing_reports_the_truth_while_a_fetch_runs(monkeypatch):
     while time.monotonic() < deadline and vpngate.is_refreshing():
         time.sleep(0.05)
     assert vpngate.is_refreshing() is False, "refreshing never cleared"
+
+
+def test_the_read_timeout_is_generous_enough_for_the_real_download():
+    """VPN Gate serves 1.3 MB at about 41 KB/s from this house - 32 seconds,
+    measured. A 12-second flat timeout could not finish that download, which is
+    why the region list mostly never arrived and, when it did, looked like luck.
+
+    Connect stays short so a DEAD host still fails fast; only the READ is
+    patient, and it costs nobody anything now that it runs off the request path.
+    """
+    t = vpngate._TIMEOUT
+    assert t.read is not None and t.read >= 60.0, (
+        f"read timeout {t.read}s is too tight for a ~32s download; the list "
+        "will keep failing to arrive"
+    )
+    assert t.connect is not None and t.connect <= 15.0, (
+        f"connect timeout {t.connect}s is too slack; a dead host should fail fast"
+    )
+
+
+def test_a_wedged_refresh_does_not_block_every_future_one(monkeypatch):
+    """A flag that only ever gets set is a deadlock.
+
+    If a fetch wedges - a half-open socket, a host that accepts and then never
+    sends - _refreshing would stay True for the life of the process, every
+    later refresh would no-op, and the list would never update again. The
+    screen would sit on "fetching regions" forever, which is its own lie.
+    """
+    # Simulate a refresh claimed long ago that never finished.
+    with vpngate._lock:
+        vpngate._refreshing = True
+        vpngate._refresh_started_at = time.time() - (vpngate._REFRESH_ABANDON_AFTER + 60)
+        vpngate._cache_at = 0.0
+
+    fast = _SlowUpstream(delay=0.05)
+    monkeypatch.setattr(vpngate.httpx, "get", fast)
+
+    vpngate.ensure_fresh()
+    time.sleep(0.6)
+
+    assert fast.calls == 1, (
+        "a refresh abandoned long ago still blocked a new one - the flag latched"
+    )
+
+
+def test_a_recent_refresh_is_still_respected(monkeypatch):
+    """The escape hatch above must not defeat the stampede guard it sits in."""
+    with vpngate._lock:
+        vpngate._refreshing = True
+        vpngate._refresh_started_at = time.time()  # in flight right now
+        vpngate._cache_at = 0.0
+
+    fast = _SlowUpstream(delay=0.05)
+    monkeypatch.setattr(vpngate.httpx, "get", fast)
+
+    vpngate.ensure_fresh()
+    time.sleep(0.3)
+
+    assert fast.calls == 0, "started a second fetch while one was legitimately running"
 
 
 def test_a_failing_upstream_keeps_the_previous_list(monkeypatch):

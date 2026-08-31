@@ -105,9 +105,56 @@ else
 fi
 head -c 200 /tmp/rr.json; echo
 
+# Speed alone is not the goal - an instant empty list would also be "fast".
+# The point of moving the fetch off the request path was that the list still
+# ARRIVES, just without anyone waiting on it. So wait here, where waiting is
+# free, and confirm it lands.
+echo ""
+echo "-- and the background refresh must actually populate the list"
+LANDED=0
+for i in $(seq 1 30); do
+  if curl -s --max-time 10 http://127.0.0.1:8080/api/v1/vpn/regions \
+     | grep -q '"regions":\[{'; then
+    echo "   PASS - regions arrived after ~${i}s, with nobody blocked waiting"
+    LANDED=1
+    break
+  fi
+  sleep 1
+done
+if [ "$LANDED" = "0" ]; then
+  echo "   FAIL - 30s later the list is still empty. Check the box's internet/DNS:"
+  curl -s --max-time 10 http://127.0.0.1:8080/api/v1/vpn/regions | head -c 200; echo
+  FAIL=1
+fi
+
 echo ""
 echo "-- kiosk bundle the box is serving"
-curl -s http://127.0.0.1:8080/device-kiosk | grep -o 'assets/[A-Za-z0-9.-]*\.\(js\|css\)' | sort -u | sed 's/^/   /'
+# -L matters: /device-kiosk redirects, and without it curl returns an empty
+# body. That is exactly what happened on the first run - this block printed
+# NOTHING and the script still said ALL CHECKS PASSED, because it only ever
+# echoed and never asserted. A check that cannot fail is not a check, and
+# this one was sitting inside the read-back section that exists precisely to
+# stop us trusting an unverified claim.
+SERVED=$(curl -sL --max-time 15 http://127.0.0.1:8080/device-kiosk \
+         | grep -o 'assets/[A-Za-z0-9._-]*\.\(js\|css\)' | sort -u)
+
+if [ -z "$SERVED" ]; then
+  echo "   FAIL - the box served no kiosk asset references at all"
+  FAIL=1
+else
+  echo "$SERVED" | sed 's/^/   /'
+  # Compare against what was staged, so "current" is measured, not assumed.
+  EXPECT=$(grep -o 'assets/[A-Za-z0-9._-]*\.\(js\|css\)' "$STAGE/kiosk/index.html" 2>/dev/null | sort -u)
+  if [ -n "$EXPECT" ] && [ "$SERVED" = "$EXPECT" ]; then
+    echo "   PASS - matches the bundle that was just staged"
+  elif [ -n "$EXPECT" ]; then
+    echo "   FAIL - the box is serving a DIFFERENT bundle. Expected:"
+    echo "$EXPECT" | sed 's/^/     /'
+    FAIL=1
+  else
+    echo "   (no staged index.html to compare against - not asserting)"
+  fi
+fi
 
 echo ""
 if [ "$FAIL" = "0" ]; then

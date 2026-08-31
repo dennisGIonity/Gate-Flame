@@ -65,7 +65,18 @@ import time
 
 import httpx
 
-_TIMEOUT = 12.0
+# MEASURED FROM THE PI, 2026-08-31:
+#   http=200  connect=0.40s  total=32.1s  size=1,320,243   (~41 KB/s)
+#
+# The old flat 12s could not finish a download that takes half a minute, so the
+# list mostly never arrived - and when it occasionally did, it was because the
+# trickle happened to stay under the per-read limit. That intermittency is what
+# made this look like a provider outage rather than our own timeout.
+#
+# Split rather than flat: a DEAD host should still fail fast (10s to connect),
+# while a SLOW one is simply waited out. Now that this runs off the request
+# path, a long read costs nobody anything - no screen is waiting on it.
+_TIMEOUT = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0)
 _CACHE_TTL = 600.0  # 10 minutes - VPN Gate's list churns; no need to hammer it.
 
 VPNGATE_CSV_URL = "http://www.vpngate.net/api/iphone/"
@@ -78,6 +89,10 @@ _last_error: str | None = None
 # screen can say "still fetching" instead of "nothing to offer" - those are
 # different facts and only one of them is a reason to give up.
 _refreshing: bool = False
+_refresh_started_at: float = 0.0
+# Longer than any healthy fetch (32s measured) with room for a bad day, short
+# enough that a wedged one self-heals within a few minutes rather than never.
+_REFRESH_ABANDON_AFTER = 300.0
 
 # Friendly names for the ISO-ish country codes VPN Gate's CSV actually uses.
 # Unknown codes still work - they just show as their own code, honest rather
@@ -166,17 +181,22 @@ def _parse_csv(text: str) -> list[dict]:
     return rows
 
 
-def _refresh(force: bool = False) -> None:
+def _refresh(force: bool = False, _already_claimed: bool = False) -> None:
     """Fetch VPN Gate's list. BLOCKS - only ever call this off the request path.
 
     Callers serving an HTTP request want ensure_fresh() instead.
+
+    _already_claimed: ensure_fresh() has taken the _refreshing slot and owns
+    clearing it. Without this the two would fight over the flag - this function
+    would clear it in its own finally while ensure_fresh's thread still held it.
     """
     global _cache, _cache_at, _last_error, _refreshing
     with _lock:
         stale = (time.time() - _cache_at) > _CACHE_TTL
         if not (force or stale):
             return
-        _refreshing = True
+        if not _already_claimed:
+            _refreshing = True
     try:
         r = httpx.get(VPNGATE_CSV_URL, timeout=_TIMEOUT)
         if r.status_code != 200:
@@ -198,8 +218,9 @@ def _refresh(force: bool = False) -> None:
         with _lock:
             _last_error = f"could not reach VPN Gate: {exc}"
     finally:
-        with _lock:
-            _refreshing = False
+        if not _already_claimed:
+            with _lock:
+                _refreshing = False
 
 
 def ensure_fresh() -> None:
@@ -219,23 +240,32 @@ def ensure_fresh() -> None:
     A household screen must never wait on someone else's server. Serve what we
     have, refresh behind it, and let the caller say the list is being fetched.
     """
-    global _refreshing
+    global _refreshing, _refresh_started_at
+    now = time.time()
     with _lock:
         if _refreshing:
-            return
-        if (time.time() - _cache_at) <= _CACHE_TTL:
+            # A FLAG THAT ONLY EVER GETS SET IS A DEADLOCK. If a fetch wedges -
+            # a half-open socket, a host that accepts and then never sends -
+            # this flag would stay True for the life of the process and every
+            # later refresh would return here without doing anything. The list
+            # would then never update again, and the screen would sit on
+            # "fetching regions" forever, which is its own kind of lie.
+            # So a refresh that has outlived any plausible fetch is treated as
+            # abandoned and a new one is allowed.
+            if (now - _refresh_started_at) < _REFRESH_ABANDON_AFTER:
+                return
+        if (now - _cache_at) <= _CACHE_TTL:
             return
         # Claim the slot inside the same lock we checked under, so several
         # concurrent requests cannot each start their own fetch.
         _refreshing = True
+        _refresh_started_at = now
 
     def _run() -> None:
         global _refreshing
         try:
-            with _lock:
-                _refreshing = False
-            _refresh(force=True)
-        except Exception:  # noqa: BLE001 - a daemon thread must never die loudly
+            _refresh(force=True, _already_claimed=True)
+        finally:
             with _lock:
                 _refreshing = False
 
