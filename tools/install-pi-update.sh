@@ -111,8 +111,12 @@ head -c 200 /tmp/rr.json; echo
 # free, and confirm it lands.
 echo ""
 echo "-- and the background refresh must actually populate the list"
+# 90s, not 30. The download measured 32.1s once and 6.2s minutes later - the
+# same 1.3 MB from the same box. Waiting only 30s reported FAIL on a fetch that
+# was working correctly and landed moments after the script gave up, which is
+# just a slower way of lying about the system.
 LANDED=0
-for i in $(seq 1 30); do
+for i in $(seq 1 90); do
   if curl -s --max-time 10 http://127.0.0.1:8080/api/v1/vpn/regions \
      | grep -q '"regions":\[{'; then
     echo "   PASS - regions arrived after ~${i}s, with nobody blocked waiting"
@@ -122,7 +126,7 @@ for i in $(seq 1 30); do
   sleep 1
 done
 if [ "$LANDED" = "0" ]; then
-  echo "   FAIL - 30s later the list is still empty. Check the box's internet/DNS:"
+  echo "   FAIL - 90s later the list is still empty. Check the box's internet/DNS:"
   curl -s --max-time 10 http://127.0.0.1:8080/api/v1/vpn/regions | head -c 200; echo
   FAIL=1
 fi
