@@ -26,22 +26,35 @@ echo "=============================================================="
 # ---------------------------------------------------------------- 1. agent
 echo ""
 echo "[1/3] agent modules"
+# KEEP IN SYNC with AGENT_FILES in tools/stage-pi-update.sh. A file staged but
+# missing here would be installed without a backup, leaving a bad deploy with
+# nothing to roll back to.
+AGENT_FILES="vpngate.py main.py health_feed.py"
 mkdir -p "/var/backups/gateflame/$STAMP"
-for f in vpngate.py main.py; do
+for f in $AGENT_FILES; do
   [ -f "$AGENT/gateflame/$f" ] && cp -a "$AGENT/gateflame/$f" "/var/backups/gateflame/$STAMP/$f"
 done
-install -o root -g root -m 0644 "$STAGE/gateflame/vpngate.py" "$AGENT/gateflame/vpngate.py"
-install -o root -g root -m 0644 "$STAGE/gateflame/main.py"    "$AGENT/gateflame/main.py"
+for f in $AGENT_FILES; do
+  if [ ! -f "$STAGE/gateflame/$f" ]; then
+    echo "      MISSING from the staged set: $f - aborting rather than half-installing"
+    exit 1
+  fi
+  install -o root -g root -m 0644 "$STAGE/gateflame/$f" "$AGENT/gateflame/$f"
+done
+echo "      installed: $AGENT_FILES"
 echo "      backup: /var/backups/gateflame/$STAMP"
 
 # Syntax-check with the venv's own interpreter BEFORE restarting. Shipping a
 # file that cannot import would take the whole box's API down, and the restart
 # would "succeed" while every route 502s.
-if "$AGENT/venv/bin/python" -m py_compile "$AGENT/gateflame/vpngate.py" "$AGENT/gateflame/main.py"; then
+COMPILE_LIST=""
+for f in $AGENT_FILES; do COMPILE_LIST="$COMPILE_LIST $AGENT/gateflame/$f"; done
+# shellcheck disable=SC2086 - word splitting is the point here
+if "$AGENT/venv/bin/python" -m py_compile $COMPILE_LIST; then
   echo "      compiles OK"
 else
   echo "      COMPILE FAILED - restoring backup, not restarting"
-  for f in vpngate.py main.py; do
+  for f in $AGENT_FILES; do
     [ -f "/var/backups/gateflame/$STAMP/$f" ] && cp -a "/var/backups/gateflame/$STAMP/$f" "$AGENT/gateflame/$f"
   done
   exit 1

@@ -27,7 +27,7 @@
  * route in node-agent/gateflame/main.py and nothing wired to Math.random().
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Bug,
@@ -59,8 +59,15 @@ import ConsoleLock from './ConsoleLock';
 import { FilteringPanel, NetworkPanel, OverviewPanel, ThreatsPanel, type PanelContext } from './panels';
 import { FirewallPanel, ModulesPanel, SystemPanel, WanPanel } from './panelsSystem';
 import { ShieldPanel, SHIELD_TAB_ICON } from './panelsShield';
-import Ionibot, { defaultDeps } from '../../ionibot';
 import { buildKioskIonibotContext, learnKioskGateway } from './kioskIonibot';
+
+/* Lazy, like IonicrobesGame and for the same reason: the console boots on a Pi
+   behind a TV, and Ionibot is ~46 kB of a bundle that most people will never
+   open. Its own probes are what make it worth having, and none of them run
+   until the sheet does - so deferring the code costs nothing and gets the wall
+   panel to first paint sooner after a power cut. Load shedding makes that a
+   weekly event here, not a rare one. */
+const Ionibot = lazy(() => import('../../ionibot').then((m) => ({ default: m.Ionibot })));
 
 type TabId = 'overview' | 'filtering' | 'threats' | 'shield' | 'network' | 'modules' | 'firewall' | 'wan' | 'system';
 
@@ -379,11 +386,22 @@ export default function KioskApp() {
 
           Rendered last so its sheet sits above the panels, and outside the
           scrolling region so the button does not drift off a long tab. */}
-      <Ionibot
-        ctx={buildKioskIonibotContext(gateway)}
-        contactUrl="mailto:info@ionity.today"
-        probeDeps={defaultDeps}
-      />
+      {/* No fallback: until the chunk lands there is simply no help button,
+          which is honest. A placeholder button that does nothing when pressed
+          would be worse than none - the customer pressing it is already having
+          a bad day. */}
+      <Suspense fallback={null}>
+        {/* probeDeps deliberately NOT passed. Ionibot already defaults to the
+            same defaultProbeDeps, and importing them here pulled probes.ts into
+            the eager graph - the build then modulepreloaded 17 kB of a chunk
+            the lazy split existed to defer. The phone passes them only because
+            it needs to add a bearer token; the console, being loopback, does
+            not. */}
+        <Ionibot
+          ctx={buildKioskIonibotContext(gateway)}
+          contactUrl="mailto:info@ionity.today"
+        />
+      </Suspense>
     </div>
   );
 }

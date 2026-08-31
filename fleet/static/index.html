@@ -152,6 +152,40 @@ tbody tr:hover{background:rgba(14,165,233,.05)}
   border:1px solid rgba(245,158,11,.28);color:#fbbf24;font-size:11.5px;line-height:1.55}
 .gap b{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.14em;
   display:block;margin-bottom:3px}
+/* ---- support findings ---------------------------------------------------
+   Severity carries the colour, so a support person scanning the page sees the
+   shape of the problem before reading a word. Deliberately NOT a traffic-light
+   badge on every row: only things that need attention appear at all, and a
+   green "all fine" row would be one more thing to read past. */
+.find{padding:13px 15px;border-radius:14px;border:1px solid var(--line);
+  background:var(--panel-2);margin-bottom:10px}
+.find.critical{border-color:rgba(244,63,94,.4);background:rgba(244,63,94,.06)}
+.find.warning{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.05)}
+.find h4{margin:0 0 7px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:9px}
+.find.critical h4{color:var(--red)} .find.warning h4{color:var(--amber)}
+.find .sev{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;
+  letter-spacing:.16em;padding:3px 8px;border-radius:6px;border:1px solid currentColor;
+  opacity:.8;flex-shrink:0}
+.find .lbl{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.14em;color:var(--dim);display:block;margin-bottom:3px}
+.find .row{margin-top:9px;font-size:13px;line-height:1.5;color:var(--muted)}
+/* The field the finding came from. Small and monospaced on purpose: it is
+   provenance, not prose - it lets a reader tell "the box told us this" from
+   "the console worked this out", without competing with the advice above it. */
+.find .ev{margin-top:9px;font-family:var(--font-mono);font-size:10px;color:var(--dim);
+  padding-top:8px;border-top:1px solid var(--line)}
+.allclear{padding:15px 17px;border-radius:14px;border:1px solid rgba(16,185,129,.3);
+  background:rgba(16,185,129,.05);color:var(--green);font-size:13.5px}
+
+/* ---- shield -------------------------------------------------------------- */
+.dev{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:11px 13px;border-radius:12px;background:var(--panel-2);
+  border:1px solid var(--line);margin-bottom:8px}
+.dev .nm{font-size:13.5px;font-weight:500}
+.dev .mac{font-family:var(--font-mono);font-size:10px;color:var(--dim);margin-top:2px}
+.dev .rg{font-family:var(--font-mono);font-size:11px;padding:5px 10px;border-radius:8px;
+  border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.dev .rg.on{color:var(--sky-400);border-color:rgba(56,189,248,.4);background:rgba(56,189,248,.07)}
 .notice{padding:11px 14px;border-radius:12px;border:1px dashed var(--line);
   color:var(--muted);font-size:12px;line-height:1.6}
 .chartwrap{position:relative}
@@ -409,6 +443,70 @@ function renderNode(){
   const gaps = (n.modules||[]).filter(m=>m.gap).map(m=>
     `<div class="gap"><b>${esc((m.id||'').replace('module_',''))}</b>${esc(m.gap)}</div>`).join('');
 
+  // ---- support findings ---------------------------------------------------
+  // Computed on the server from the last check-in, so this is a renderer and
+  // nothing more. It must not add a conclusion of its own: the whole reason a
+  // support person can trust this panel is that everything on it is traceable
+  // to a field the box actually reported.
+  const findings = (n.findings||[]).map(f=>`
+    <div class="find ${esc(f.severity)}">
+      <h4><span class="sev">${esc(f.severity)}</span>${esc(f.title)}</h4>
+      <div class="row"><span class="lbl">What the customer sees</span>${esc(f.customer)}</div>
+      <div class="row"><span class="lbl">What to check</span>${esc(f.check)}</div>
+      <div class="ev">reported as ${esc(f.evidence||'—')}</div>
+    </div>`).join('');
+
+  const findingsCard = `
+    <div class="card">
+      <h3 style="margin:0 0 4px">Support view</h3>
+      <div class="chartmeta" style="margin:0 0 14px">
+        Read from this box's last check-in ${fmtAgo(n.lastSeenAgoSeconds)}. Nothing here was probed
+        live &mdash; a support console cannot reach a customer's box directly, and a panel that
+        implied otherwise would be describing this browser, not their network.
+      </div>
+      ${findings || `<div class="allclear">Nothing needs attention. Every module this box is
+        expected to run is running, and no threshold was crossed.</div>`}
+    </div>`;
+
+  // ---- shield --------------------------------------------------------------
+  // Three states kept apart, for the same reason they are kept apart on the
+  // phone: "we could not read it", "there is nothing configured" and "here is
+  // what is configured" need different words, and collapsing them is what once
+  // had Shield telling owners a working feature had never been installed.
+  const sh = n.shield;
+  let shieldBody;
+  if (!n.shieldReported) {
+    shieldBody = `<div class="notice">This box runs an agent that predates Shield reporting.
+      That is not a fault &mdash; it simply has nothing to say here until it is updated.</div>`;
+  } else if (sh === null) {
+    shieldBody = `<div class="notice">The box tried to read its Shield state and could not.
+      That is different from Shield being unconfigured, and worth a look.</div>`;
+  } else if (!sh.configured) {
+    shieldBody = `<div class="notice">Nobody in this household has put a device on a region yet.
+      Shield is installed and idle.</div>`;
+  } else {
+    shieldBody = (sh.devices||[]).map(d=>`
+      <div class="dev">
+        <div style="min-width:0">
+          <div class="nm">${esc(d.label||d.mac)}</div>
+          <div class="mac">${esc(d.mac)}${d.provider?' · '+esc(d.provider):''}</div>
+        </div>
+        <span class="rg ${d.enabled?'on':''}">${d.region?esc(d.region):'no region'}${d.enabled?'':' · off'}</span>
+      </div>`).join('');
+  }
+
+  const shieldCard = `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <h3 style="margin:0">Gate^Flame Shield</h3>
+        ${sh && sh.configured ? `<span class="chip on">${sh.enabledCount} of ${sh.devices.length} on</span>` : ''}
+      </div>
+      <div class="chartmeta" style="margin:6px 0 14px">
+        Device names are the owner's own, shown exactly as they appear on their phone.
+      </div>
+      ${shieldBody}
+    </div>`;
+
   const winBtns = ['24h','7d','30d','90d'].map(w=>
     `<span class="chip ${state.window===w?'on':''}" onclick="setWindow('${w}')">${w}</span>`).join('');
 
@@ -456,6 +554,10 @@ function renderNode(){
           </div>
           ${gaps}
         </div>
+
+        ${findingsCard}
+
+        ${shieldCard}
 
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">

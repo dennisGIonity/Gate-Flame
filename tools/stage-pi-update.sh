@@ -14,9 +14,17 @@ echo "=== staging from $ROOT (feed host: $FEED_HOST) ==="
 
 ssh -o BatchMode=yes "$PI" "rm -rf /tmp/gfstage && mkdir -p /tmp/gfstage/gateflame /tmp/gfstage/kiosk"
 
-# The two agent modules that changed. Deliberately NOT the whole package - a
-# narrow copy is easier to reason about and to undo.
-scp -q "$ROOT/node-agent/gateflame/vpngate.py" "$ROOT/node-agent/gateflame/main.py" "$PI:/tmp/gfstage/gateflame/"
+# Only the agent modules that changed. Deliberately NOT the whole package - a
+# narrow copy is easier to reason about and to undo, and the installer backs up
+# exactly this list before overwriting.
+#
+# KEEP IN SYNC with AGENT_FILES in tools/install-pi-update.sh. A file added
+# here and not there gets copied but never backed up, so a bad deploy would
+# have nothing to roll back to.
+AGENT_FILES="vpngate.py main.py health_feed.py"
+for f in $AGENT_FILES; do
+  scp -q "$ROOT/node-agent/gateflame/$f" "$PI:/tmp/gfstage/gateflame/"
+done
 
 # The kiosk bundle, built fresh.
 if [ ! -d "$ROOT/dist-kiosk" ]; then
