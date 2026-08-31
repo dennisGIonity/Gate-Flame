@@ -88,6 +88,111 @@
   @media (prefers-reduced-motion: reduce) {
     .gf-marquee { animation: none; }
   }
+
+  /* ------------------------------------------------------------------
+   * MOTION VOCABULARY (mobile)
+   *
+   * The app was explaining itself in paragraphs. These replace the words
+   * with movement — but under one rule that does not bend: motion may show
+   * how a value ARRIVES, or that the app is still WAITING for one. It may
+   * never imply a reading that the API did not return. Nothing below is
+   * driven by a number; they are all entrance, waiting or ambient states,
+   * so none of them can accidentally animate a figure into existence.
+   *
+   * Every one of them stops under prefers-reduced-motion. A person who
+   * asked for stillness gets the final state immediately, never a hidden
+   * element — the information is the content, the movement is not.
+   * ------------------------------------------------------------------ */
+
+  /* Cards arrive in sequence rather than all at once, which is most of why
+     a screen reads as composed rather than dumped. Delay is set inline per
+     child so the stagger costs no extra classes. */
+  /* `backwards`, deliberately NOT `both`.
+   *
+   * `both` keeps the LAST keyframe applied after the animation ends. If the
+   * animation never runs for any reason - stylesheet not applied yet, a
+   * WebView quirk, an engine that does not know the keyframe name - the
+   * element stays stuck at the FIRST frame, which is opacity 0. That failure
+   * mode is a blank screen with the app running perfectly underneath it, and
+   * it is indistinguishable from a crash.
+   *
+   * `backwards` applies the start state only during the delay; once the
+   * animation finishes the element falls back to its natural style, which is
+   * visible. Same result when it works, and when it does not work the worst
+   * case is "no animation" rather than "no app". */
+  .gf-rise {
+    animation: gf-rise-in 460ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  @keyframes gf-rise-in {
+    from { opacity: 0; transform: translate3d(0, 10px, 0); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* A soft breathing halo, used behind the Home verdict. Encodes nothing —
+     it is the difference between "this screen is live" and "this screen is
+     a screenshot". */
+  .gf-breathe {
+    animation: gf-breathe 4.5s ease-in-out infinite;
+  }
+  @keyframes gf-breathe {
+    0%, 100% { opacity: 0.24; transform: scale(1); }
+    50%      { opacity: 0.42; transform: scale(1.06); }
+  }
+
+  /* One expanding ring, fired when protection is healthy. Deliberately slow
+     and low-contrast: a radar sweep that pulses per query would be a
+     figure, and this is not one. */
+  .gf-ping {
+    animation: gf-ping 3.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  @keyframes gf-ping {
+    0%   { opacity: 0.5; transform: scale(0.92); }
+    70%  { opacity: 0;   transform: scale(1.5); }
+    100% { opacity: 0;   transform: scale(1.5); }
+  }
+
+  /* The shimmer a skeleton uses while a real value is still in flight.
+     THIS IS THE HONEST PLACEHOLDER: it says "waiting", where a 0 would say
+     "measured zero". */
+  .gf-shimmer {
+    background: linear-gradient(90deg, #0F1B2D 0%, #1E293B 50%, #0F1B2D 100%);
+    background-size: 200% 100%;
+    animation: gf-shimmer 1.6s ease-in-out infinite;
+  }
+  @keyframes gf-shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  /* A bar or arc growing to its already-known value. The width/rotation is
+     set inline from real data; this only controls HOW it gets there. */
+  .gf-grow {
+    transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1),
+                stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Row-level entrance for lists (devices, blocked domains). Same rule as
+     the cards: staggered by index, inline delay. */
+  /* `backwards` for the same reason as .gf-rise above: a list that fails to
+     animate must render as a plain list, never as an empty one. */
+  .gf-slide {
+    animation: gf-slide-in 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  @keyframes gf-slide-in {
+    from { opacity: 0; transform: translate3d(-6px, 0, 0); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gf-rise, .gf-breathe, .gf-ping, .gf-shimmer, .gf-slide {
+      animation: none !important;
+    }
+    .gf-grow { transition: none !important; }
+    /* Without this the entrance animations' `both` fill-mode would leave
+       elements stuck at opacity 0 — stillness must not mean invisible. */
+    .gf-rise, .gf-slide { opacity: 1 !important; transform: none !important; }
+  }
   
   .glass-panel {
     @apply bg-white/95 dark:bg-black/60 backdrop-blur-3xl transition-all duration-500;

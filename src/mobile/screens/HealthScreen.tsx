@@ -16,7 +16,7 @@
  * disabled. A greyed-out button is still a question the customer has to ask.
  */
 
-import { Cpu, HardDrive, Thermometer, Timer } from 'lucide-react';
+import { Cpu, Thermometer, Timer } from 'lucide-react';
 
 import type { FilteringState } from '../../types/filtering';
 import {
@@ -31,7 +31,7 @@ import {
   type TelemetrySummary,
 } from '../../components/kiosk/kioskClient';
 import { AreaChart, CH, Meter, RingGauge } from '../../components/kiosk/charts';
-import { Card, Chip, Gap, Metric, Screen, ScreenTitle, Tiles, Warning } from '../mobileUi';
+import { C, Card, Chip, Gap, Metric, Screen, ScreenTitle, Stat, Tiles, Warning } from '../mobileUi';
 
 interface ServicesResponse {
   modules: ServiceModule[];
@@ -110,107 +110,96 @@ export function HealthScreen({
         />
       )}
 
-      {/* ------------------------------------------------ hardware, charted
-          The four figures below are instants. These two are the same readings
-          over the time the screen has been open, which is the only way to tell
-          a box that is briefly busy from one that is pinned — and pinned is
-          what a failing SD card looks like from the outside.               */}
-      <Card>
-        <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[#64748B]">
-          Load, while you have been watching
-        </p>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-wider text-[#64748B]">Processor</p>
-            <p className="mt-0.5 font-mono text-xl tabular-nums text-slate-100">
-              {pct(host?.cpuPercent)}
-            </p>
-            <AreaChart samples={cpu.samples} height={58} max={100} stroke={CH.cyan} label="cpu" />
-          </div>
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-wider text-[#64748B]">
-              Temperature
-            </p>
-            <p
-              className={`mt-0.5 font-mono text-xl tabular-nums ${warm ? 'text-[#F59E0B]' : 'text-slate-100'}`}
-            >
-              {host?.tempC == null ? DASH : `${host.tempC.toFixed(1)}°`}
-            </p>
-            {/* 85 °C is the Pi's hard-throttle point, so the scale is a
-                physical limit rather than a round number. */}
-            <AreaChart samples={temp.samples} height={58} max={85} stroke={CH.orange} label="temperature" />
-          </div>
-        </div>
-        <div className="mt-5 space-y-3">
-          <Meter label="Processor" value={host?.cpuPercent ?? null} max={100} unit="%" format={(v) => pct(v)} />
-          <Meter
-            label="Storage used"
-            value={host?.diskUsedPercent ?? null}
-            max={100}
-            unit="%"
-            format={(v) => pct(v)}
-          />
-          <Meter
-            label="Memory"
-            value={host?.memUsedMB ?? null}
-            max={host?.memTotalMB ?? 1}
-            unit="MB"
-            format={(v) => num(v)}
-          />
-          <Meter
-            label="Temperature"
-            value={host?.tempC ?? null}
-            max={85}
-            unit="°C"
-            format={(v) => (v == null ? DASH : v.toFixed(1))}
-          />
-        </div>
-      </Card>
+      {/* -------------------------------------------------------- vitals
+          This card used to be TWO cards showing the same four readings — a
+          stack of meters, then the identical figures again as icon tiles.
+          Duplication is its own kind of clutter: it doubles the reading
+          without adding a fact. One set now, each figure sitting on a bar
+          that grows to it, so the level is readable without the number.
 
-      {/* ------------------------------------------------------ hardware */}
-      <Card>
-        <Tiles>
-          <div className="flex items-start gap-2">
-            <Thermometer className="mt-1 h-4 w-4 shrink-0 text-[#64748B]" />
-            <Metric
-              label="Temperature"
-              value={host?.tempC == null ? DASH : host.tempC.toFixed(1)}
-              unit="°C"
-              tone={warm ? 'warn' : 'default'}
-            />
+          The two live traces stay: an instant tells you the box is busy,
+          the trace tells you whether it has been pinned — and pinned is
+          what a failing SD card looks like from the outside.            */}
+              <Card>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <Cpu className="h-3.5 w-3.5 text-[#64748B]" />
+                <span className="font-mono text-[10px] uppercase tracking-wider text-[#64748B]">
+                  Processor
+                </span>
+              </div>
+              <p className="mt-0.5 font-mono text-xl tabular-nums text-slate-100">
+                {pct(host?.cpuPercent)}
+              </p>
+              <AreaChart samples={cpu.samples} height={52} max={100} stroke={CH.cyan} label="cpu" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <Thermometer className="h-3.5 w-3.5 text-[#64748B]" />
+                <span className="font-mono text-[10px] uppercase tracking-wider text-[#64748B]">
+                  Temperature
+                </span>
+              </div>
+              <p
+                className={`mt-0.5 font-mono text-xl tabular-nums ${warm ? 'text-[#F59E0B]' : 'text-slate-100'}`}
+              >
+                {host?.tempC == null ? DASH : `${host.tempC.toFixed(1)}°`}
+              </p>
+              {/* 85 °C is the Pi's hard-throttle point, so the scale is a
+                  physical limit rather than a round number. */}
+              <AreaChart samples={temp.samples} height={52} max={85} stroke={CH.orange} label="temperature" />
+            </div>
           </div>
-          <div className="flex items-start gap-2">
-            <Cpu className="mt-1 h-4 w-4 shrink-0 text-[#64748B]" />
-            <Metric label="Processor" value={pct(host?.cpuPercent)} />
-          </div>
-          <div className="flex items-start gap-2">
-            <HardDrive className="mt-1 h-4 w-4 shrink-0 text-[#64748B]" />
-            <Metric
-              label="Storage used"
+
+          <div className="mt-5 space-y-3.5">
+            <Stat
+              label="Storage"
               value={pct(host?.diskUsedPercent)}
-              tone={tight ? 'warn' : 'default'}
+              pct={host?.diskUsedPercent}
+              tone={tight ? C.amber : C.cyan}
+              loading={!t && !telemetry.error}
+            />
+            <Stat
+              label="Memory"
+              value={
+                host?.memUsedMB != null && host?.memTotalMB
+                  ? `${(host.memUsedMB / 1024).toFixed(1)} / ${(host.memTotalMB / 1024).toFixed(1)} GB`
+                  : DASH
+              }
+              pct={
+                host?.memUsedMB != null && host?.memTotalMB
+                  ? (host.memUsedMB / host.memTotalMB) * 100
+                  : null
+              }
+              loading={!t && !telemetry.error}
+            />
+            <Stat
+              label="Temperature"
+              value={host?.tempC == null ? DASH : `${host.tempC.toFixed(1)} °C`}
+              pct={host?.tempC == null ? null : (host.tempC / 85) * 100}
+              tone={warm ? C.amber : C.green}
+              loading={!t && !telemetry.error}
             />
           </div>
-          <div className="flex items-start gap-2">
-            <Timer className="mt-1 h-4 w-4 shrink-0 text-[#64748B]" />
-            <Metric label="Running for" value={duration(host?.uptimeSeconds ?? t?.uptimeSeconds)} />
-          </div>
-        </Tiles>
-        <Gap text={t?.gap} />
-      </Card>
 
-      {warm && (
-        <Warning
-          title="The box is running warm"
-          detail="Over 70 °C it slows down. Give it air."
-        />
-      )}
-      {tight && (
-        <Warning
-          title="The box is running out of storage"
-          detail="It needs room for the blocklist."
-        />
-      )}
+          <div className="mt-4 flex items-center gap-2 border-t border-[#1E293B] pt-3">
+            <Timer className="h-3.5 w-3.5 text-[#64748B]" />
+            <span className="font-mono text-[10px] uppercase tracking-wider text-[#64748B]">
+              Running for
+            </span>
+            <span className="ml-auto font-mono text-sm tabular-nums text-slate-100">
+              {duration(host?.uptimeSeconds ?? t?.uptimeSeconds)}
+            </span>
+          </div>
+          <Gap text={t?.gap} />
+        </Card>
+
+      {/* Warnings keep their words - they are the one place on this screen
+          where a customer needs a sentence, because they have to DO
+          something. Everything else became a bar. */}
+      {warm && <Warning title="Running warm" detail="Over 70 °C it slows down. Give it air." />}
+      {tight && <Warning title="Running out of storage" detail="It needs room for the blocklist." />}
 
       {/* ------------------------------------------------------- modules
           The list below only shows what is WRONG, which is right for a

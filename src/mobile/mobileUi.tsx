@@ -26,7 +26,8 @@
  * hardcoded phone chrome and its own nav landed on top of its own content.
  */
 
-import type { ReactNode } from 'react';
+import { Children, isValidElement } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 /** Straight from kioskUi COLORS. Duplicated as literals only where Tailwind
  *  needs them inline; the source of truth is the console's palette. */
@@ -72,8 +73,194 @@ export function Screen({ children }: { children: ReactNode }) {
       }}
     >
       <div className="mx-auto flex w-full max-w-md flex-col gap-3 sm:max-w-xl sm:gap-4 lg:max-w-3xl">
-        {children}
+        {/*
+         * Every screen's top-level blocks rise into place in sequence.
+         *
+         * Done HERE rather than by wrapping each card on each screen, because
+         * seven screens each hand-numbering their own stagger is seven places
+         * for it to drift out of step - and the moment it drifts the app stops
+         * feeling like one piece of software.
+         *
+         * Entrance only: this animates the CONTAINER, never a figure inside
+         * it, so no reading can be implied by movement. Conditional children
+         * (`{cond && <Card/>}`) arrive as `false` and are passed through
+         * untouched rather than being given a delay they cannot use.
+         */}
+        {Children.map(children, (child, i) =>
+          isValidElement(child) ? (
+            <div className="gf-rise" style={{ animationDelay: `${Math.min(i, 6) * 55}ms` }}>
+              {child}
+            </div>
+          ) : (
+            child
+          ),
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Wrap a child so it rises into place, staggered by position.
+ *
+ * This is most of the "modern" feel and it costs nothing: cards arriving in
+ * sequence read as composed, where the same cards appearing at once read as a
+ * dump. It is pure entrance — it animates the CARD, never the number inside
+ * it, so no reading is ever implied by movement.
+ */
+export function Rise({
+  children,
+  index = 0,
+  className = '',
+}: {
+  children: ReactNode;
+  index?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`gf-rise ${className}`}
+      // Capped so a long screen's last card is not still waiting a second
+      // later - past ~6 items the stagger has already done its job.
+      style={{ animationDelay: `${Math.min(index, 6) * 55}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The honest placeholder: a shimmer where a figure will land.
+ *
+ * Replaces the "collecting samples…"-style captions this app used to write
+ * out in words. A shimmer says WAITING; a `0` would say MEASURED ZERO, and
+ * those mean opposite things.
+ */
+export function Skeleton({ className = 'h-8 w-24' }: { className?: string }) {
+  return <div className={`gf-shimmer rounded-lg ${className}`} aria-hidden />;
+}
+
+/**
+ * A horizontal bar that grows to a real value.
+ *
+ * `value`/`max` come from the API. When `value` is null the track renders as
+ * a dashed empty rail rather than a zero-width fill — a missing reading and a
+ * real zero must never look the same, which is the same rule the fleet
+ * dashboard's meters follow.
+ */
+export function Bar({
+  value,
+  max = 100,
+  tone = C.cyan,
+  height = 6,
+}: {
+  value: number | null | undefined;
+  max?: number;
+  tone?: string;
+  height?: number;
+}) {
+  const known = value !== null && value !== undefined && !Number.isNaN(value);
+  const pct = known ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div
+      className="w-full overflow-hidden rounded-full"
+      style={{
+        height,
+        background: known
+          ? '#0F1B2D'
+          : 'repeating-linear-gradient(90deg,#0F1B2D 0 6px,transparent 6px 12px)',
+      }}
+    >
+      {known && (
+        <div
+          className="gf-grow h-full rounded-full"
+          style={{ width: `${pct}%`, background: tone }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A label/value/bar row — the shape that replaced most of this app's prose.
+ *
+ * "Storage 39%" over a bar that is 39% full communicates what a sentence
+ * about needing room for the blocklist was trying to say, in one glance and
+ * no reading.
+ */
+export function Stat({
+  label,
+  value,
+  pct,
+  max = 100,
+  tone = C.cyan,
+  loading = false,
+}: {
+  label: string;
+  value: string;
+  pct?: number | null;
+  max?: number;
+  tone?: string;
+  loading?: boolean;
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#64748B]">
+          {label}
+        </span>
+        {loading ? (
+          <Skeleton className="h-4 w-14" />
+        ) : (
+          <span className="font-mono text-sm tabular-nums text-slate-100">{value}</span>
+        )}
+      </div>
+      <div className="mt-1.5">
+        <Bar value={pct ?? null} max={max} tone={tone} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A live dot: steady when healthy, pulsing ring when actively good, still and
+ * grey when we cannot say. Carries STATE, never a quantity.
+ */
+export function Pulse({ tone = C.green, on = true }: { tone?: string; on?: boolean }) {
+  return (
+    <span className="relative inline-flex h-2.5 w-2.5 shrink-0" aria-hidden>
+      {on && (
+        <span
+          className="gf-ping absolute inline-flex h-full w-full rounded-full"
+          style={{ background: tone }}
+        />
+      )}
+      <span
+        className="relative inline-flex h-2.5 w-2.5 rounded-full"
+        style={{ background: on ? tone : '#334155' }}
+      />
+    </span>
+  );
+}
+
+/** Row entrance for lists, staggered by index. Same rule as `Rise`. */
+export function SlideIn({
+  children,
+  index = 0,
+  className = '',
+  style,
+}: {
+  children: ReactNode;
+  index?: number;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      className={`gf-slide ${className}`}
+      style={{ animationDelay: `${Math.min(index, 10) * 35}ms`, ...style }}
+    >
+      {children}
     </div>
   );
 }

@@ -19,7 +19,7 @@ import {
   type ThreatsResponse,
 } from '../../components/kiosk/kioskClient';
 import { AreaChart, BarList, CH, Delta, RingGauge } from '../../components/kiosk/charts';
-import { Card, ChartCard, Chip, DASH, Empty, Gap, Screen, ScreenTitle } from '../mobileUi';
+import { Card, ChartCard, Chip, DASH, Empty, Gap, Screen, ScreenTitle, SlideIn } from '../mobileUi';
 
 /**
  * FTL's own verdict, in words a customer can read.
@@ -133,7 +133,8 @@ export function ThreatsScreen({ active }: { active: boolean }) {
       {entries.length > 0 && (
         <div className="flex flex-col gap-2">
           {entries.map((e, i) => (
-            <Card key={`${e.domain ?? 'unknown'}-${i}`} className="!p-3">
+            <SlideIn key={`${e.domain ?? 'unknown'}-${i}`} index={i}>
+            <Card className="!p-3">
               <div className="flex items-start gap-3">
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#FF8700]" />
                 <div className="min-w-0 flex-1">
@@ -153,6 +154,7 @@ export function ThreatsScreen({ active }: { active: boolean }) {
                 </div>
               </div>
             </Card>
+            </SlideIn>
           ))}
         </div>
       )}

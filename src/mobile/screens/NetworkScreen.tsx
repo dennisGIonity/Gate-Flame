@@ -14,7 +14,7 @@ import { Laptop, Router as RouterIcon, Smartphone, HelpCircle } from 'lucide-rea
 
 import { num, usePolled, useSeries, type LanClient } from '../../components/kiosk/kioskClient';
 import { AreaChart, BarList, CH, Delta, RingGauge } from '../../components/kiosk/charts';
-import { Card, ChartCard, Chip, DASH, Empty, Screen, ScreenTitle } from '../mobileUi';
+import { C, Card, ChartCard, Chip, DASH, Empty, Pulse, Screen, ScreenTitle, SlideIn } from '../mobileUi';
 
 interface ClientsResponse {
   clients: LanClient[];
@@ -115,35 +115,38 @@ export function NetworkScreen({ active }: { active: boolean }) {
 
       {list.length > 0 && (
         <div className="flex flex-col gap-2">
-          {list.map((c) => {
-            const Icon = glyph(c.hostname);
+          {list.map((c, i) => {
+            // `label` is decided on the node now (device_names.py): the name
+            // the owner typed, else the vendor, else the MAC. This list used
+            // to lead with the IP and print "name not published" underneath -
+            // an address as a name, and a sentence explaining why it wasn't.
+            const name = c.label || c.hostname || c.mac;
+            const Icon = glyph(c.hostname ?? c.vendor ?? null);
             return (
-              <Card key={`${c.mac}-${c.ip}`} className="!p-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#1E293B] bg-[#0F1B2D]">
-                    <Icon className="h-4 w-4 text-[#38BDF8]" />
+              <SlideIn key={`${c.mac}-${c.ip}`} index={i}>
+                <Card className="!p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#1E293B] bg-[#0F1B2D]">
+                      <Icon className="h-4 w-4 text-[#38BDF8]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] text-slate-200">{name}</p>
+                      <p className="truncate font-mono text-[10px] text-[#475569]">
+                        {c.ip}
+                        {c.vendor ? ` · ${c.vendor}` : c.randomisedMac ? ' · private address' : ''}
+                      </p>
+                    </div>
+                    {/* A live dot instead of the interface name: which NIC the
+                        box heard it on is engineering detail, not something a
+                        household reads. */}
+                    <Pulse tone={C.cyan} />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-mono text-[13px] text-slate-200">{c.ip}</p>
-                    <p className="truncate text-[11px] text-[#64748B]">
-                      {c.hostname ?? 'name not published'} · {c.mac || DASH}
-                    </p>
-                  </div>
-                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-[#475569]">
-                    {c.interface}
-                  </span>
-                </div>
-              </Card>
+                </Card>
+              </SlideIn>
             );
           })}
         </div>
       )}
-
-      <p className="px-1 pt-1 text-[11px] leading-relaxed text-[#64748B]">
-        Your router asks the box on behalf of the whole house, so blocked lookups cannot always be
-        traced back to one device. That is the trade for the box never being able to break your
-        internet.
-      </p>
     </Screen>
   );
 }

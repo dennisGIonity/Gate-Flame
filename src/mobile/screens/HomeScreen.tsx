@@ -41,7 +41,7 @@ import {
   Delta,
   RingGauge,
 } from '../../components/kiosk/charts';
-import { Card, ChartCard, Gap, Metric, Screen, Warning } from '../mobileUi';
+import { Card, ChartCard, Gap, Metric, Pulse, Screen, Skeleton, Warning } from '../mobileUi';
 
 const GravityParticleCanvas = lazy(() =>
   import('../../components/GravityParticleCanvas').then((m) => ({
@@ -169,13 +169,16 @@ export function HomeScreen({
             instead, where it is decoration rather than a competing headline. */}
         <div className="flex flex-col items-center px-5 pb-4 pt-7 text-center sm:pt-9">
           <div className="relative">
-            {/* A soft halo behind the glyph, tinted by the verdict. Pure CSS,
-                so it costs nothing and it is what makes the four states read
-                as different MOODS rather than four differently-coloured
-                icons. */}
+            {/* The halo now BREATHES when the box is healthy and sits still
+                when it is not. That single difference does the job a sentence
+                used to: a live, well screen versus a stopped one, read before
+                a single word. It encodes no quantity - only which of the four
+                states we are in, which the colour already says. */}
             <span
               aria-hidden
-              className="absolute inset-0 -z-10 rounded-full blur-2xl"
+              className={`absolute inset-0 -z-10 rounded-full blur-2xl ${
+                status === 'protected' ? 'gf-breathe' : ''
+              }`}
               style={{ backgroundColor: look.tone, opacity: status === 'unknown' ? 0.1 : 0.28 }}
             />
             <Icon className={`h-12 w-12 sm:h-14 sm:w-14 ${look.text}`} strokeWidth={1.5} />
@@ -188,9 +191,17 @@ export function HomeScreen({
           {look.sub && <p className="mt-1.5 text-sm text-slate-400">{look.sub}</p>}
 
           {status === 'protected' && (
-            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#64748B]">
-              <AnimatedNumber value={t?.queriesBlockedToday ?? null} format={(v) => num(v)} /> blocked
-              today
+            <p className="mt-4 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#64748B]">
+              {/* A live dot instead of the words "live" or "right now". */}
+              <Pulse tone={CH.green} />
+              {t ? (
+                <span>
+                  <AnimatedNumber value={t.queriesBlockedToday ?? null} format={(v) => num(v)} />{' '}
+                  blocked today
+                </span>
+              ) : (
+                <Skeleton className="h-3 w-28" />
+              )}
             </p>
           )}
         </div>
@@ -235,62 +246,67 @@ export function HomeScreen({
       )}
 
       {/* ------------------------------------------------ share, as a ring */}
-      <Card accent={look.accent} glow>
-        <div className="flex items-center gap-5">
-          <RingGauge
-            value={t?.blockPercentage ?? null}
-            sub="blocked"
-            tone={status === 'protected' ? CH.orange : CH.muted}
-            size={116}
-          />
-          <div className="min-w-0 flex-1">
-            {/* The explanatory paragraph that used to sit here ("ads, trackers
-                and known-bad addresses your devices asked for and did not
-                get…") was four lines on a phone, under a number that already
-                says it. Three words carry the same meaning. */}
-            <p className="text-sm font-medium text-slate-200">Lookups refused</p>
-            <div className="mt-3">
-              <AreaChart
-                samples={share.samples}
-                height={38}
-                stroke={CH.cyan}
-                max={100}
-                showAxis={false}
-                label="blocked share"
-              />
+              <Card accent={look.accent} glow>
+          <div className="flex items-center gap-5">
+            <RingGauge
+              value={t?.blockPercentage ?? null}
+              sub="blocked"
+              tone={status === 'protected' ? CH.orange : CH.muted}
+              size={116}
+            />
+            <div className="min-w-0 flex-1">
+              {/* The explanatory paragraph that used to sit here ("ads,
+                  trackers and known-bad addresses your devices asked for and
+                  did not get…") was four lines on a phone, under a number that
+                  already says it. Three words plus the moving line carry the
+                  same meaning. */}
+              <p className="text-sm font-medium text-slate-200">Lookups refused</p>
+              <div className="mt-3">
+                <AreaChart
+                  samples={share.samples}
+                  height={38}
+                  stroke={CH.cyan}
+                  max={100}
+                  showAxis={false}
+                  label="blocked share"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
 
       {/* ------------------------------------------------------- headline */}
-      <Card>
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
-          <Metric label="Looked up today" value={num(t?.totalQueriesToday)} />
-          <Metric
-            label="Blocked today"
-            value={num(t?.queriesBlockedToday)}
-            tone={t?.queriesBlockedToday ? 'accent' : 'default'}
-          />
-          <Metric label="Blocked share" value={pct(t?.blockPercentage)} />
-          <Metric label="Devices seen" value={num(t?.activeClientsCount)} />
-        </div>
-        {/* The agent names its own gaps. We render the sentence, never a guess. */}
-        <Gap text={f?.lastError} />
-      </Card>
+              <Card>
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
+            {/* Counting up is the ONE animation allowed to touch a figure, and
+                only because AnimatedNumber short-circuits on null before its
+                animation exists - a missing reading still lands as a dash and
+                never counts up from zero to a number nobody measured. */}
+            <Metric label="Looked up today" value={num(t?.totalQueriesToday)} />
+            <Metric
+              label="Blocked today"
+              value={num(t?.queriesBlockedToday)}
+              tone={t?.queriesBlockedToday ? 'accent' : 'default'}
+            />
+            <Metric label="Blocked share" value={pct(t?.blockPercentage)} />
+            <Metric label="Devices seen" value={num(t?.activeClientsCount)} />
+          </div>
+          {/* The agent names its own gaps. We render the sentence, never a guess. */}
+          <Gap text={f?.lastError} />
+        </Card>
 
       {/* ---------------------------------------------------------- trend */}
-      <ChartCard
-        label="Blocked since you opened this"
-        value={t ? num(t.queriesBlockedToday) : DASH}
-        tone={CH.orange}
-        right={<Delta samples={blocked.samples} />}
-        // Still says it is not history - that claim has to stay - but in one
-        // clause rather than two sentences.
-        footer="Live only — the box keeps no history yet."
-      >
-        <AreaChart samples={blocked.samples} height={104} stroke={CH.orange} label="blocked today" />
-      </ChartCard>
+              <ChartCard
+          label="Blocked since you opened this"
+          value={t ? num(t.queriesBlockedToday) : DASH}
+          tone={CH.orange}
+          right={<Delta samples={blocked.samples} />}
+          // Still says it is not history - that claim has to stay - but in one
+          // clause rather than two sentences.
+          footer="Live only — the box keeps no history yet."
+        >
+          <AreaChart samples={blocked.samples} height={104} stroke={CH.orange} label="blocked today" />
+        </ChartCard>
     </Screen>
   );
 }
