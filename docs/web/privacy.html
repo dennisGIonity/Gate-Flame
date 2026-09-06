@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Notice — Gate^Flame | Ionity</title>
+
+<!-- AEDI identity / provenance -->
+<meta name="author" content="Johan Wilhelm van Antwerp">
+<meta name="description" content="POPIA section 18 privacy notice for the Gate^Flame Network Security Node. What stays on your box, what the optional support check-in sends, and how to switch it off.">
+<meta name="keywords" content="POPIA, privacy notice, Gate^Flame, Ionity, AEDI, network security, DNS filtering, South Africa">
+<meta name="theme-color" content="#00c6ff">
+<meta name="robots" content="index,follow">
+<meta name="dcterms.rightsHolder" content="Antwerp Designs | Ionity (Pty) Ltd">
+<meta name="dcterms.dateCopyrighted" content="2018-2026">
+<meta name="dcterms.identifier" content="DOC-2026-09-015-PRIVACY">
+<link rel="canonical" href="https://www.ionity.today/privacy">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Privacy Notice — Gate^Flame">
+<meta property="og:description" content="What stays on your box, what the optional support check-in sends, and how to switch it off.">
+<meta property="og:url" content="https://www.ionity.today/privacy">
+<meta property="og:site_name" content="Ionity">
+
+<style>
+  :root{
+    --brand:#0e7fa6; --brand-bright:#00bfff; --brand-glow:#00c6ff;
+    --ink:#16202b; --ink-soft:#4a5866; --dark:#0d1b2a;
+    --bg:#ffffff; --bg-soft:#f5f8fa; --bg-tint:#f2fafd;
+    --rule:#dde5ec; --max:44rem;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --brand:#57cdf2; --brand-bright:#00c6ff;
+      --ink:#e8eef4; --ink-soft:#9fb0c0; --dark:#e8eef4;
+      --bg:#0d1b2a; --bg-soft:#132436; --bg-tint:#10283a;
+      --rule:#25384c;
+    }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:400 17px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:var(--max); margin:0 auto; padding:0 1.25rem 5rem}
+
+  header.masthead{
+    border-top:5px solid var(--brand-glow);
+    background:var(--bg-soft);
+    padding:2.75rem 0 2rem; margin-bottom:2.5rem;
+    border-bottom:1px solid var(--rule);
+  }
+  .eyebrow{
+    font-size:.75rem; letter-spacing:.16em; text-transform:uppercase;
+    font-weight:700; color:var(--brand); margin:0 0 .5rem;
+  }
+  h1{font-size:clamp(1.9rem,5vw,2.6rem); line-height:1.15; margin:0 0 .4rem; letter-spacing:-.02em}
+  .sub{margin:0; color:var(--ink-soft); font-size:1.1rem}
+  .meta{margin:1.25rem 0 0; font-size:.85rem; color:var(--ink-soft)}
+
+  h2{
+    font-size:1.3rem; line-height:1.3; margin:2.75rem 0 .75rem;
+    color:var(--brand); letter-spacing:-.01em;
+    scroll-margin-top:1rem;
+  }
+  h2 .num{color:var(--ink-soft); font-weight:400}
+  p{margin:0 0 1rem}
+  ul{margin:0 0 1rem; padding-left:1.25rem}
+  li{margin:0 0 .5rem}
+  strong{font-weight:650; color:var(--ink)}
+  a{color:var(--brand); text-underline-offset:2px}
+  code{
+    font:500 .88em/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--bg-soft); border:1px solid var(--rule);
+    border-radius:4px; padding:.1em .35em; word-break:break-word;
+  }
+  .lede{font-size:1.05rem; color:var(--ink-soft)}
+
+  .callout{
+    border-left:4px solid var(--brand-bright); background:var(--bg-tint);
+    padding:1rem 1.15rem; margin:1.5rem 0; border-radius:0 6px 6px 0;
+  }
+  .callout p:last-child{margin-bottom:0}
+  .callout.flag{border-left-color:#e8a33d}
+
+  .tablewrap{overflow-x:auto; margin:1.25rem 0; -webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse; width:100%; min-width:34rem; font-size:.92rem}
+  caption{text-align:left; color:var(--ink-soft); font-size:.85rem; padding-bottom:.5rem}
+  th,td{border:1px solid var(--rule); padding:.6rem .7rem; text-align:left; vertical-align:top}
+  thead th{background:#0d1b2a; color:#fff; font-weight:600; font-size:.85rem}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) thead th{background:#1b3448}
+  }
+  tbody th{background:var(--bg-soft); font-weight:600; width:34%}
+  td code{font-size:.85em}
+
+  footer.legal{
+    margin-top:4rem; padding-top:1.5rem; border-top:1px solid var(--rule);
+    font-size:.82rem; color:var(--ink-soft);
+  }
+  footer.legal p{margin:0 0 .4rem}
+  .tag{color:var(--brand); font-weight:600}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap" style="padding-bottom:0">
+    <p class="eyebrow">Ionity &nbsp;|&nbsp; AEDI</p>
+    <h1>Privacy Notice</h1>
+    <p class="sub">Gate^Flame Network Security Node</p>
+    <p class="meta">
+      Given under section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA).<br>
+      Version 1.0 &nbsp;·&nbsp; Effective <em>[date of publication]</em> &nbsp;·&nbsp; DOC-2026-09-015-PRIVACY
+    </p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<p class="lede">This notice tells you what Ionity collects when you use a Gate^Flame node and the
+Gate^Flame mobile app, why, for how long, and what you can do about it.</p>
+
+<p class="lede">It describes the product <strong>as it is actually built</strong>, field by field. Where
+something is not yet settled, this notice says so rather than rounding it in our favour.</p>
+
+<h2 id="who"><span class="num">1.</span> Who is responsible</h2>
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><th scope="row">Responsible party</th><td>Ionity (Pty) Ltd (formerly Antwerp Designs), trading as AEDI</td></tr>
+    <tr><th scope="row">Registration number</th><td><em>[company registration number — insert before publication]</em></td></tr>
+    <tr><th scope="row">Address</th><td>Centurion, Gauteng, South Africa</td></tr>
+    <tr><th scope="row">Information Officer</th><td>Johan Wilhelm van Antwerp</td></tr>
+    <tr><th scope="row">Contact</th><td><a href="mailto:info@ionity.today">info@ionity.today</a></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="short"><span class="num">2.</span> The short version</h2>
+<p>Gate^Flame filters DNS on your own network, on a box in your own home or office.
+<strong>Almost everything it knows about your network never leaves the building.</strong></p>
+<ul>
+  <li><strong>What you browse is yours.</strong> Domains, DNS query logs, threat logs, deep-packet
+      inspection output and the IP addresses of your devices are held on your box and are
+      <strong>never transmitted to Ionity</strong>. Not summarised, not aggregated, not sampled.</li>
+  <li><strong>The box can send us a health check-in</strong> — CPU, memory, temperature, whether each
+      module is running. This is <strong>off unless you turn it on</strong>.</li>
+  <li><strong>If you use the Shield (VPN) feature, that check-in also carries a list of the devices
+      you put on a VPN region</strong> — including each device's MAC address and the name you gave it.
+      This is the one place a device identifier leaves your network, and
+      <a href="#identifiers">section 5</a> covers it on its own because it deserves to be read,
+      not skimmed.</li>
+  <li><strong>The mobile app sends us nothing at all.</strong> It talks only to your box, on your own network.</li>
+</ul>
+
+<h2 id="never"><span class="num">3.</span> What never reaches us</h2>
+<p>The following stay on your node and are never sent to Ionity:</p>
+<ul>
+  <li>the domains any device looks up, and the full DNS query log</li>
+  <li>the threat log and every per-query blocking decision</li>
+  <li>deep-packet-inspection output</li>
+  <li>the IP addresses and hostnames of devices on your network</li>
+  <li>anything typed into the wall console or the app beyond the settings themselves</li>
+</ul>
+<p>This is enforced in code, not by policy. The module that builds the check-in
+(<code>health_feed.py</code>) does not import the threat, client or DPI modules at all, so the data
+is not in scope at the point the message is built. The receiving server rejects any field it does
+not expect with an HTTP 422 error and has no database column such data could be written into.</p>
+
+<div class="callout">
+  <p><strong>A note on how the product is wired:</strong> your router forwards its DNS to the box
+  rather than each device being pointed at it directly. A side effect is that even your own box
+  mostly cannot attribute a lookup to an individual device. We mention it because it means
+  “which person visited which site” is not information the product generally holds, let alone sends.</p>
+</div>
+
+<h2 id="sends"><span class="num">4.</span> What the box sends us, if you switch the check-in on</h2>
+<p><strong>Off by default.</strong> The health feed runs only when <code>GATEFLAME_FEED_ENABLED</code>
+is turned on. When enabled it sends one message every 15 minutes over HTTPS to
+<code>feeds.ionity.today</code>, authenticated with a token unique to your node.</p>
+<p>This is the complete message. There are no other fields:</p>
+<div class="tablewrap">
+<table>
+  <caption>Every field in the support check-in.</caption>
+  <thead><tr><th>Field</th><th>What it is</th><th>Why we need it</th></tr></thead>
+  <tbody>
+    <tr><td><code>nodeId</code></td><td>The box's own identifier, e.g. <code>GF-72TYTITQ</code></td><td>Tells your box apart from another customer's</td></tr>
+    <tr><td><code>agentVersion</code></td><td>Software version</td><td>Whether a fault is already fixed in a newer release</td></tr>
+    <tr><td><code>sentAt</code>, <code>uptimeSeconds</code></td><td>Time sent; time since last boot</td><td>Spotting boxes that keep restarting</td></tr>
+    <tr><td><code>host.cpuPercent</code>, <code>memUsedMB</code>, <code>memTotalMB</code>, <code>diskUsedPercent</code></td><td>Load, memory and disk use</td><td>A box running out of resources fails in confusing ways</td></tr>
+    <tr><td><code>host.tempC</code>, <code>host.throttleFlags</code></td><td>Temperature; whether the processor is throttling</td><td>Overheating and failing power supplies, the two commonest hardware faults</td></tr>
+    <tr><td><code>modules[].id</code>, <code>.status</code>, <code>.gap</code></td><td>Each feature's name, whether it is running, and a short text reason if not</td><td>Answering “why has filtering stopped” without a site visit</td></tr>
+    <tr><td><code>counters.errors24h</code>, <code>.restarts24h</code>, <code>.wanBudgetUsedPercent</code></td><td>Error and restart counts; data-cap usage</td><td>Trend, not detail</td></tr>
+    <tr><td><code>piholeReachable</code></td><td>Whether the filter engine is answering</td><td>The single most useful support fact</td></tr>
+    <tr><td><code>shield</code></td><td>Your VPN configuration — see <a href="#identifiers">section 5</a></td><td></td></tr>
+  </tbody>
+</table>
+</div>
+<p>The free-text <code>gap</code> and <code>remedy</code> fields are length-capped and rejected outright
+if they contain anything that parses as an IP or MAC address, so a fault message cannot smuggle out
+network detail.</p>
+
+<h2 id="identifiers"><span class="num">5.</span> Device identifiers — the part you should read</h2>
+<p>If you use <strong>Shield</strong>, our VPN feature, the check-in also contains one row for
+<strong>each device you have chosen to put on a VPN region</strong>:</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Field</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>mac</code></td><td>The device's hardware address, e.g. <code>a4:83:e7:1c:22:0b</code></td></tr>
+    <tr><td><code>label</code></td><td>The name you gave that device, e.g. “Kyle's tablet”</td></tr>
+    <tr><td><code>region</code></td><td>The country you routed it through, e.g. Japan</td></tr>
+    <tr><td><code>enabled</code></td><td>Whether it is currently on</td></tr>
+    <tr><td><code>provider</code></td><td>Which VPN service carries it</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout flag">
+  <p><strong>A MAC address is a device identifier, and a name you chose may identify a person.</strong>
+  We are not going to describe this as anonymous, because it is not.</p>
+</div>
+
+<p>Three things limit it, and all three are real:</p>
+<ol>
+  <li><strong>Only devices you configured appear.</strong> These rows exist because somebody chose a
+      VPN region for that device. Devices merely seen on your network are never listed. A household
+      that has never opened Shield sends an empty list.</li>
+  <li><strong>It is still only configuration, never behaviour.</strong> It says “this device is set to
+      Japan”. It never says what that device did, visited, or blocked.</li>
+  <li><strong>The whole check-in is off by default,</strong> and turning it off stops these rows with it.</li>
+</ol>
+
+<p><strong>Why it is there at all:</strong> so that when you telephone about Shield, support can see
+which of your devices is on which region and help you, instead of asking you to read settings off a
+screen while you are already frustrated. That was a deliberate product decision, taken on
+31 August 2026, and this notice exists partly because we made it.</p>
+
+<p><strong>If you would rather it did not leave:</strong> turn the health feed off, or do not assign
+devices to VPN regions. Shield keeps working either way; you simply give up assisted support on it.</p>
+
+<h2 id="app"><span class="num">6.</span> The mobile app</h2>
+<p>The Gate^Flame app talks <strong>only to your node, over your own local network</strong>. It does
+not send anything to Ionity or to anyone else.</p>
+<ul>
+  <li>No analytics, advertising, crash-reporting or tracking libraries are built into it. There are
+      none in the app's dependencies.</li>
+  <li>It requests three Android permissions: internet access, network-state access, and multicast —
+      the last so it can find your box on the network by name. It does not ask for location, contacts,
+      storage or identifiers.</li>
+  <li>Calls to any address outside your private network are refused by the app itself.</li>
+  <li>It holds a pairing token proving it is allowed to talk to your box. That token stays on your phone.</li>
+</ul>
+
+<h2 id="why"><span class="num">7.</span> Why we process it, and on what basis</h2>
+<p>We use the check-in <strong>only</strong> for warranty, technical support and product reliability.</p>
+<p>We do <strong>not</strong> sell it, share it, rent it, or use it for marketing, profiling, advertising
+or lead generation. We do not use it to decide who to contact about upgrades. If that ever changes, it
+is a new purpose requiring a new basis and a new version of this notice — not a quiet expansion of this one.</p>
+<p><strong>Supplying it is entirely voluntary.</strong> The feed is off until you enable it, and you may
+disable it at any time. <strong>Nothing about your protection depends on it.</strong> If it is off,
+filtering, Shield, the app and the wall console all work exactly as before — you simply lose
+remote-assisted support, and we will ask you more questions on the phone.</p>
+<p>The check-in does not run at all until a node has been paired, which requires physical presence at the box.</p>
+
+<h2 id="sharing"><span class="num">8.</span> Who else sees it</h2>
+<p>Nobody outside Ionity. We do not share the check-in with advertisers, data brokers, analytics
+providers or partners. If a court or a regulator lawfully compels disclosure, we will comply, and will
+tell you unless we are prohibited from doing so.</p>
+<p><strong>Ionity is not an operator for the data on your box.</strong> We never receive it and cannot
+reach into your network. That data is yours and you are the responsible party for it.</p>
+
+<h2 id="storage"><span class="num">9.</span> Where it is stored, and for how long</h2>
+<p><strong>Stored in South Africa.</strong> The receiving service runs in South Africa, so no
+cross-border transfer of personal information takes place and section 72 of POPIA is not engaged. If
+that ever changes we will update this notice <strong>before</strong> moving anything, and will state
+which country and which safeguard we rely on.</p>
+<p><strong>Retention: 90 days.</strong> Older check-ins are deleted automatically as new ones arrive.
+There is also a hard cap of 10 000 stored reports per node, whichever limit is reached first. There is
+no long-term archive.</p>
+<p>Sales and warranty records — your name, contact details and what you bought — are kept for as long
+as we are required to keep them under South African tax and company law.</p>
+
+<h2 id="security"><span class="num">10.</span> How it is protected</h2>
+<ul>
+  <li>Every node authenticates with its own token, stored hashed (HMAC-SHA256 with a secret held
+      outside the database). A stolen copy of the database does not yield a working token.</li>
+  <li>Transport to <code>feeds.ionity.today</code> is HTTPS.</li>
+  <li>The box only accepts connections from your own local network, checked before any password or
+      token is considered.</li>
+  <li>Actions that change or destroy settings require physical presence at the box. They cannot be
+      triggered from a token, from the app, or from the internet.</li>
+  <li>The receiver rejects unrecognised fields outright rather than storing them.</li>
+</ul>
+<p>No system is perfectly secure. If personal information under our control is compromised, POPIA
+section 22 requires us to notify the Information Regulator and the affected people, and we will.</p>
+
+<h2 id="rights"><span class="num">11.</span> Your rights</h2>
+<p>Under POPIA sections 23 to 25 you may:</p>
+<ul>
+  <li><strong>ask what we hold about you</strong> — and because we hold so little, the honest answer is
+      usually: your sales record, your contact details, and up to 90 days of health check-ins;</li>
+  <li><strong>have it corrected</strong> if it is wrong;</li>
+  <li><strong>have it deleted.</strong> We can erase a node's entire history on request; the facility
+      exists and is not a manual favour;</li>
+  <li><strong>object to processing</strong>, or withdraw agreement to the check-in, at any time — in
+      practice, by switching it off;</li>
+  <li><strong>complain to us</strong>, and separately <strong>complain to the Regulator</strong>,
+      whether or not you complain to us first.</li>
+</ul>
+<p>Write to <a href="mailto:info@ionity.today">info@ionity.today</a>. We will acknowledge within
+5 working days and respond substantively within 30 days. We do not charge for this.</p>
+
+<div class="callout">
+  <p><strong>The Information Regulator (South Africa)</strong><br>
+  Woodmead North Office Park, 54 Maxwell Drive, Woodmead, Johannesburg, 2191<br>
+  General enquiries: <a href="mailto:enquiries@inforegulator.org.za">enquiries@inforegulator.org.za</a>
+  · 010 023 5200 · 0800 017 160<br>
+  POPIA complaints: <a href="mailto:POPIAComplaints@inforegulator.org.za">POPIAComplaints@inforegulator.org.za</a>
+  (POPIA Form 5)<br>
+  <a href="https://inforegulator.org.za" rel="noopener">inforegulator.org.za</a></p>
+</div>
+
+<h2 id="business"><span class="num">12.</span> If you are a business, school or landlord</h2>
+<p>If you install Gate^Flame anywhere other than your own home, <strong>you</strong> become the
+responsible party for what the box observes about the people using that network, and you have your own
+duties under POPIA — including telling staff, pupils, tenants or guests that their traffic is being
+filtered and logged.</p>
+<p>Ionity does not discharge those duties for you and cannot. Please do not assume otherwise, because
+the household exemption in POPIA section 6(1)(a) will not cover you.</p>
+
+<h2 id="changes"><span class="num">13.</span> Changes to this notice</h2>
+<p>If we change what leaves your network, we will publish a new version here with a new effective date
+<strong>before</strong> the change reaches your box, and record what changed. A feature that widens what
+the check-in carries is exactly the kind of change this paragraph exists for.</p>
+<p>The current version always lives at <a href="https://www.ionity.today/privacy">www.ionity.today/privacy</a>.</p>
+
+<h2 id="contact"><span class="num">14.</span> Questions</h2>
+<p><a href="mailto:info@ionity.today">info@ionity.today</a> — Johan Wilhelm van Antwerp,
+Information Officer, Ionity (Pty) Ltd.</p>
+
+<footer class="legal">
+  <p>© 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM<sup>2</sup></p>
+  <p>Governance: Policy 986 AED &nbsp;·&nbsp; DOC-2026-09-015-PRIVACY v1.0 &nbsp;·&nbsp; Classification: PUBLIC</p>
+  <p class="tag">Building Tomorrow, Today.</p>
+</footer>
+
+</main>
+</body>
+</html>
