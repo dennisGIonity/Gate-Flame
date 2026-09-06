@@ -28,7 +28,9 @@ internet depends on it.
 
 from __future__ import annotations
 
+import os
 import threading
+import time
 
 import httpx
 
@@ -37,6 +39,24 @@ from .config import config
 from .pihole import _base, _get, _session, summary
 
 _TIMEOUT = 30.0
+
+# The gravity rebuild gets its OWN timeout, and it is large.
+#
+# This module's docstring says a rebuild is "tens of seconds on a Pi". The
+# gravity POST was nonetheless sent with _TIMEOUT, the same 30s used for a
+# list add. On 2026-09-06 a High-level change took the box from 347,905
+# domains to 3.08 million; the rebuild ran for minutes, httpx gave up at 30
+# seconds, and apply() recorded "gravity rebuild failed" while Pi-hole
+# finished the job perfectly and logged "Gravity database has been updated".
+#
+# So the threat-level dial appeared to fail BECAUSE it was asked to do more
+# work. Every larger list made it more likely, which is precisely backwards.
+_GRAVITY_TIMEOUT = float(os.environ.get("GATEFLAME_GRAVITY_TIMEOUT", "900"))
+
+# After the POST gives up, how long to keep asking Pi-hole whether it finished
+# anyway, and how often. A slow box must not be called broken.
+_GRAVITY_VERIFY_SECONDS = float(os.environ.get("GATEFLAME_GRAVITY_VERIFY_SECONDS", "600"))
+_GRAVITY_VERIFY_INTERVAL = 5.0
 
 # Guards a rebuild. Two overlapping gravity runs corrupt the database, and a
 # customer flipping three toggles quickly is entirely normal.
@@ -85,7 +105,7 @@ def desired_lists(settings: dict) -> list[str]:
     return [u for u in urls if not (u in seen or seen.add(u))]
 
 
-def _post(path: str, payload: dict) -> dict | None:
+def _post(path: str, payload: dict, timeout: float | None = None) -> dict | None:
     base = _base()
     if not base:
         return None
@@ -93,7 +113,12 @@ def _post(path: str, payload: dict) -> dict | None:
     if not sid:
         return None
     try:
-        r = httpx.post(f"{base}{path}", headers={"sid": sid}, json=payload, timeout=_TIMEOUT)
+        r = httpx.post(
+            f"{base}{path}",
+            headers={"sid": sid},
+            json=payload,
+            timeout=_TIMEOUT if timeout is None else timeout,
+        )
         if r.status_code not in (200, 201):
             return None
         return r.json()
@@ -113,6 +138,35 @@ def _delete(path: str) -> bool:
         return r.status_code in (200, 204)
     except httpx.HTTPError:
         return False
+
+
+def _gravity_finished(domains_before: int) -> bool:
+    """Did the rebuild complete, whatever the HTTP connection did?
+
+    Called only after the gravity POST failed or timed out. The connection
+    dropping says nothing about Pi-hole: on a slow box, or a very large list
+    set, the rebuild routinely outlives any sane HTTP timeout and completes
+    normally afterwards. Declaring failure at that moment is how a working
+    box gets reported broken.
+
+    "Finished" means Pi-hole is answering again AND the gravity domain count
+    has moved. A count that is merely non-zero is not enough - the PREVIOUS
+    build was also non-zero, and mistaking it for the new one is how a failed
+    apply gets reported as success.
+
+    Returns False if the box never comes back or the count never changes,
+    which is a real failure and should be recorded as one.
+    """
+    deadline = time.monotonic() + _GRAVITY_VERIFY_SECONDS
+    while time.monotonic() < deadline:
+        time.sleep(_GRAVITY_VERIFY_INTERVAL)
+        stats = summary()
+        if stats is None:
+            continue  # still busy or still restarting; not yet an answer
+        now = stats.get("domainsOnGravity") or 0
+        if now and now != domains_before:
+            return True
+    return False
 
 
 def current_lists() -> list[str] | None:
@@ -191,9 +245,27 @@ def apply(settings: dict) -> bool:
 
     # Rebuild gravity so the changes are live. Without this the list table has
     # changed and the resolver has not.
-    if _post("/api/action/gravity", {}) is None:
-        _last_error = "gravity rebuild failed"
-        return False
+    #
+    # NEVER CLAIM FAILURE WITHOUT A READ-BACK EITHER. This project's standing
+    # rule is "never claim success without a read-back" - see `confirmed`
+    # above. 2026-09-06 showed the mirror image is just as damaging: this line
+    # claimed FAILURE without one. The POST timed out at 30s on a rebuild that
+    # legitimately took minutes, and the box reported "gravity rebuild failed"
+    # while Pi-hole was mid-rebuild and about to succeed. Result: the threat
+    # dial was reported broken for hours while working.
+    #
+    # A dropped connection tells us nothing about what Pi-hole did. Only
+    # Pi-hole can say that, so ask it.
+    before = summary() or {}
+    domains_before = before.get("domainsOnGravity") or 0
+
+    if _post("/api/action/gravity", {}, timeout=_GRAVITY_TIMEOUT) is None:
+        if not _gravity_finished(domains_before):
+            _last_error = (
+                "gravity rebuild did not finish - Pi-hole stopped responding and "
+                "the domain count did not change"
+            )
+            return False
 
     # And read back ONE more time, because a gravity rebuild that runs cleanly
     # over a list it could not download leaves zero domains and reports success -

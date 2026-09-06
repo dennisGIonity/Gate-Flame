@@ -55,7 +55,11 @@ class Recorder:
             return list(self.lists_after_write)
         return list(self.lists)
 
-    def post(self, path, payload):
+    # `timeout` accepted and ignored: the gravity rebuild is posted with its own
+    # much larger timeout (see blocklists._GRAVITY_TIMEOUT). These tests do not
+    # care how long the real call would wait, only what was sent - but a double
+    # that cannot accept the argument fails every caller for the wrong reason.
+    def post(self, path, payload, timeout=None):
         if path == "/api/action/gravity":
             self.gravity_runs += 1
             return {} if self.gravity_ok else None
