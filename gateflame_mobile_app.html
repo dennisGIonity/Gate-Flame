@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gate^Flame Mobile APK & HTML Application</title>
+    <style>
+        :root {
+            --bg-dark: #0b0f17;
+            --card-bg: rgba(17, 24, 39, 0.85);
+            --primary-orange: #f97316;
+            --primary-cyan: #06b6d4;
+            --primary-blue: #3b82f6;
+            --emerald: #10b981;
+            --red: #ef4444;
+            --amber: #f59e0b;
+            --purple: #8b5cf6;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --glass-border: rgba(6, 182, 212, 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow-x: hidden;
+            padding-bottom: 80px;
+        }
+
+        .app-container {
+            padding: 16px;
+            max-width: 500px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .logo-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-badge {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary-cyan), var(--primary-blue));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 900;
+            color: white;
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        .logo-text {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(to right, #fff, #9ca3af);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-text span {
+            color: var(--primary-cyan);
+            -webkit-text-fill-color: var(--primary-cyan);
+        }
+
+        .status-badge {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--emerald);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            font-family: monospace;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--emerald);
+            box-shadow: 0 0 10px var(--emerald);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .glass-card {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.8), rgba(11, 15, 23, 0.9));
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(6, 182, 212, 0.15);
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.3), transparent);
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-weight: 800;
+            font-family: monospace;
+            color: var(--primary-cyan);
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-box {
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.6), rgba(2, 6, 23, 0.8));
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 18px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .stat-box:hover {
+            transform: translateY(-2px);
+            border-color: rgba(6, 182, 212, 0.3);
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 900;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -0.04em;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-family: monospace;
+        }
+
+        .defense-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .defense-btn {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 14px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--text-muted);
+            position: relative;
+        }
+
+        .defense-btn:hover {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .defense-btn.active {
+            border-color: var(--primary-cyan);
+            background: rgba(6, 182, 212, 0.1);
+            color: white;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+        }
+
+        .defense-btn.active::after {
+            content: '✓';
+            position: absolute;
+            top: 10px; right: 10px;
+            font-size: 10px; color: var(--primary-cyan);
+        }
+
+        .defense-btn-title {
+            font-size: 12px;
+            font-weight: 800;
+            font-family: monospace;
+            display: flex;
+            justify-content: space-between;
+            color: #fff;
+        }
+
+        .defense-btn-sub {
+            font-size: 10px;
+            margin-top: 4px;
+            opacity: 0.8;
+            font-family: monospace;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .input-field {
+            flex: 1;
+            background: #0b0f17;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 8px 12px;
+            color: var(--primary-cyan);
+            font-family: monospace;
+            font-size: 12px;
+            outline: none;
+        }
+
+        .input-field:focus {
+            border-color: var(--primary-cyan);
+        }
+
+        .btn-add {
+            background: var(--emerald);
+            color: black;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 12px;
+            font-family: monospace;
+            cursor: pointer;
+        }
+
+        .btn-add:active {
+            transform: scale(0.96);
+        }
+
+        .domain-list {
+            max-height: 140px;
+            overflow-y: auto;
+            margin-top: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 10px;
+            background: rgba(0,0,0,0.3);
+        }
+
+        .domain-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 11px;
+            font-family: monospace;
+        }
+
+        .domain-item:last-child {
+            border-bottom: none;
+        }
+
+        .btn-del {
+            background: transparent;
+            color: var(--red);
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            padding: 2px 6px;
+        }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 11px;
+            font-family: monospace;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .tag-blocked {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--red);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .tag-whitelisted {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--emerald);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .nav-bar {
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0 24px;
+            background: linear-gradient(to top, var(--bg-dark), rgba(11, 15, 23, 0.95));
+            border-top: 1px solid rgba(6, 182, 212, 0.2);
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            backdrop-filter: blur(20px);
+            z-index: 100;
+        }
+
+        .nav-item {
+            color: var(--text-muted);
+            font-size: 9px;
+            font-weight: 700;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.6;
+        }
+
+        .nav-item.active {
+            color: var(--primary-cyan);
+            opacity: 1;
+            transform: translateY(-2px);
+        }
+
+        .nav-icon {
+            font-size: 20px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Header -->
+    <header>
+        <div class="logo-box">
+            <div class="logo-badge">GF</div>
+            <div class="logo-text">Gate<span>^</span>Flame</div>
+        </div>
+        <div class="status-badge" id="node-status">
+            <div class="status-dot"></div> SINKHOLE LIVE
+        </div>
+    </header>
+
+    <!-- TAB 1: DASHBOARD -->
+    <div id="tab-dashboard" class="tab-content active">
+        <!-- Network Overview Box -->
+        <div class="glass-card">
+            <div class="card-title">
+                <span>TELEMETRY OVERVIEW</span>
+                <span id="defense-level-badge" style="color: var(--emerald);">DEFENSE: MEDIUM</span>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-value" id="val-queries" style="color: var(--primary-blue);">38,851</div>
+                    <div class="stat-label">Total Queries</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="val-blocked" style="color: var(--red);">14,397</div>
+                    <div class="stat-label">Blocked Hits</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="val-percent" style="color: var(--amber);">37.1%</div>
+                    <div class="stat-label">Block Ratio</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="val-domains" style="color: var(--emerald);">6.75M</div>
+                    <div class="stat-label">Domains on Blocklist</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Defense Selector -->
+        <div class="glass-card">
+            <div class="card-title">DEFENSE LEVEL CONTROL</div>
+            <div class="defense-grid">
+                <div class="defense-btn" onclick="setDefenseLevel('eco')" id="btn-eco">
+                    <div class="defense-btn-title">ECO <span>15%</span></div>
+                    <div class="defense-btn-sub">1.25M &bull; Basic Ads</div>
+                </div>
+                <div class="defense-btn active" onclick="setDefenseLevel('low')" id="btn-low">
+                    <div class="defense-btn-title">LOW <span>37%</span></div>
+                    <div class="defense-btn-sub">6.75M &bull; Trackers</div>
+                </div>
+                <div class="defense-btn" onclick="setDefenseLevel('medium')" id="btn-medium">
+                    <div class="defense-btn-title">MEDIUM <span>58%</span></div>
+                    <div class="defense-btn-sub">14.8M &bull; Malware</div>
+                </div>
+                <div class="defense-btn" onclick="setDefenseLevel('complete')" id="btn-complete">
+                    <div class="defense-btn-title">COMPLETE <span>78%</span></div>
+                    <div class="defense-btn-sub">28.5M &bull; Strict All</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Threat Feed -->
+        <div class="glass-card">
+            <div class="card-title">RECENT REAL-TIME THREAT LOGS</div>
+            <div id="threat-feed-container"></div>
+        </div>
+    </div>
+
+    <!-- TAB 2: THREAT LOGS -->
+    <div id="tab-threats" class="tab-content">
+        <div class="glass-card">
+            <div class="card-title">LIVE SINKHOLED LOGS</div>
+            <div id="full-threat-container"></div>
+        </div>
+    </div>
+
+    <!-- TAB 3: CLIENT DEVICES -->
+    <div id="tab-devices" class="tab-content">
+        <div class="glass-card">
+            <div class="card-title">CONNECTED CLIENT NODES (6 ACTIVE)</div>
+            <div class="domain-list" style="max-height: 300px;">
+                <div class="domain-item">
+                    <div>
+                        <strong style="color: white;">Dennis-MacBook-Pro</strong><br>
+                        <span style="color: var(--text-muted);">192.168.1.112 &bull; 3C:06:30:E1:8B:92</span>
+                    </div>
+                    <span style="color: var(--primary-cyan);">12,450 Qs</span>
+                </div>
+                <div class="domain-item">
+                    <div>
+                        <strong style="color: white;">Living Room Smart TV 75"</strong><br>
+                        <span style="color: var(--text-muted);">192.168.1.140 &bull; E4:E0:C5:11:00:AB</span>
+                    </div>
+                    <span style="color: var(--primary-cyan);">8,900 Qs</span>
+                </div>
+                <div class="domain-item">
+                    <div>
+                        <strong style="color: white;">Office-Workstation-04</strong><br>
+                        <span style="color: var(--text-muted);">192.168.1.109 &bull; 70:85:C2:55:99:3E</span>
+                    </div>
+                    <span style="color: var(--primary-cyan);">9,100 Qs</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: SETTINGS -->
+    <div id="tab-settings" class="tab-content">
+        <!-- Whitelist Manager -->
+        <div class="glass-card">
+            <div class="card-title">
+                <span>DOMAIN WHITELIST MANAGER</span>
+                <span id="whitelist-count" style="color: var(--emerald);">3 Exempt</span>
+            </div>
+            <p style="font-size: 10px; color: var(--text-muted); font-family: monospace; margin-bottom: 8px;">
+                Domains added here are exempt from filtering regardless of defense level.
+            </p>
+            <form onsubmit="addWhitelist(event)">
+                <div class="input-group">
+                    <input type="text" id="whitelist-input" class="input-field" placeholder="e.g. work-portal.com" required>
+                    <button type="submit" class="btn-add">Add</button>
+                </div>
+            </form>
+            <div class="domain-list" id="whitelist-container"></div>
+        </div>
+
+        <!-- Blacklist Manager -->
+        <div class="glass-card">
+            <div class="card-title">
+                <span>CUSTOM BLACKLIST RULES</span>
+                <span id="blacklist-count" style="color: var(--red);">2 Blocked</span>
+            </div>
+            <form onsubmit="addBlacklist(event)">
+                <div class="input-group">
+                    <input type="text" id="blacklist-input" class="input-field" placeholder="e.g. adserver-bad.com" required>
+                    <button type="submit" class="btn-add" style="background: var(--red); color: white;">Block</button>
+                </div>
+            </form>
+            <div class="domain-list" id="blacklist-container"></div>
+        </div>
+
+        <!-- System Node Info -->
+        <div class="glass-card">
+            <div class="card-title">IONITY GLOBAL NODE SPECIFICATIONS</div>
+            <div style="font-size: 11px; font-family: monospace; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;">
+                <p>Model: Gate^Flame™ Network Security Node</p>
+                <p>Serial / MAC: DC:A6:32:88:14:2F</p>
+                <p>Uplink: RJ45 Wired / Wi-Fi Dual Band</p>
+                <p style="color: var(--emerald);">Subscription: R45.00 / mo Warranty Active</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom Navigation Bar -->
+<div class="nav-bar">
+    <div class="nav-item active" onclick="switchTab('dashboard')" id="nav-dashboard">
+        <div class="nav-icon">⌂</div>
+        Dashboard
+    </div>
+    <div class="nav-item" onclick="switchTab('threats')" id="nav-threats">
+        <div class="nav-icon">🛡</div>
+        Threat Logs
+    </div>
+    <div class="nav-item" onclick="switchTab('devices')" id="nav-devices">
+        <div class="nav-icon">⚡</div>
+        Devices
+    </div>
+    <div class="nav-item" onclick="switchTab('settings')" id="nav-settings">
+        <div class="nav-icon">⚙</div>
+        Settings
+    </div>
+</div>
+
+<script>
+    // State management
+    let state = {
+        totalQueries: 38851,
+        queriesBlocked: 14397,
+        defenseLevel: 'low',
+        whitelistedDomains: ['api.ionity.today', 'work-portal.com', 'google.com'],
+        blacklistedDomains: ['adserver-bad.com', 'tracker-malicious.org'],
+        threatLogs: [
+            { domain: 'telemetry.smart-tv.samsungcloud.com', action: 'Blocked', category: 'Telemetry', time: 'Just now' },
+            { domain: 'trackers.ads-network.io', action: 'Blocked', category: 'Ad Tracker', time: '1m ago' },
+            { domain: 'api.ionity.today', action: 'Whitelisted', category: 'System Sync', time: '2m ago' },
+            { domain: 'crypto-miner.pool-hash.top', action: 'Blocked', category: 'Cryptojacking', time: '4m ago' }
+        ]
+    };
+
+    const defenseConfigs = {
+        eco: { ratio: 0.15, domains: '1.25M', badge: 'DEFENSE: ECO (15%)' },
+        low: { ratio: 0.37, domains: '6.75M', badge: 'DEFENSE: LOW (37%)' },
+        medium: { ratio: 0.58, domains: '14.8M', badge: 'DEFENSE: MEDIUM (58%)' },
+        complete: { ratio: 0.78, domains: '28.5M', badge: 'DEFENSE: IONITY COMPLETE (78%)' }
+    };
+
+    function setDefenseLevel(level) {
+        state.defenseLevel = level;
+        const cfg = defenseConfigs[level];
+        
+        // Update active UI buttons
+        document.querySelectorAll('.defense-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`btn-${level}`).classList.add('active');
+        
+        // Recalculate estimated block numbers based on selected level
+        state.queriesBlocked = Math.round(state.totalQueries * cfg.ratio);
+        
+        renderUI();
+    }
+
+    function renderUI() {
+        const cfg = defenseConfigs[state.defenseLevel];
+        const percent = ((state.queriesBlocked / state.totalQueries) * 100).toFixed(1);
+        
+        document.getElementById('val-queries').innerText = state.totalQueries.toLocaleString();
+        document.getElementById('val-blocked').innerText = state.queriesBlocked.toLocaleString();
+        document.getElementById('val-percent').innerText = `${percent}%`;
+        document.getElementById('val-domains').innerText = cfg.domains;
+        document.getElementById('defense-level-badge').innerText = cfg.badge;
+
+        renderThreats();
+        renderWhitelist();
+        renderBlacklist();
+    }
+
+    function renderThreats() {
+        const container = document.getElementById('threat-feed-container');
+        const fullContainer = document.getElementById('full-threat-container');
+        
+        const html = state.threatLogs.map(log => `
+            <div class="list-item">
+                <div>
+                    <strong style="color: ${log.action === 'Whitelisted' ? 'var(--emerald)' : 'var(--red)'}">${log.domain}</strong><br>
+                    <span style="color: var(--text-muted); font-size: 10px;">Category: ${log.category}</span>
+                </div>
+                <span class="${log.action === 'Whitelisted' ? 'tag-whitelisted' : 'tag-blocked'}">${log.action}</span>
+            </div>
+        `).join('');
+
+        if (container) container.innerHTML = html;
+        if (fullContainer) fullContainer.innerHTML = html;
+    }
+
+    function renderWhitelist() {
+        const container = document.getElementById('whitelist-container');
+        document.getElementById('whitelist-count').innerText = `${state.whitelistedDomains.length} Exempt`;
+        
+        if (state.whitelistedDomains.length === 0) {
+            container.innerHTML = '<div class="domain-item" style="color: var(--text-muted);">No domains whitelisted</div>';
+            return;
+        }
+
+        container.innerHTML = state.whitelistedDomains.map(dom => `
+            <div class="domain-item">
+                <span style="color: var(--emerald);">${dom}</span>
+                <button class="btn-del" onclick="removeWhitelist('${dom}')">✕</button>
+            </div>
+        `).join('');
+    }
+
+    function renderBlacklist() {
+        const container = document.getElementById('blacklist-container');
+        document.getElementById('blacklist-count').innerText = `${state.blacklistedDomains.length} Blocked`;
+        
+        if (state.blacklistedDomains.length === 0) {
+            container.innerHTML = '<div class="domain-item" style="color: var(--text-muted);">No custom blacklisted domains</div>';
+            return;
+        }
+
+        container.innerHTML = state.blacklistedDomains.map(dom => `
+            <div class="domain-item">
+                <span style="color: var(--red);">${dom}</span>
+                <button class="btn-del" onclick="removeBlacklist('${dom}')">✕</button>
+            </div>
+        `).join('');
+    }
+
+    function addWhitelist(e) {
+        e.preventDefault();
+        const input = document.getElementById('whitelist-input');
+        const dom = input.value.trim().toLowerCase();
+        if (!dom) return;
+
+        if (!state.whitelistedDomains.includes(dom)) {
+            state.whitelistedDomains.push(dom);
+            state.blacklistedDomains = state.blacklistedDomains.filter(d => d !== dom);
+            
+            // Log whitelisted event
+            state.threatLogs.unshift({
+                domain: dom,
+                action: 'Whitelisted',
+                category: 'User Exemption',
+                time: 'Just now'
+            });
+        }
+        input.value = '';
+        renderUI();
+    }
+
+    function removeWhitelist(dom) {
+        state.whitelistedDomains = state.whitelistedDomains.filter(d => d !== dom);
+        renderUI();
+    }
+
+    function addBlacklist(e) {
+        e.preventDefault();
+        const input = document.getElementById('blacklist-input');
+        const dom = input.value.trim().toLowerCase();
+        if (!dom) return;
+
+        if (!state.blacklistedDomains.includes(dom)) {
+            state.blacklistedDomains.push(dom);
+            state.whitelistedDomains = state.whitelistedDomains.filter(d => d !== dom);
+        }
+        input.value = '';
+        renderUI();
+    }
+
+    function removeBlacklist(dom) {
+        state.blacklistedDomains = state.blacklistedDomains.filter(d => d !== dom);
+        renderUI();
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        document.getElementById(`nav-${tabId}`).classList.add('active');
+    }
+
+    // Dynamic Traffic Simulation Loop
+    setInterval(() => {
+        // Small randomization for realism
+        const inc = Math.floor(Math.random() * 3) + 1;
+        const cfg = defenseConfigs[state.defenseLevel];
+        
+        const sampleDomains = [
+            'telemetry.smart-tv.samsungcloud.com',
+            'trackers.ads-network.io',
+            'analytics.windows-telemetry.com',
+            'beacon.evil-domain-phishing.xyz',
+            'adservice.google.com/pagead',
+            'crypto-miner.pool-hash.top',
+            'work-portal.com',
+            'api.ionity.today'
+        ];
+        
+        const dom = sampleDomains[Math.floor(Math.random() * sampleDomains.length)];
+        const isWhitelisted = state.whitelistedDomains.some(w => dom.toLowerCase().includes(w.toLowerCase()));
+        const isBlacklisted = state.blacklistedDomains.some(b => dom.toLowerCase().includes(b.toLowerCase()));
+        
+        let blocked = false;
+        if (isWhitelisted) {
+            blocked = false;
+        } else if (isBlacklisted) {
+            blocked = true;
+        } else {
+            blocked = Math.random() < cfg.ratio;
+        }
+        
+        state.totalQueries += inc;
+        if (blocked) state.queriesBlocked += 1;
+
+        // Occasionally add to logs for visual activity
+        if (Math.random() < 0.4) {
+            const categories = ['Telemetry', 'Ad Tracker', 'Phishing', 'Cryptojacking', 'System Sync'];
+            const cat = isWhitelisted ? 'System Sync' : categories[Math.floor(Math.random() * categories.length)];
+
+            state.threatLogs.unshift({
+                domain: dom,
+                action: isWhitelisted ? 'Whitelisted' : (blocked ? 'Blocked' : 'Forwarded'),
+                category: isWhitelisted ? 'User Exemption' : cat,
+                time: 'Just now'
+            });
+            if (state.threatLogs.length > 25) state.threatLogs.pop();
+        }
+
+        renderUI();
+    }, 2800); // Slightly faster interval for more "alive" feel
+
+    // Initial render
+    renderUI();
+</script>
+</body>
+</html>
