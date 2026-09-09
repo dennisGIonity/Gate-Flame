@@ -42,19 +42,45 @@ _TIMEOUT = 30.0
 
 # The gravity rebuild gets its OWN timeout, and it is large.
 #
-# This module's docstring says a rebuild is "tens of seconds on a Pi". The
-# gravity POST was nonetheless sent with _TIMEOUT, the same 30s used for a
-# list add. On 2026-09-06 a High-level change took the box from 347,905
-# domains to 3.08 million; the rebuild ran for minutes, httpx gave up at 30
-# seconds, and apply() recorded "gravity rebuild failed" while Pi-hole
-# finished the job perfectly and logged "Gravity database has been updated".
+# The gravity POST used to be sent with _TIMEOUT - the same 30s as a list add.
+# On 2026-09-06 a High-level change took the box from 347,905 domains to 3.08
+# million, apply() recorded "gravity rebuild failed", and the threat dial went
+# inert while Pi-hole was demonstrably still filtering.
 #
-# So the threat-level dial appeared to fail BECAUSE it was asked to do more
-# work. Every larger list made it more likely, which is precisely backwards.
-_GRAVITY_TIMEOUT = float(os.environ.get("GATEFLAME_GRAVITY_TIMEOUT", "900"))
+# WHAT WAS MEASURED, because the first explanation of this was wrong.
+#
+# The initial diagnosis was "the rebuild takes minutes and 30s is too short".
+# Then it got timed on the live Pi 5:
+#
+#     time docker exec gateflame-pihole pihole -g   ->  real 0m13.550s
+#
+# 3.08M domains, 13.5 seconds. The REBUILD was never the slow part, and 30s
+# would have been ample for it. That theory was inference presented as fact.
+#
+# What that run also showed is where the time really goes. Four of the seven
+# lists reported "No changes detected" - cached. The two that did fetch came
+# back HTTP 503 from GitHub and fell back to their cached copies:
+#
+#     Status: Retrieval failed (exit_code=22 Msg: 503)
+#     List download failed: using previously cached list
+#
+# A first apply after a threat-level change has NO cache. It pulls every list
+# cold - the malicious list alone is 2.33M domains, tens of megabytes - over a
+# household connection, through whatever retries a 503 provokes. That is the
+# part that can outlast 30 seconds, and it scales with the customer's line
+# speed, not with the box.
+#
+# So the number below is sized for a cold download on a slow link with
+# retries, NOT for 3x a warm rebuild - 3x 13.5s is 41 seconds and would put
+# the fault straight back. Per-box override exists because a rural ADSL line
+# and a fibre line are not the same problem.
+_GRAVITY_TIMEOUT = float(os.environ.get("GATEFLAME_GRAVITY_TIMEOUT", "600"))
 
-# After the POST gives up, how long to keep asking Pi-hole whether it finished
-# anyway, and how often. A slow box must not be called broken.
+# The backstop, and the part that actually decides truth. After the POST gives
+# up, keep asking Pi-hole whether it finished anyway, for this long. Ten
+# minutes on top of the ten above: twenty minutes of tolerance before anything
+# is called broken. It runs on a background thread, so the console shows
+# `applying` throughout rather than freezing or lying.
 _GRAVITY_VERIFY_SECONDS = float(os.environ.get("GATEFLAME_GRAVITY_VERIFY_SECONDS", "600"))
 _GRAVITY_VERIFY_INTERVAL = 5.0
 
