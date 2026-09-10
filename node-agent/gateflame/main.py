@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import blocklists, content_categories, filtering_state, threat_level, vpn, vpngate
+from . import anomaly, blocklists, content_categories, datadir, filtering_state, profiles, threat_level, upstream, vpn, vpngate
 from . import clients as clients_mod
 from . import pihole, services, telemetry, threats
 from .config import config
@@ -51,6 +51,11 @@ control_scope = ScopeChecker(store, ("control", "kiosk"))
 
 @app.on_event("startup")
 def _startup() -> None:
+    # The data root first: everything below may want to persist something,
+    # and a box that cannot must say so on /system/status rather than fail
+    # each module separately. Never raises.
+    datadir.ensure()
+
     feed_loop.start()
 
     # Warm the VPN Gate list in the background so the first owner to open
@@ -87,11 +92,23 @@ def get_status(request: Request):
     # every discovery candidate to confirm it's actually a Gate^Flame node
     # (checking for nodeId + agentVersion) rather than a captive portal.
     require_lan(request)
+    storage = datadir.status()
     return {
         "nodeId": store.node_id(),
         "agentVersion": config.agent_version,
         "provisioned": store.is_provisioned(),
+        # Unauthenticated on purpose: whether the box can persist is a support
+        # question answerable from any LAN machine, and it leaks nothing
+        # personal. Details (per-folder) need read scope - see /system/storage.
+        "storageHealthy": storage["healthy"],
+        "storageRoot": storage["root"],
     }
+
+
+@app.get("/api/v1/system/storage")
+def get_storage(request: Request, _=Depends(read_scope)):
+    """The .DUMP data root: present, writable, per-folder counts, free space."""
+    return datadir.status()
 
 
 # ---- Pairing (§3.1) --------------------------------------------------------
@@ -720,6 +737,113 @@ def resume_filtering(request: Request, _=Depends(control_scope)):
     store.resume_filtering()
     blocklists.apply_async(store)
     return _filtering_state_payload()
+
+
+# ---------------------------------------------------------------------------
+# Profiles and accessibility. See profiles.py. A profile is a named pair of
+# (threat level, categories) applied through the SAME store methods and the
+# SAME blocklists.apply_async the individual controls use.
+# ---------------------------------------------------------------------------
+
+class ProfileBody(BaseModel):
+    profile: str
+
+
+class AccessibilityBody(BaseModel):
+    reducedMotion: bool | None = None
+    highContrast: bool | None = None
+    textScale: float | None = None
+    verboseLabels: bool | None = None
+    keepAwakeMinutes: int | None = None
+
+
+@app.get("/api/v1/profiles")
+def get_profiles(request: Request, _=Depends(read_scope)):
+    return profiles.describe(store.get_filter_settings())
+
+
+@app.put("/api/v1/profiles")
+def put_profile(body: ProfileBody, request: Request, auth=Depends(control_scope)):
+    if not profiles.valid(body.profile):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "unknown_profile", "allowed": list(profiles.PRESETS)},
+        )
+    level, cats = profiles.settings_for(body.profile)
+    store.set_threat_level(level)
+    store.set_categories(content_categories.sanitise(cats))
+    device = (auth or {}).get("device") if isinstance(auth, dict) else None
+    applied_by = device.get("name") if isinstance(device, dict) else ("kiosk" if isinstance(auth, dict) and "kiosk" in auth.get("granted_scopes", []) else None)
+    profiles.record_applied(body.profile, applied_by)
+    blocklists.apply_async(store)
+    return profiles.describe(store.get_filter_settings())
+
+
+@app.get("/api/v1/profiles/accessibility")
+def get_accessibility(request: Request, _=Depends(read_scope)):
+    return {"prefs": profiles.get_accessibility(), "storageWritable": datadir.status()["subdirs"]["profiles"]["writable"]}
+
+
+@app.put("/api/v1/profiles/accessibility")
+def put_accessibility(body: AccessibilityBody, request: Request, _=Depends(control_scope)):
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    try:
+        prefs, persisted = profiles.set_accessibility(patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"error": "invalid_accessibility", "message": str(exc)})
+    return {"prefs": prefs, "persisted": persisted}
+
+
+# ---------------------------------------------------------------------------
+# DNS upstream: the box's own recursion (default) or Cloudflare. See
+# upstream.py - applied through Pi-hole's config API, PROVEN by read-back and
+# a live resolution, rolled back if the new upstream does not answer.
+# ---------------------------------------------------------------------------
+
+class UpstreamBody(BaseModel):
+    mode: str
+
+
+@app.get("/api/v1/dns/upstream")
+def get_upstream(request: Request, _=Depends(read_scope)):
+    return upstream.describe()
+
+
+@app.put("/api/v1/dns/upstream")
+def put_upstream(body: UpstreamBody, request: Request, auth=Depends(kiosk_only)):
+    # Kiosk scope, not control: changing who sees the household's lookups is a
+    # privacy-posture change, made at the box like stopping a module is.
+    if not upstream.valid(body.mode):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "unknown_mode", "allowed": list(upstream.MODES)},
+        )
+    result = upstream.apply(body.mode, applied_by="kiosk")
+    if not result["applied"]["ok"]:
+        # 409, not 500: the box is in a known, reported state (the previous
+        # one), and the body says exactly why the change did not take.
+        raise HTTPException(status_code=409, detail=result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# On-box ML anomaly detection. See anomaly.py. Findings are reasons to look,
+# never verdicts, and the payload says so.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/v1/ml/anomalies")
+def get_anomalies(request: Request, _=Depends(read_scope)):
+    last = anomaly.last()
+    if last is None:
+        # Never run since boot. Run now rather than return an empty list
+        # that a reader would take for "nothing found".
+        last = anomaly.run()
+    return last
+
+
+@app.post("/api/v1/ml/anomalies/run")
+def run_anomalies(request: Request, _=Depends(control_scope)):
+    return anomaly.run()
 
 
 # ---------------------------------------------------------------------------

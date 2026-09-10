@@ -30,6 +30,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
 import type {
+  AccessibilityPrefs,
+  AccessibilityResponse,
+  AnomalyResponse,
+  ProfileId,
+  ProfilesResponse,
+  UpstreamModeId,
+  UpstreamResponse,
+} from '../../types/guard';
+import type {
   VpnDeviceState,
   VpnDevicesResponse,
   VpnGateConfigResponse,
@@ -367,6 +376,10 @@ export async function nodeRequest<T>(
         const d = parsed?.detail;
         if (typeof d === 'string') detail = d;
         else if (d?.advisory) detail = String(d.advisory);
+        // /dns/upstream answers 409 with its full payload; the reason the
+        // change did not take is the node's own sentence, in applied.error.
+        else if (d?.applied?.error) detail = String(d.applied.error);
+        else if (d?.message) detail = String(d.message);
         else if (d?.error) detail = String(d.error);
       } catch {
         /* non-JSON error body: the status alone is the message */
@@ -463,6 +476,28 @@ export const kioskApi = {
       method: 'PUT',
       body: { name },
     }),
+
+  // -------------------------------------------------------------------
+  // Guard panel: profiles, accessibility, upstream, on-box ML. Types in
+  // src/types/guard.ts, routes in node-agent/gateflame/main.py. Every write
+  // returns the node's refreshed view, never an echo of the request.
+  // -------------------------------------------------------------------
+
+  applyProfile: (profile: ProfileId) =>
+    nodeRequest<ProfilesResponse>('/profiles', { method: 'PUT', body: { profile } }),
+
+  setAccessibility: (patch: Partial<AccessibilityPrefs>) =>
+    nodeRequest<AccessibilityResponse>('/profiles/accessibility', { method: 'PUT', body: patch }),
+
+  /**
+   * Kiosk-scope on the node. A 409 carries the full UpstreamResponse with
+   * `applied.error` explaining why the change did not take (and that the box
+   * is back where it was) - the caller renders that, it is not a crash.
+   */
+  setUpstream: (mode: UpstreamModeId) =>
+    nodeRequest<UpstreamResponse>('/dns/upstream', { method: 'PUT', body: { mode } }),
+
+  runAnomalyScan: () => nodeRequest<AnomalyResponse>('/ml/anomalies/run', { method: 'POST' }),
 };
 
 // ---------------------------------------------------------------------------

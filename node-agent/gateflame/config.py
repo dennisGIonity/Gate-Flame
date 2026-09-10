@@ -9,6 +9,10 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Config:
     db_path: str = os.environ.get("GATEFLAME_DB_PATH", "/var/lib/gateflame/state.db")
+    # Persistent data root (.DUMP) for everything that is not state.db - see
+    # datadir.py. Read there via os.environ at call time so tests can point it
+    # at a tmp dir; mirrored here so `config` documents every knob in one place.
+    data_root: str = os.environ.get("GATEFLAME_DATA_ROOT", "/opt/gateflame/.DUMP")
     listen_host: str = os.environ.get("GATEFLAME_HOST", "0.0.0.0")
     listen_port: int = int(os.environ.get("GATEFLAME_PORT", "8080"))
     agent_version: str = os.environ.get("GATEFLAME_VERSION", "0.1.0")

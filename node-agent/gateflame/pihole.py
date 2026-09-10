@@ -142,6 +142,39 @@ def api_get(path: str) -> dict | None:
     return _get(path)
 
 
+def api_patch(path: str, payload: dict) -> dict | None:
+    """Authenticated PATCH returning parsed JSON, or None on any failure.
+
+    Added for upstream.py (Pi-hole v6 `PATCH /api/config`). Same session
+    cache and single 401 retry as `_get`, for the same reason: one session
+    holder. A None here means "not applied" and the caller must READ BACK
+    before believing anything else - Pi-hole answering 200 is not proof.
+    """
+    base = _base()
+    if not base:
+        return None
+
+    for attempt in (1, 2):
+        sid = _session(base)
+        if not sid:
+            return None
+        try:
+            r = httpx.patch(f"{base}{path}", headers={"sid": sid}, json=payload, timeout=_TIMEOUT)
+        except httpx.HTTPError:
+            return None
+
+        if r.status_code == 401 and attempt == 1:
+            _invalidate()
+            continue
+        if r.status_code not in (200, 201):
+            return None
+        try:
+            return r.json()
+        except ValueError:
+            return None
+    return None
+
+
 def reachable() -> bool:
     """True only when Pi-hole answers an AUTHENTICATED request.
 

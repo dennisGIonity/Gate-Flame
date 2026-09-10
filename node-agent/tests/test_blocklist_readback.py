@@ -26,7 +26,15 @@ import pytest
 
 from gateflame import blocklists
 
-LIST_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+# The wanted set for `low` is READ from threat_level, not retyped here. Until
+# 2026-09-10 this was one hardcoded StevenBlack URL, and when the low tier grew
+# to three lists (commit 654dbf4) these tests went red while the code was right
+# - a test pinned to a literal it does not own is a test that fails on purpose
+# for the wrong reason.
+from gateflame import threat_level as _tl  # noqa: E402
+
+WANTED = _tl.lists_for("low")
+LIST_URL = WANTED[0]
 SETTINGS = {"enabled": True, "threat_level": "low", "categories": []}
 
 LOADED = {"domainsOnGravity": 151234}
@@ -185,7 +193,7 @@ def test_a_successful_apply_still_succeeds(monkeypatch):
 
     assert ok is True
     assert blocklists.last_error() is None
-    assert rec.posted == [LIST_URL]
+    assert sorted(rec.posted) == sorted(WANTED)
     assert rec.gravity_runs == 1
 
 
@@ -206,12 +214,12 @@ def test_reconcile_repairs_an_empty_box(monkeypatch):
     store = _Store()
 
     assert blocklists.reconcile(store) is True
-    assert rec.posted == [LIST_URL], "reconcile must actually write the missing list"
+    assert sorted(rec.posted) == sorted(WANTED), "reconcile must actually write the missing lists"
 
 
 def test_reconcile_repairs_a_registered_list_with_empty_gravity(monkeypatch):
     """Lists agree, gravity empty. Agreement is not protection."""
-    rec = _install(monkeypatch, Recorder(lists=[LIST_URL], stats=EMPTY))
+    rec = _install(monkeypatch, Recorder(lists=list(WANTED), stats=EMPTY))
     store = _Store()
 
     blocklists.reconcile(store)
@@ -221,7 +229,7 @@ def test_reconcile_repairs_a_registered_list_with_empty_gravity(monkeypatch):
 
 def test_reconcile_is_cheap_when_everything_already_agrees(monkeypatch):
     """A weekly reboot must not mean a full gravity download every time."""
-    rec = _install(monkeypatch, Recorder(lists=[LIST_URL], stats=LOADED))
+    rec = _install(monkeypatch, Recorder(lists=list(WANTED), stats=LOADED))
     store = _Store()
 
     assert blocklists.reconcile(store) is True

@@ -19,11 +19,33 @@ removed it starts passing, and the day someone adds another one it starts failin
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 AGENT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _bare_env(**extra: str) -> dict[str, str]:
+    """The minimum environment a Python subprocess can start in.
+
+    POSIX needs only PATH. Windows' Python refuses to initialise without
+    SYSTEMROOT (crypto init reads it) and its PATH separator differs, so the
+    two variables are passed through from the parent on that platform only.
+    Deliberately no HOME: the import must not want one either. This test was
+    red on wabakipi for that reason alone from 2026-08-17 to 2026-09-10 while
+    the property it guards was true.
+    """
+    env = {"PATH": "/usr/bin:/bin"}
+    if os.name == "nt":
+        # APPDATA/LOCALAPPDATA are where a per-user `pip install` puts
+        # packages; without them Python cannot find httpx/fastapi and the
+        # import fails for a reason that has nothing to do with the DB path.
+        keep = ("PATH", "SYSTEMROOT", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA")
+        env = {k: os.environ[k] for k in keep if k in os.environ}
+    env.update(extra)
+    return env
 
 
 def test_importing_main_does_not_touch_the_default_db_path(tmp_path):
@@ -37,11 +59,7 @@ def test_importing_main_does_not_touch_the_default_db_path(tmp_path):
     result = subprocess.run(
         [sys.executable, "-c", "import gateflame.main"],
         cwd=AGENT_ROOT,
-        env={
-            "PATH": "/usr/bin:/bin",
-            "GATEFLAME_DB_PATH": str(db),
-            # Deliberately no HOME: the import must not want one either.
-        },
+        env=_bare_env(GATEFLAME_DB_PATH=str(db)),
         capture_output=True,
         text=True,
         timeout=60,
@@ -65,7 +83,7 @@ def test_the_default_db_path_is_still_what_the_unit_file_expects():
     result = subprocess.run(
         [sys.executable, "-c", "from gateflame.config import Config; print(Config().db_path)"],
         cwd=AGENT_ROOT,
-        env={"PATH": "/usr/bin:/bin"},  # no GATEFLAME_DB_PATH
+        env=_bare_env(),  # no GATEFLAME_DB_PATH
         capture_output=True,
         text=True,
         timeout=60,

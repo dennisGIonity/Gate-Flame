@@ -5,6 +5,10 @@ set -euo pipefail
 
 INSTALL_DIR="/opt/gateflame/node-agent"
 DATA_DIR="/var/lib/gateflame"
+# The persistent data root (.DUMP) - see gateflame/datadir.py. Created here so
+# a fresh install can persist from first boot; install-automation.sh adds the
+# timers that use it.
+DATA_ROOT="${GATEFLAME_DATA_ROOT:-/opt/gateflame/.DUMP}"
 SERVICE_USER="gateflame"
 
 if [[ $EUID -ne 0 ]]; then
@@ -15,6 +19,9 @@ fi
 id -u "$SERVICE_USER" &>/dev/null || useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
 
 mkdir -p "$INSTALL_DIR" "$DATA_DIR"
+for sub in storage profiles ml history logs exports backups; do
+  install -d -m 0750 "$DATA_ROOT/$sub"
+done
 
 # Replace the package rather than merging over it.
 #
@@ -33,7 +40,7 @@ cp ./requirements.txt "$INSTALL_DIR"/
 # Stale bytecode survives a source replacement and is loaded in preference to
 # a .py whose mtime it still matches. Clear it with the source.
 find "$INSTALL_DIR" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
-chown -R "$SERVICE_USER":"$SERVICE_USER" "$DATA_DIR"
+chown -R "$SERVICE_USER":"$SERVICE_USER" "$DATA_DIR" "$DATA_ROOT"
 
 python3 -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip
@@ -56,6 +63,7 @@ Group=gateflame
 # The group does not exist on non-Pi hosts; systemd tolerates that.
 SupplementaryGroups=video
 Environment=GATEFLAME_DB_PATH=/var/lib/gateflame/state.db
+Environment=GATEFLAME_DATA_ROOT=/opt/gateflame/.DUMP
 Environment=GATEFLAME_HOST=0.0.0.0
 Environment=GATEFLAME_PORT=8080
 # Uncomment and point at a local Pi-hole install to get real query/block/
@@ -74,7 +82,7 @@ RestartSec=5
 # right here rather than promising to "harden later".
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/gateflame
+ReadWritePaths=/var/lib/gateflame /opt/gateflame/.DUMP
 ProtectHome=true
 PrivateTmp=true
 

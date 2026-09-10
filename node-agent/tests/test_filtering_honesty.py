@@ -141,7 +141,11 @@ def test_pihole_not_answering_is_degraded_not_active(monkeypatch):
     assert "not answering" in out["lastError"]
 
 
-LIST_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+# Read from threat_level, not retyped - see test_blocklist_readback.py.
+from gateflame import threat_level as _tl  # noqa: E402
+
+WANTED = _tl.lists_for("low")
+LIST_URL = WANTED[0]
 
 
 def test_a_failed_apply_is_reported_as_degraded(monkeypatch):
@@ -170,7 +174,7 @@ def test_a_stale_error_is_dropped_when_pihole_contradicts_it(monkeypatch):
     _set_pihole_url(monkeypatch, REACHABLE)
     monkeypatch.setattr(blocklists, "_last_error", "gravity rebuild failed", raising=False)
     # Pi-hole says otherwise: the wanted list is loaded and gravity is populated.
-    monkeypatch.setattr(blocklists, "current_lists", lambda: [LIST_URL])
+    monkeypatch.setattr(blocklists, "current_lists", lambda: list(WANTED))
 
     out = _payload()
 

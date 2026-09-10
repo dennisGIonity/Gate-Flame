@@ -184,13 +184,41 @@ class Counters(StrictModel):
     wanBudgetUsedPercent: float | None = Field(default=None, ge=0, le=1000)
 
 
+class ShieldDevice(StrictModel):
+    """One row of the Shield block: a device the OWNER configured for the VPN.
+
+    This is the one place a device identifier is permitted on the wire, by
+    Dennis's explicit decision of 2026-08-31, and it is declared in
+    docs/PRIVACY-NOTICE.md §5 and in the Play data-safety mapping. The MAC is
+    the identity; `label` is the owner's chosen name for it (or the vendor /
+    MAC fallback computed on the node) and is NOT passed through the
+    no-identifier filter because a MAC fallback is exactly what it may be.
+    """
+
+    mac: str = Field(pattern=r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+    label: str = Field(max_length=80)
+    region: str | None = Field(default=None, max_length=32)
+    enabled: bool
+    provider: Literal["headscale", "vpngate"] | None = None
+
+
+class ShieldReport(StrictModel):
+    """§5 block: Shield (VPN) state. `configured: false, devices: []` is the
+    honest shape for a household that never opened the feature."""
+
+    configured: bool
+    enabledCount: int = Field(ge=0, le=1024)
+    devices: list[ShieldDevice] = Field(default_factory=list, max_length=256)
+
+
 class HealthReport(StrictModel):
     """The complete accepted payload. Anything not listed here is a 422.
 
-    This is the entire §4.1 left column and nothing else. There is no
-    `clients`, no `queries`, no `threats`, no `dns`, no `interfaces` — and
-    because of `extra="forbid"`, adding one to the agent without adding it
-    here (which would mean arguing it past §4.1 in review) fails closed.
+    This is the entire §4.1 left column plus the §5 Shield block (2026-08-31)
+    and nothing else. There is no `clients`, no `queries`, no `threats`, no
+    `dns`, no `interfaces` — and because of `extra="forbid"`, adding one to
+    the agent without adding it here (which would mean arguing it past §4.1
+    in review) fails closed.
     """
 
     nodeId: str = Field(pattern=NODE_ID_PATTERN)
@@ -203,6 +231,13 @@ class HealthReport(StrictModel):
     modules: list[ModuleHealth] = Field(default_factory=list, max_length=32)
     counters: Counters = Field(default_factory=Counters)
     piholeReachable: bool | None = None
+    # Shield state. `None` means the node could not READ its Shield table
+    # (health_feed._shield_snapshot returns None on error); absent means an
+    # agent older than 2026-08-31. The dashboard distinguishes both from an
+    # empty list. Added 2026-09-10: the agent had been sending this for ten
+    # days and every real check-in was being 422'd by this receiver - the
+    # contract test caught it, nobody read the contract test.
+    shield: ShieldReport | None = None
 
     @field_validator("sentAt")
     @classmethod
