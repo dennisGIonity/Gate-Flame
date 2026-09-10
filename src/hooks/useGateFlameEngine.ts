@@ -2,19 +2,22 @@
  * Gate^Flame — the telemetry loop.
  *
  * Polls the node for real telemetry and threat activity. When no node is
- * reachable, `gateflameApi` routes to the simulator and flips the connection
- * state to `demo`, which is what makes DataSourceBanner appear. This loop does
- * not know which of the two it got — that decision lives in one place.
+ * reachable, `gateflameApi` returns honest empties (nulls, empty lists) and
+ * flips the connection state to `offline`, which is what makes
+ * DataSourceBanner appear. This loop does not know which of the two it got —
+ * that decision lives in one place.
  *
- * What this replaced: a `setInterval(4000)` fabricating query counts, block
- * percentages, saved-megabytes and threat-log rows from `Math.random()` over
- * six hardcoded domains, with nothing anywhere indicating it was fiction.
+ * What this replaced, in two steps: first (2026-08) a `setInterval(4000)`
+ * fabricating query counts, block percentages and threat-log rows from
+ * `Math.random()` with nothing indicating it was fiction; then (2026-09-10)
+ * the quarantined simulator that had taken its place behind a banner. There is
+ * now no code path anywhere in this loop that writes a value the node did not
+ * send.
  */
 
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { gateflameApi } from '../services/gateflameApi';
-import { mockAdapter } from '../services/mockAdapter';
 import { config } from '../config/env';
 import { ApiRequestError } from '../services/apiClient';
 import type { SystemTelemetry } from '../types';
@@ -48,7 +51,9 @@ export const useGateFlameEngine = () => {
       if (inFlight || abort.signal.aborted) return;
 
       const current = telemetryRef.current;
-      if (current.protectionStatus !== 'active') return;
+      // Only a deliberate pause stops polling. 'initializing' is the seed
+      // state before the first answer, and polling is how it leaves it.
+      if (current.protectionStatus === 'paused') return;
 
       inFlight = true;
       try {
@@ -71,9 +76,7 @@ export const useGateFlameEngine = () => {
 
         if (source === 'live') {
           // The node owns the threat log and the client list. Never synthesise
-          // entries over them, and never leave the seeded placeholders in
-          // place once real data is available — a stale mock client list beside
-          // live telemetry is the worst of both.
+          // entries over them, and replace them wholesale on every poll.
           const [threats, clientList] = await Promise.all([
             gateflameApi.threats(20),
             gateflameApi.clients(),
@@ -81,12 +84,9 @@ export const useGateFlameEngine = () => {
           if (abort.signal.aborted) return;
           setThreatLogs(threats.entries);
           setClients(clientList.clients);
-        } else if (source === 'demo') {
-          const fabricated = mockAdapter.threatTick(current.filterLevel);
-          if (fabricated) {
-            setThreatLogs((prev) => [fabricated, ...prev.slice(0, 19)]);
-          }
         }
+        // Offline: the lists are left exactly as they were. Nothing is added,
+        // because there is nothing true to add.
       } catch (err) {
         // Only genuine refusals reach here — unreachability is handled inside
         // gateflameApi by falling back and flipping the banner.

@@ -6,7 +6,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { useAppStore } from '../store/useAppStore';
 import { gateflameApi } from '../services/gateflameApi';
 import { useConnection } from '../hooks/useConnection';
-import { SimulatedBadge } from './DataSourceBanner';
+import { UnavailableBadge } from './DataSourceBanner';
 import { config } from '../config/env';
 import type { ModuleMetricsResponse } from '../types/api';
 
@@ -24,10 +24,11 @@ export const DynamicModuleTab: React.FC<{ moduleId: string }> = ({ moduleId }) =
 
   const [metrics, setMetrics] = useState<ModuleMetricsResponse | null>(null);
 
-  // Metrics come from the node. When none is reachable, gateflameApi routes to
-  // the simulator and the connection state flips to `demo`, which is what makes
-  // the SimulatedBadge appear below. Previously this component ran seven
-  // Math.random() feeds on a 2s timer and presented them as measurements.
+  // Metrics come from the node. When none is reachable, gateflameApi returns
+  // an empty metrics object and the connection state flips to `offline`, which
+  // is what makes the UnavailableBadge appear below. Previously this component
+  // ran seven Math.random() feeds on a 2s timer and presented them as
+  // measurements; after that it fell back to a simulator. Neither exists now.
   useEffect(() => {
     let cancelled = false;
 
@@ -83,7 +84,7 @@ export const DynamicModuleTab: React.FC<{ moduleId: string }> = ({ moduleId }) =
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-blue-400 animate-pulse"></span>
                 SERVICE ACTIVE
               </div>
-              <SimulatedBadge />
+              <UnavailableBadge />
             </div>
           </div>
         </div>
@@ -118,7 +119,7 @@ export const DynamicModuleTab: React.FC<{ moduleId: string }> = ({ moduleId }) =
                   {chartData.length === 0 ? 'Awaiting node' : 'From node'}
                 </p>
             </div>
-            <SimulatedBadge />
+            <UnavailableBadge />
         </div>
         <div className="flex-1 min-h-0 -ml-4">
            <ResponsiveContainer width="100%" height="100%">
@@ -152,7 +153,7 @@ export const DynamicModuleTab: React.FC<{ moduleId: string }> = ({ moduleId }) =
             docs/PAIRING-AND-TELEMETRY.md. */}
         <div className="space-y-1 relative z-0 flex flex-col justify-end h-full">
             <p>&gt; [API] endpoint {moduleConfig.apiEndpoint}</p>
-            <p>&gt; [SRC] {dataSource === 'live' ? `live — ${nodeName ?? 'node'}` : dataSource === 'demo' ? 'SIMULATED — no node connected' : dataSource}</p>
+            <p>&gt; [SRC] {dataSource === 'live' ? `live — ${nodeName ?? 'node'}` : dataSource === 'offline' ? 'OFFLINE — no node connected, nothing measured' : dataSource}</p>
             <p>&gt; [DATA] {chartData.length} point{chartData.length === 1 ? '' : 's'} in window</p>
             <p>&gt; [LOGS] awaiting /services/{moduleConfig.apiEndpoint.split('/').pop()}/logs</p>
         </div>

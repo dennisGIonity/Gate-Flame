@@ -1,26 +1,37 @@
 /**
  * Gate^Flame — gateflameApi tests.
  *
- * This module is the seam: one facade, either a real node or the simulator
+ * This module is the seam: one facade, either a real node or nothing
  * underneath, and the caller is always told which. The tests below drive it
  * through a stubbed `fetch` rather than by mocking nodeDiscovery, so the real
- * discovery race, the real apiClient error classification and the real fallback
- * all participate. Mocking discovery would leave the actual decision — "did
- * anything answer?" — untested.
+ * discovery race, the real apiClient error classification and the real
+ * offline path all participate. Mocking discovery would leave the actual
+ * decision — "did anything answer?" — untested.
  *
- * The property that matters is not "demo mode works". It is that demo mode is
- * never indistinguishable from live: every fallback must also move
- * `dataSource` to 'demo' and notify subscribers, because that flag is the only
- * thing standing between a user and fabricated security telemetry presented as
- * their own network.
+ * The property that matters: offline is never indistinguishable from live.
+ * Every fallback must move `dataSource` to 'offline', notify subscribers, and
+ * hand back EMPTY data — nulls and empty lists, never a plausible number.
+ * Until 2026-09-10 this suite asserted that the simulator "advanced from the
+ * seed"; those assertions are now inverted.
  *
  * `connection` is module-level state and `config` freezes import.meta.env at
  * import time, so every test loads a fresh copy of the module graph.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { INITIAL_TELEMETRY } from '../data/mockData';
+import { EMPTY_TELEMETRY } from '../data/seeds';
 import type { ConnectionState, NodeStatusResponse } from '../types/api';
+
+/** A previous value with measured numbers, so "not carried forward" is testable. */
+const INITIAL_TELEMETRY = {
+  ...EMPTY_TELEMETRY,
+  totalQueriesToday: 38851,
+  queriesBlockedToday: 14397,
+  domainsOnGravity: 6755558,
+  uptimeSeconds: 86420,
+  protectionStatus: 'active' as const,
+  filterLevel: 'high' as const,
+};
 
 const NODE_STATUS: NodeStatusResponse = {
   nodeId: 'gf-node-008',
@@ -79,7 +90,7 @@ const loadApi = async () => {
   return import('./gateflameApi');
 };
 
-describe('gateflameApi — the live/demo decision', () => {
+describe('gateflameApi — the live/offline decision', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.unstubAllEnvs();
@@ -100,10 +111,9 @@ describe('gateflameApi — the live/demo decision', () => {
       expect(state.agentVersion).toBe(NODE_STATUS.agentVersion);
       expect(state.lastError).toBeNull();
       expect(state.lastSuccessAt).not.toBeNull();
-      expect(state.mockForced).toBe(false);
     });
 
-    it('telemetry() returns the node’s numbers, not the simulator’s', async () => {
+    it('telemetry() returns the node’s numbers, not the previous value', async () => {
       vi.stubGlobal(
         'fetch',
         nodeAt('http://gateflame.local', { '/telemetry/summary': () => json(LIVE_SUMMARY) }),
@@ -114,8 +124,7 @@ describe('gateflameApi — the live/demo decision', () => {
       const summary = await gateflameApi.telemetry(INITIAL_TELEMETRY);
 
       expect(summary).toEqual(LIVE_SUMMARY);
-      // The simulator would have walked up from the seed values instead.
-      expect(summary.totalQueriesToday).toBeLessThan(INITIAL_TELEMETRY.totalQueriesToday);
+      expect(summary.totalQueriesToday).not.toBe(INITIAL_TELEMETRY.totalQueriesToday);
       expect(gateflameApi.getConnection().dataSource).toBe('live');
     });
 
@@ -143,8 +152,7 @@ describe('gateflameApi — the live/demo decision', () => {
       await gateflameApi.connect();
 
       await expect(gateflameApi.threats(20)).resolves.toEqual({ entries, total: 1 });
-      // An empty live client list must be reported as empty, not backfilled
-      // with the seeded mock clients.
+      // An empty live client list must be reported as empty, not backfilled.
       await expect(gateflameApi.clients()).resolves.toEqual({ clients: [] });
     });
 
@@ -172,41 +180,62 @@ describe('gateflameApi — the live/demo decision', () => {
     });
   });
 
-  describe('an unreachable node falls back to the simulator AND reports demo mode', () => {
-    it('connect() lands on demo with a human-readable reason and mockForced false', async () => {
+  describe('an unreachable node yields EMPTY data AND reports offline', () => {
+    it('connect() lands on offline with a human-readable reason', async () => {
       vi.stubGlobal('fetch', deadNetwork());
       const { gateflameApi } = await loadApi();
 
       const state = await gateflameApi.connect();
 
-      expect(state.dataSource).toBe('demo');
+      expect(state.dataSource).toBe('offline');
       expect(state.nodeBaseUrl).toBeNull();
       expect(state.nodeId).toBeNull();
-      // mockForced distinguishes "we failed" from "someone switched demo on",
-      // and DataSourceBanner shows different copy for each.
-      expect(state.mockForced).toBe(false);
       expect(state.lastError).toMatch(/No Gate\^Flame node found on this network/);
     });
 
-    it('telemetry() returns simulated numbers derived from the previous tick', async () => {
+    it('telemetry() returns nulls — never a number derived from the previous tick', async () => {
       vi.stubGlobal('fetch', deadNetwork());
       const { gateflameApi } = await loadApi();
       await gateflameApi.connect();
 
       const summary = await gateflameApi.telemetry(INITIAL_TELEMETRY);
 
-      // The simulator advances from what it was given, so the value is above the
-      // seed but only just — that is what tells it apart from LIVE_SUMMARY.
-      expect(summary.totalQueriesToday).toBeGreaterThan(INITIAL_TELEMETRY.totalQueriesToday);
-      expect(summary.totalQueriesToday).toBeLessThanOrEqual(
-        INITIAL_TELEMETRY.totalQueriesToday + 4,
-      );
-      expect(summary.uptimeSeconds).toBe(INITIAL_TELEMETRY.uptimeSeconds + 4);
-      // And it is still, unmistakably, demo.
-      expect(gateflameApi.getConnection().dataSource).toBe('demo');
+      expect(summary.totalQueriesToday).toBeNull();
+      expect(summary.queriesBlockedToday).toBeNull();
+      expect(summary.blockPercentage).toBeNull();
+      expect(summary.domainsOnGravity).toBeNull();
+      expect(summary.activeClientsCount).toBeNull();
+      expect(summary.dataSavedMB).toBeNull();
+      expect(summary.avgLatencyMs).toBeNull();
+      expect(summary.uptimeSeconds).toBe(0);
+      // Local-only state is carried, so a network blip cannot un-pause protection.
+      expect(summary.protectionStatus).toBe(INITIAL_TELEMETRY.protectionStatus);
+      expect(summary.filterLevel).toBe(INITIAL_TELEMETRY.filterLevel);
+      expect(gateflameApi.getConnection().dataSource).toBe('offline');
     });
 
-    it('notifies subscribers of the demo state, which is what raises the banner', async () => {
+    it('threats(), clients(), services() and moduleMetrics() are all empty offline', async () => {
+      vi.stubGlobal('fetch', deadNetwork());
+      const { gateflameApi } = await loadApi();
+      await gateflameApi.connect();
+
+      await expect(gateflameApi.threats()).resolves.toEqual({ entries: [], total: 0 });
+      await expect(gateflameApi.clients()).resolves.toEqual({ clients: [] });
+      await expect(gateflameApi.services()).resolves.toEqual({ modules: [] });
+      await expect(gateflameApi.moduleMetrics('ids')).resolves.toEqual({ id: 'ids', tiles: [], series: [] });
+    });
+
+    it('toggleService() refuses offline instead of pretending a module changed', async () => {
+      vi.stubGlobal('fetch', deadNetwork());
+      const { gateflameApi } = await loadApi();
+      await gateflameApi.connect();
+
+      await expect(gateflameApi.toggleService('ids', 'ids', true)).rejects.toThrow(
+        /No node connected — cannot start ids/,
+      );
+    });
+
+    it('notifies subscribers of the offline state, which is what raises the banner', async () => {
       vi.stubGlobal('fetch', deadNetwork());
       const { gateflameApi } = await loadApi();
 
@@ -218,12 +247,12 @@ describe('gateflameApi — the live/demo decision', () => {
       // Immediate current value, then connecting, then the fallback.
       expect(seen[0]).toBe('connecting');
       expect(seen).toContain('connecting');
-      expect(seen[seen.length - 1]).toBe('demo');
+      expect(seen[seen.length - 1]).toBe('offline');
 
       unsubscribe();
       await gateflameApi.connect();
-      expect(seen[seen.length - 1]).toBe('demo');
-      expect(seen.filter((s) => s === 'demo')).toHaveLength(1);
+      expect(seen[seen.length - 1]).toBe('offline');
+      expect(seen.filter((s) => s === 'offline')).toHaveLength(1);
     });
 
     it('does not reach the network more than the candidate list allows', async () => {
@@ -240,7 +269,7 @@ describe('gateflameApi — the live/demo decision', () => {
   });
 
   describe('losing the node mid-session', () => {
-    it('degrades from live to demo, keeps rendering, and says why', async () => {
+    it('degrades from live to offline with empty data, and says why', async () => {
       let telemetryReachable = true;
       vi.stubGlobal(
         'fetch',
@@ -260,11 +289,11 @@ describe('gateflameApi — the live/demo decision', () => {
       telemetryReachable = false;
       const afterLoss = await gateflameApi.telemetry(INITIAL_TELEMETRY);
 
-      // Simulated data rather than a blank dashboard...
-      expect(afterLoss.totalQueriesToday).toBeGreaterThan(INITIAL_TELEMETRY.totalQueriesToday);
-      // ...but flagged, with the reason, and the base URL dropped.
+      // Nulls, not the last live number and not anything derived from it...
+      expect(afterLoss.totalQueriesToday).toBeNull();
+      // ...flagged, with the reason, and the base URL dropped.
       const state = gateflameApi.getConnection();
-      expect(state.dataSource).toBe('demo');
+      expect(state.dataSource).toBe('offline');
       expect(state.nodeBaseUrl).toBeNull();
       expect(state.lastError).toMatch(/^Lost contact with the node:/);
     });
@@ -281,7 +310,7 @@ describe('gateflameApi — the live/demo decision', () => {
 
       await expect(gateflameApi.telemetry(INITIAL_TELEMETRY)).rejects.toThrow('token revoked');
       // Critically: no fallback. A 403 is a real answer, and papering over it
-      // with fabricated numbers would hide a revoked pairing.
+      // with empties would hide a revoked pairing.
       expect(gateflameApi.getConnection().dataSource).toBe('live');
     });
   });
@@ -297,13 +326,13 @@ describe('gateflameApi — the live/demo decision', () => {
 
       const state = await gateflameApi.connect();
 
-      expect(state.dataSource).toBe('demo');
+      expect(state.dataSource).toBe('offline');
       expect(state.nodeBaseUrl).toBeNull();
     });
   });
 
-  describe('VITE_USE_MOCK_DATA=true (forced demo)', () => {
-    it('goes straight to demo with mockForced set and never probes the network', async () => {
+  describe('there is no simulator to force', () => {
+    it('a stale VITE_USE_MOCK_DATA=true is ignored and a real node is still used', async () => {
       vi.stubEnv('VITE_USE_MOCK_DATA', 'true');
       const fetchMock = nodeAt('http://gateflame.local');
       vi.stubGlobal('fetch', fetchMock);
@@ -311,16 +340,13 @@ describe('gateflameApi — the live/demo decision', () => {
 
       const state = await gateflameApi.connect();
 
-      expect(state.dataSource).toBe('demo');
-      expect(state.mockForced).toBe(true);
-      expect(state.lastError).toBeNull();
-      // Even with a node sitting right there.
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(state.dataSource).toBe('live');
+      expect(fetchMock).toHaveBeenCalled();
     });
   });
 
   describe('VITE_STRICT_LIVE=true (no silent fallback)', () => {
-    it('reports error instead of demo when nothing answers', async () => {
+    it('reports error instead of offline when nothing answers', async () => {
       vi.stubEnv('VITE_STRICT_LIVE', 'true');
       vi.stubGlobal('fetch', deadNetwork());
       const { gateflameApi } = await loadApi();
@@ -331,7 +357,7 @@ describe('gateflameApi — the live/demo decision', () => {
       expect(state.lastError).toMatch(/No Gate\^Flame node found/);
     });
 
-    it('throws from data calls rather than returning fabricated numbers', async () => {
+    it('throws from data calls rather than returning empties', async () => {
       vi.stubEnv('VITE_STRICT_LIVE', 'true');
       vi.stubGlobal('fetch', deadNetwork());
       const { gateflameApi } = await loadApi();
@@ -342,7 +368,7 @@ describe('gateflameApi — the live/demo decision', () => {
       );
     });
 
-    it('surfaces a mid-session loss as an error instead of dropping to demo', async () => {
+    it('surfaces a mid-session loss as an error instead of dropping to offline', async () => {
       vi.stubEnv('VITE_STRICT_LIVE', 'true');
       let reachable = true;
       vi.stubGlobal(
@@ -363,7 +389,7 @@ describe('gateflameApi — the live/demo decision', () => {
     });
   });
 
-  describe('pairing has no simulated fallback', () => {
+  describe('pairing has no offline fallback', () => {
     it('requestPairingCode refuses without a node rather than inventing a code', async () => {
       vi.stubGlobal('fetch', deadNetwork());
       const { gateflameApi } = await loadApi();

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SECURITY_MODULES, ApiService } from '../services/serviceManager';
 import { useAppStore } from '../store/useAppStore';
-import { DataSourceBanner, SimulatedBadge } from './DataSourceBanner';
+import { DataSourceBanner, UnavailableBadge } from './DataSourceBanner';
 
 export const SettingsManager: React.FC = () => {
   const activeModules = useAppStore(state => state.activeModules);
@@ -72,7 +72,7 @@ export const SettingsManager: React.FC = () => {
               <div className="flex justify-between items-start mb-2">
                 <div className={`text-xs font-bold pr-4 ${isActive ? 'text-sky-700 dark:text-blue-300' : 'text-slate-700 dark:text-blue-600/70'}`}>
                   {module.title}
-                  {isActive && <SimulatedBadge className="ml-2 align-middle" />}
+                  {isActive && <UnavailableBadge className="ml-2 align-middle" />}
                 </div>
                 
                 {/* Custom Toggle Switch */}

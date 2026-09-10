@@ -31,7 +31,7 @@ interface GravityParticleCanvasProps {
    * reads the real one from useConnection(), so a caller cannot accidentally
    * tell it that a live node is a demo.
    */
-  dataSource?: 'live' | 'demo' | 'connecting' | 'error';
+  dataSource?: 'live' | 'offline' | 'connecting' | 'error';
 }
 
 export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React.memo(({
@@ -103,8 +103,6 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
       alpha: number;
     }
 
-    const threatLabels = ['Telemetry', 'Ad-Tracker', 'Ransomware', 'Phishing', 'Malware', 'Spyware', 'SmartTV-Log'];
-    const cleanLabels = ['Root-DNS', 'Unbound', 'HTTPS', 'TLS-Safe'];
 
     // Labels are only ever drawn from REAL data.
     //
@@ -121,19 +119,15 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
     const liveThreats = threatFeed ?? [];
     const liveClean = cleanFeed ?? [];
     const hasRealFeed = liveThreats.length > 0 || liveClean.length > 0;
-    const allowFabricated = dataSource === 'demo';
 
+    // 2026-09-10: the invented label pools that used to feed the offline
+    // (then "demo") state are gone. With no real feed the particles fly
+    // unlabelled in every connection state, live or not.
     const pickLabel = (isThreat: boolean): string => {
-      if (hasRealFeed) {
-        const pool = isThreat ? liveThreats : liveClean;
-        if (pool.length === 0) return '';
-        return pool[Math.floor(Math.random() * pool.length)];
-      }
-      if (allowFabricated) {
-        const pool = isThreat ? threatLabels : cleanLabels;
-        return pool[Math.floor(Math.random() * pool.length)];
-      }
-      return ''; // live node, nothing observed yet - say nothing
+      if (!hasRealFeed) return '';
+      const pool = isThreat ? liveThreats : liveClean;
+      if (pool.length === 0) return '';
+      return pool[Math.floor(Math.random() * pool.length)];
     };
 
     const particles: Particle[] = [];
@@ -145,9 +139,7 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
       const threatRatio =
         typeof blockPercentage === 'number' && blockPercentage >= 0 && blockPercentage <= 100
           ? blockPercentage / 100
-          : hasRealFeed || !allowFabricated
-            ? 0.5 // no rate known: an even, meaningless mix, and no labels anyway
-            : 0.7;
+          : 0.5; // no rate known: an even, meaningless mix, and no labels anyway
       const isThreat = Math.random() < threatRatio;
       const type = isThreat ? 'threat' : 'clean';
       const label = pickLabel(isThreat);

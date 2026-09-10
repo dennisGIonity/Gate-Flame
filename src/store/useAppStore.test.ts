@@ -18,12 +18,35 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from './useAppStore';
-import {
-  INITIAL_TELEMETRY,
-  INITIAL_USER_ACCOUNT,
-  MOCK_CLIENTS,
-  MOCK_THREAT_LOGS,
-} from '../data/mockData';
+import { DEFAULT_USER_ACCOUNT, EMPTY_TELEMETRY } from '../data/seeds';
+import type { ThreatLogEntry } from '../types';
+
+/** Two real-shaped rows so list behaviour can be asserted against something. */
+const SEED_LOGS: ThreatLogEntry[] = [
+  {
+    id: 'seed-1',
+    timestamp: '10:00:00',
+    domain: 'tracker.example',
+    clientIp: '10.0.0.2',
+    clientName: 'Laptop',
+    category: 'Ad Tracker',
+    action: 'Blocked',
+    severity: 'high',
+  },
+  {
+    id: 'seed-2',
+    timestamp: '10:00:01',
+    domain: 'cdn.example',
+    clientIp: '10.0.0.3',
+    clientName: 'Phone',
+    category: 'Telemetry',
+    action: 'Blocked',
+    severity: 'low',
+  },
+];
+// Seeds with a measured value so "left untouched" assertions are meaningful.
+const INITIAL_TELEMETRY = { ...EMPTY_TELEMETRY, totalQueriesToday: 100, domainsOnGravity: 5000, protectionStatus: 'active' as const };
+const INITIAL_USER_ACCOUNT = { ...DEFAULT_USER_ACCOUNT, email: 'owner@example.test', deviceNickname: 'Test Node' };
 
 const STORAGE_KEY = 'ionity-app-storage';
 
@@ -46,8 +69,8 @@ describe('useAppStore', () => {
   beforeEach(() => {
     useAppStore.setState({
       telemetry: { ...INITIAL_TELEMETRY },
-      threatLogs: [...MOCK_THREAT_LOGS],
-      clients: [...MOCK_CLIENTS],
+      threatLogs: [...SEED_LOGS],
+      clients: [],
       userAccount: { ...INITIAL_USER_ACCOUNT },
       activeModules: [],
     });
@@ -103,53 +126,6 @@ describe('useAppStore', () => {
       expect(t.domainsOnGravity).toBe(INITIAL_TELEMETRY.domainsOnGravity);
     });
 
-    it('rebootDevice reports initializing and returns to active after 3s', () => {
-      vi.useFakeTimers();
-
-      useAppStore.getState().rebootDevice();
-      expect(useAppStore.getState().telemetry.protectionStatus).toBe('initializing');
-
-      vi.advanceTimersByTime(2999);
-      expect(useAppStore.getState().telemetry.protectionStatus).toBe('initializing');
-
-      vi.advanceTimersByTime(1);
-      expect(useAppStore.getState().telemetry.protectionStatus).toBe('active');
-    });
-  });
-
-  describe('addWhitelistDomain', () => {
-    it('prepends a Whitelisted entry for that domain without dropping history', () => {
-      const before = useAppStore.getState().threatLogs.length;
-
-      useAppStore.getState().addWhitelistDomain('analytics.example.com');
-
-      const logs = useAppStore.getState().threatLogs;
-      expect(logs).toHaveLength(before + 1);
-      expect(logs[0]).toMatchObject({
-        domain: 'analytics.example.com',
-        action: 'Whitelisted',
-        severity: 'low',
-      });
-      // The pre-existing head is still directly behind the new entry.
-      expect(logs[1].id).toBe(MOCK_THREAT_LOGS[0].id);
-    });
-
-    it('timestamps the entry as zero-padded HH:MM:SS', () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date(2026, 7, 14, 9, 5, 3));
-
-      useAppStore.getState().addWhitelistDomain('cdn.example.com');
-
-      expect(useAppStore.getState().threatLogs[0].timestamp).toBe('09:05:03');
-    });
-  });
-
-  it('refreshGravity grows the gravity list by one block of domains', () => {
-    useAppStore.getState().refreshGravity();
-
-    expect(useAppStore.getState().telemetry.domainsOnGravity).toBe(
-      INITIAL_TELEMETRY.domainsOnGravity + 1420,
-    );
   });
 
   it('changeFilterLevel replaces only filterLevel', () => {
@@ -181,7 +157,7 @@ describe('useAppStore', () => {
     it('setTelemetry with a function receives the previous value', () => {
       useAppStore.getState().setTelemetry((prev) => ({
         ...prev,
-        totalQueriesToday: prev.totalQueriesToday + 5,
+        totalQueriesToday: (prev.totalQueriesToday ?? 0) + 5,
       }));
 
       expect(useAppStore.getState().telemetry.totalQueriesToday).toBe(
@@ -210,12 +186,12 @@ describe('useAppStore', () => {
     });
 
     it('persists only telemetry and userAccount — never logs, clients or modules', () => {
-      useAppStore.getState().addWhitelistDomain('tracker.example.com');
+      useAppStore.getState().setThreatLogs([...SEED_LOGS]);
       useAppStore.getState().toggleModule('firewall', true);
 
       const stored = readPersisted();
       expect(Object.keys(stored.state).sort()).toEqual(['telemetry', 'userAccount']);
-      expect(JSON.stringify(stored)).not.toContain('tracker.example.com');
+      expect(JSON.stringify(stored)).not.toContain('tracker.example');
       expect(JSON.stringify(stored)).not.toContain('firewall');
     });
 
@@ -238,8 +214,10 @@ describe('useAppStore', () => {
 
       expect(rehydrated.getState().telemetry.filterLevel).toBe('none');
       expect(rehydrated.getState().userAccount.appTheme).toBe('light');
-      // Non-persisted slices come back from the seed data, not from storage.
-      expect(rehydrated.getState().threatLogs.length).toBe(MOCK_THREAT_LOGS.length);
+      // Non-persisted slices come back EMPTY, not from storage and not from
+      // any seed list — there is no seed list any more.
+      expect(rehydrated.getState().threatLogs).toEqual([]);
+      expect(rehydrated.getState().clients).toEqual([]);
     });
 
     it('survives a blocked localStorage instead of throwing into the UI', () => {

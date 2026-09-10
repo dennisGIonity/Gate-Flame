@@ -1,5 +1,5 @@
 /**
- * Gate^Flame — subscribe to the live/demo connection state.
+ * Gate^Flame — subscribe to the live/offline connection state.
  *
  * Built on useSyncExternalStore rather than mirrored into the Zustand store on
  * purpose. Connection state is owned by gateflameApi, which is also what
@@ -26,5 +26,5 @@ export const useConnection = (): ConnectionState & { reconnect: () => void } => 
   return { ...state, reconnect };
 };
 
-/** True when the data on screen is fabricated. */
-export const useIsSimulated = (): boolean => useConnection().dataSource === 'demo';
+/** True when no node is answering and every figure on screen is a dash. */
+export const useIsOffline = (): boolean => useConnection().dataSource === 'offline';

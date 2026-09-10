@@ -1,16 +1,19 @@
 /**
  * Gate^Flame — data source banner.
  *
- * The honesty surface. When the app is showing simulated data, this says so,
- * unmissably, at the top of every view.
+ * The honesty surface. When the app cannot reach a node, this says so,
+ * unmissably, at the top of every view — and every figure beneath it is a
+ * dash, not a number.
  *
- * Before this existed, nine feature cards rendered numbers fabricated by
- * Math.random() with nothing to distinguish them from real telemetry. For a
- * demo that is fine. For a product sold as network security it is not, and the
- * distinction has to be visible rather than documented.
+ * History, because it explains the tone: first (pre-2026-08) nine feature
+ * cards rendered Math.random() numbers with nothing to distinguish them from
+ * real telemetry. Then a quarantined simulator ran behind an amber "SIMULATED
+ * DATA" banner. On 2026-09-10 the simulator was deleted outright: there is now
+ * nothing to warn about except the absence of a node, so that is what the
+ * banner says.
  *
- * Deliberately not dismissible while in demo mode. A banner the user can close
- * is a banner that is closed during the one screenshot that matters.
+ * Deliberately not dismissible while offline. A banner the user can close is a
+ * banner that is closed during the one screenshot that matters.
  */
 
 import React from 'react';
@@ -18,8 +21,7 @@ import { AlertTriangle, Loader2, RefreshCw, ShieldCheck, WifiOff } from 'lucide-
 import { useConnection } from '../hooks/useConnection';
 
 export const DataSourceBanner: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
-  const { dataSource, nodeName, nodeId, agentVersion, lastError, mockForced, reconnect } =
-    useConnection();
+  const { dataSource, nodeName, nodeId, agentVersion, lastError, reconnect } = useConnection();
 
   if (dataSource === 'live') {
     if (compact) return null;
@@ -73,7 +75,7 @@ export const DataSourceBanner: React.FC<{ compact?: boolean }> = ({ compact = fa
     );
   }
 
-  // dataSource === 'demo'
+  // dataSource === 'offline'
   return (
     <div
       role="alert"
@@ -82,38 +84,38 @@ export const DataSourceBanner: React.FC<{ compact?: boolean }> = ({ compact = fa
     >
       <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
-        <div className="font-bold tracking-wider">SIMULATED DATA — NOT YOUR NETWORK</div>
+        <div className="font-bold tracking-wider">NO NODE CONNECTED — NOTHING BELOW IS MEASURED</div>
         <div className="mt-0.5 opacity-90 break-words">
-          {mockForced
-            ? 'Demo mode is switched on. Every figure below is generated, and no setting here changes anything on a real network.'
-            : `No node connected${lastError ? ` — ${lastError}` : '.'} Every figure below is generated.`}
+          {lastError ?? 'No Gate^Flame node answered on this network.'} Figures show as "—" and lists are empty until one does. Nothing here is invented.
         </div>
       </div>
-      {!mockForced && (
-        <button
-          type="button"
-          onClick={reconnect}
-          className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-amber-500/50 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
-        >
-          <RefreshCw className="w-3 h-3" />
-          Retry
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={reconnect}
+        className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-amber-500/50 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+      >
+        <RefreshCw className="w-3 h-3" />
+        Retry
+      </button>
     </div>
   );
 };
 
-/** Small inline marker for individual cards and tiles. */
-export const SimulatedBadge: React.FC<{ className?: string }> = ({ className = '' }) => {
+/**
+ * Small inline marker for individual cards and tiles while no node answers.
+ * Replaces the former SimulatedBadge — there is nothing simulated to mark any
+ * more, only the absence of a measurement.
+ */
+export const UnavailableBadge: React.FC<{ className?: string }> = ({ className = '' }) => {
   const { dataSource } = useConnection();
-  if (dataSource !== 'demo') return null;
+  if (dataSource !== 'offline') return null;
   return (
     <span
       className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-400/60 bg-amber-100/80 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-[8px] font-mono tracking-wider uppercase ${className}`}
-      title="This value is generated, not measured from your network."
+      title="No node is connected. This value has not been measured."
     >
       <AlertTriangle className="w-2.5 h-2.5" />
-      Simulated
+      No data
     </span>
   );
 };

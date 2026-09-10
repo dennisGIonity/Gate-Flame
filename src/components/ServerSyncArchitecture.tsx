@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { IonityUserAccount, HardwareTierId } from '../types';
-import { HARDWARE_TIERS } from '../data/mockData';
+import { HARDWARE_TIERS } from '../data/productCatalog';
 import { 
   Server, Smartphone, Cpu, RefreshCw, Lock, Zap, ArrowRightLeft, ShieldCheck, Activity
 } from 'lucide-react';

@@ -10,12 +10,13 @@
 /**
  * The console's own transport. Deliberately NOT src/services/gateflameApi.ts.
  *
- * gateflameApi is right for the phone: when the node cannot be reached it drops
- * to mockAdapter so a salesperson can demo without a Pi on the table. On the
- * appliance's own face that behaviour would be a lie — the screen bolted to the
- * box would show invented numbers about the very network it is failing to
- * protect. So this module has NO fallback path at all. Unreachable renders as
- * unreachable. See docs/KIOSK-REBUILD-PROMPT.md, "THE ONE RULE".
+ * gateflameApi is right for the phone: when the node cannot be reached it
+ * degrades to an explicit `offline` state with empty data and an amber banner
+ * (its simulator was deleted on 2026-09-10). On the appliance's own face even a
+ * graceful degrade is the wrong shape — the screen bolted to the box must show
+ * the failure itself, not a tidy empty dashboard. So this module has NO
+ * fallback path at all. Unreachable renders as unreachable. See
+ * docs/KIOSK-REBUILD-PROMPT.md, "THE ONE RULE".
  *
  * Every interface below was typed by reading node-agent/gateflame/*.py, not by
  * reading the prompt that described them. That distinction already caught one

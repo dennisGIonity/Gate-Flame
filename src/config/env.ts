@@ -25,10 +25,11 @@ export const config = {
   /** Explicit node URL, if the operator pinned one. Otherwise discovery runs. */
   nodeBaseUrl: normaliseBase(import.meta.env.VITE_NODE_BASE_URL),
 
-  /** Force simulation even when a node is reachable. Sales-demo switch. */
-  forceMockData: bool(import.meta.env.VITE_USE_MOCK_DATA),
-
-  /** Never silently fall back to simulation — surface the error instead. */
+  /**
+   * Treat an unreachable node as a hard error rather than an 'offline' state.
+   * Both are honest; 'error' is louder. Use in QA. (The former
+   * VITE_USE_MOCK_DATA switch is gone: there is no simulator to force.)
+   */
   strictLive: bool(import.meta.env.VITE_STRICT_LIVE),
 
   apiTimeoutMs: int(import.meta.env.VITE_API_TIMEOUT_MS, 4000),

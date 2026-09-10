@@ -1,11 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { SystemTelemetry, ThreatLogEntry, ConnectedClient, IonityUserAccount } from '../types';
-// Seed values only. These are the pre-connection placeholders — the telemetry
-// loop replaces telemetry, threatLogs and clients on its first successful poll,
-// and while they are still on screen the connection state reads `demo` and
-// DataSourceBanner says so. See src/services/gateflameApi.ts.
-import { INITIAL_TELEMETRY, MOCK_THREAT_LOGS, MOCK_CLIENTS, INITIAL_USER_ACCOUNT } from '../data/mockData';
+// Seeds are EMPTY: nulls and empty lists, never plausible numbers. The
+// telemetry loop fills them on the first successful poll; until then every
+// figure renders as "—" and DataSourceBanner says why. See src/data/seeds.ts.
+import { EMPTY_TELEMETRY, DEFAULT_USER_ACCOUNT } from '../data/seeds';
 
 interface AppState {
   telemetry: SystemTelemetry;
@@ -22,9 +21,6 @@ interface AppState {
   toggleModule: (moduleId: string, enable: boolean) => void;
   pauseProtection: (durationMinutes: number) => void;
   resumeProtection: () => void;
-  addWhitelistDomain: (domain: string) => void;
-  refreshGravity: () => void;
-  rebootDevice: () => void;
   changeFilterLevel: (level: 'none' | 'low' | 'medium' | 'high') => void;
   updateUserAccount: (updated: Partial<IonityUserAccount>) => void;
 }
@@ -58,10 +54,10 @@ const safeStorage = {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      telemetry: INITIAL_TELEMETRY,
-      threatLogs: MOCK_THREAT_LOGS,
-      clients: MOCK_CLIENTS,
-      userAccount: INITIAL_USER_ACCOUNT,
+      telemetry: EMPTY_TELEMETRY,
+      threatLogs: [],
+      clients: [],
+      userAccount: DEFAULT_USER_ACCOUNT,
       activeModules: [],
       toggleModule: (moduleId, enable) => set((state) => ({ activeModules: enable ? [...new Set([...state.activeModules, moduleId])] : state.activeModules.filter(id => id !== moduleId) })),
 
@@ -98,46 +94,12 @@ export const useAppStore = create<AppState>()(
         }
       })),
 
-      addWhitelistDomain: (domain: string) => set((state) => {
-        const now = new Date();
-        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-        const newLog: ThreatLogEntry = {
-          id: `log-${Date.now()}`,
-          timestamp: timeStr,
-          domain,
-          clientIp: '192.168.1.105',
-          clientName: 'Gate^Flame-Node-Primary',
-          category: 'Ad Tracker',
-          action: 'Whitelisted',
-          severity: 'low',
-        };
-        return { threatLogs: [newLog, ...state.threatLogs] };
-      }),
-
-      refreshGravity: () => set((state) => ({
-        telemetry: {
-          ...state.telemetry,
-          domainsOnGravity: state.telemetry.domainsOnGravity + 1420,
-        }
-      })),
-
-      rebootDevice: () => {
-        set((state) => ({
-          telemetry: {
-            ...state.telemetry,
-            protectionStatus: 'initializing',
-          }
-        }));
-        
-        setTimeout(() => {
-          set((state) => ({
-            telemetry: {
-              ...state.telemetry,
-              protectionStatus: 'active',
-            }
-          }));
-        }, 3000);
-      },
+      // addWhitelistDomain / refreshGravity / rebootDevice were removed on
+      // 2026-09-10. Each wrote a value the node never sent: a threat-log row
+      // with a hardcoded IP, +1420 invented gravity domains, and an "active"
+      // status three seconds after a reboot that never happened. Nothing in the
+      // app called them; the real actions are node routes (/filtering/*,
+      // /blocklists/*) driven from the mobile and kiosk screens.
 
       changeFilterLevel: (level: 'none' | 'low' | 'medium' | 'high') => set((state) => ({
         telemetry: {

@@ -14,20 +14,19 @@
  * All three are invisible in a working demo and only bite on real hardware, so
  * they are asserted directly rather than through the UI.
  *
- * `gateflameApi` and `mockAdapter` are mocked: what is under test is the loop's
- * scheduling and lifecycle, not the live/demo decision — that has its own suite
- * in src/services/gateflameApi.test.ts.
+ * `gateflameApi` is mocked: what is under test is the loop's scheduling and
+ * lifecycle, not the live/offline decision — that has its own suite in
+ * src/services/gateflameApi.test.ts.
  */
 
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INITIAL_TELEMETRY, MOCK_CLIENTS, MOCK_THREAT_LOGS } from '../data/mockData';
+import { EMPTY_TELEMETRY } from '../data/seeds';
 import { config } from '../config/env';
 import { useAppStore } from '../store/useAppStore';
 import { ApiRequestError } from '../services/apiClient';
 import { useGateFlameEngine } from './useGateFlameEngine';
 import { gateflameApi } from '../services/gateflameApi';
-import { mockAdapter } from '../services/mockAdapter';
 import type { ThreatLogEntry } from '../types';
 import type { TelemetrySummaryResponse } from '../types/api';
 
@@ -41,12 +40,20 @@ vi.mock('../services/gateflameApi', () => ({
   },
 }));
 
-vi.mock('../services/mockAdapter', () => ({
-  mockAdapter: { threatTick: vi.fn() },
-}));
-
 const api = vi.mocked(gateflameApi);
-const adapter = vi.mocked(mockAdapter);
+
+/** A seed with a measured starting count so "+10 per tick" can be asserted. */
+const INITIAL_TELEMETRY = { ...EMPTY_TELEMETRY, totalQueriesToday: 1000, protectionStatus: 'active' as const };
+const SEED_LOG: ThreatLogEntry = {
+  id: 'seed-1',
+  timestamp: '09:00:00',
+  domain: 'seed.example',
+  clientIp: '10.0.0.1',
+  clientName: 'Seed',
+  category: 'Telemetry',
+  action: 'Blocked',
+  severity: 'low',
+};
 
 const summary = (n: number): TelemetrySummaryResponse => ({
   totalQueriesToday: n,
@@ -62,7 +69,7 @@ const summary = (n: number): TelemetrySummaryResponse => ({
   pauseTimeRemainingSeconds: 0,
 });
 
-const connectionState = (dataSource: 'live' | 'demo') =>
+const connectionState = (dataSource: 'live' | 'offline') =>
   ({
     dataSource,
     nodeBaseUrl: dataSource === 'live' ? 'http://gateflame.local' : null,
@@ -71,7 +78,6 @@ const connectionState = (dataSource: 'live' | 'demo') =>
     agentVersion: null,
     lastError: null,
     lastSuccessAt: null,
-    mockForced: false,
   }) as ReturnType<typeof gateflameApi.getConnection>;
 
 /** Render the hook and let connect() settle plus the first immediate tick run. */
@@ -95,20 +101,19 @@ describe('useGateFlameEngine', () => {
     vi.useFakeTimers();
     useAppStore.setState({
       telemetry: { ...INITIAL_TELEMETRY },
-      threatLogs: [...MOCK_THREAT_LOGS],
-      clients: [...MOCK_CLIENTS],
+      threatLogs: [SEED_LOG],
+      clients: [],
       activeModules: [],
     });
     localStorage.clear();
 
-    api.connect.mockResolvedValue(connectionState('demo'));
-    api.getConnection.mockReturnValue(connectionState('demo'));
+    api.connect.mockResolvedValue(connectionState('offline'));
+    api.getConnection.mockReturnValue(connectionState('offline'));
     api.telemetry.mockImplementation(async () =>
-      summary(useAppStore.getState().telemetry.totalQueriesToday + 10),
+      summary((useAppStore.getState().telemetry.totalQueriesToday ?? 0) + 10),
     );
     api.threats.mockResolvedValue({ entries: [], total: 0 });
     api.clients.mockResolvedValue({ clients: [] });
-    adapter.threatTick.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -122,7 +127,7 @@ describe('useGateFlameEngine', () => {
 
       expect(api.connect).toHaveBeenCalledTimes(1);
       expect(api.telemetry).toHaveBeenCalledTimes(1);
-      // connect() resolved first: the first tick already knows live from demo.
+      // connect() resolved first: the first tick already knows live from offline.
       expect(api.connect.mock.invocationCallOrder[0]).toBeLessThan(
         api.telemetry.mock.invocationCallOrder[0],
       );
@@ -132,7 +137,7 @@ describe('useGateFlameEngine', () => {
       let release = () => {};
       api.connect.mockReturnValue(
         new Promise((resolve) => {
-          release = () => resolve(connectionState('demo'));
+          release = () => resolve(connectionState('offline'));
         }),
       );
 
@@ -191,8 +196,7 @@ describe('useGateFlameEngine', () => {
       expect(api.telemetry).toHaveBeenCalledTimes(2);
     });
 
-    it('reads the current filter level per tick rather than the value at mount', async () => {
-      api.getConnection.mockReturnValue(connectionState('demo'));
+    it('passes the CURRENT telemetry to each poll rather than the value at mount', async () => {
       await start();
 
       act(() => {
@@ -200,7 +204,14 @@ describe('useGateFlameEngine', () => {
       });
       await oneInterval();
 
-      expect(adapter.threatTick).toHaveBeenLastCalledWith('low');
+      const lastArg = api.telemetry.mock.calls.at(-1)?.[0];
+      expect(lastArg?.filterLevel).toBe('low');
+    });
+
+    it('polls while the seed state is still initializing — that is how it leaves it', async () => {
+      useAppStore.setState({ telemetry: { ...EMPTY_TELEMETRY } });
+      await start();
+      expect(api.telemetry).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -410,76 +421,65 @@ describe('useGateFlameEngine', () => {
     });
   });
 
-  describe('live versus demo handling inside a tick', () => {
+  describe('live versus offline handling inside a tick', () => {
+    const liveEntry: ThreatLogEntry = {
+      id: 'live-1',
+      timestamp: '10:00:00',
+      domain: 'tracker.example',
+      clientIp: '10.0.0.2',
+      clientName: 'Laptop',
+      category: 'Ad Tracker',
+      action: 'Blocked',
+      severity: 'high',
+    };
+
     it('replaces threat logs and clients wholesale from the node when live', async () => {
       api.getConnection.mockReturnValue(connectionState('live'));
-      const liveEntry: ThreatLogEntry = {
-        id: 'live-1',
-        timestamp: '10:00:00',
-        domain: 'tracker.example',
-        clientIp: '10.0.0.2',
-        clientName: 'Laptop',
-        category: 'Ad Tracker',
-        action: 'Blocked',
-        severity: 'high',
-      };
       api.threats.mockResolvedValue({ entries: [liveEntry], total: 1 });
       api.clients.mockResolvedValue({ clients: [] });
 
       await start();
 
-      // No seeded placeholders left beside live telemetry.
+      // The seed row is gone — nothing sits beside live telemetry that the
+      // node did not send.
       expect(useAppStore.getState().threatLogs).toEqual([liveEntry]);
       expect(useAppStore.getState().clients).toEqual([]);
       expect(api.threats).toHaveBeenCalledWith(20);
-      expect(adapter.threatTick).not.toHaveBeenCalled();
     });
 
-    it('never synthesises threat entries while live', async () => {
-      api.getConnection.mockReturnValue(connectionState('live'));
+    it('offline: fetches nothing and adds nothing to the lists', async () => {
+      api.getConnection.mockReturnValue(connectionState('offline'));
+      const before = useAppStore.getState().threatLogs;
+
       await start();
       await oneInterval();
+      await oneInterval();
 
-      expect(adapter.threatTick).not.toHaveBeenCalled();
-    });
-
-    it('prepends a simulated entry in demo mode and caps the log at 20', async () => {
-      api.getConnection.mockReturnValue(connectionState('demo'));
-      const fabricated: ThreatLogEntry = {
-        id: 'sim-1',
-        timestamp: '10:00:01',
-        domain: 'sim.example',
-        clientIp: '192.168.1.112',
-        clientName: 'Simulated',
-        category: 'Telemetry',
-        action: 'Blocked',
-        severity: 'medium',
-      };
-      adapter.threatTick.mockReturnValue(fabricated);
-      useAppStore.setState({
-        threatLogs: Array.from({ length: 25 }, (_, i) => ({
-          ...fabricated,
-          id: `old-${i}`,
-        })),
-      });
-
-      await start();
-
-      const logs = useAppStore.getState().threatLogs;
-      expect(logs[0]).toEqual(fabricated);
-      expect(logs).toHaveLength(20);
+      // Three ticks offline: the log is byte-for-byte what it was. No row was
+      // synthesised, because there is no code left that could synthesise one.
+      expect(useAppStore.getState().threatLogs).toEqual(before);
       expect(api.threats).not.toHaveBeenCalled();
       expect(api.clients).not.toHaveBeenCalled();
     });
 
-    it('leaves the log untouched on a demo tick that blocked nothing', async () => {
-      api.getConnection.mockReturnValue(connectionState('demo'));
-      adapter.threatTick.mockReturnValue(null);
-      const before = useAppStore.getState().threatLogs;
+    it('offline: an all-null summary is written as-is, not backfilled', async () => {
+      api.getConnection.mockReturnValue(connectionState('offline'));
+      api.telemetry.mockResolvedValue({
+        ...summary(0),
+        totalQueriesToday: null,
+        queriesBlockedToday: null,
+        blockPercentage: null,
+        domainsOnGravity: null,
+        activeClientsCount: null,
+        dataSavedMB: null,
+        avgLatencyMs: null,
+      });
 
       await start();
 
-      expect(useAppStore.getState().threatLogs).toEqual(before);
+      const t = useAppStore.getState().telemetry;
+      expect(t.totalQueriesToday).toBeNull();
+      expect(t.domainsOnGravity).toBeNull();
     });
   });
 });

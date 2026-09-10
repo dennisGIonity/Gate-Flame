@@ -169,11 +169,17 @@ export interface PairedDevicesResponse {
 /* ── Connection state, client-side ────────────────────────────────────── */
 
 /**
- * `demo` is never silently equivalent to `live`. Every surface that renders
+ * `offline` is never silently equivalent to `live`. Every surface that renders
  * data must be able to say which one it is showing — that is the whole reason
  * this union exists rather than a boolean `isConnected`.
+ *
+ * There is deliberately no `demo` member any more. Until 2026-09-10 an
+ * unreachable node dropped the app into a simulator that generated plausible
+ * telemetry behind a banner. Dennis's instruction was "actual only": when no
+ * node answers, the app now shows nothing measured — nulls render as dashes,
+ * lists render empty — and says so.
  */
-export type DataSource = 'live' | 'demo' | 'connecting' | 'error';
+export type DataSource = 'live' | 'offline' | 'connecting' | 'error';
 
 export interface ConnectionState {
   dataSource: DataSource;
@@ -185,6 +191,4 @@ export interface ConnectionState {
   /** Human-readable reason the app is not live. Shown in the banner. */
   lastError: string | null;
   lastSuccessAt: string | null;
-  /** True when simulation was forced by config rather than by failure. */
-  mockForced: boolean;
 }

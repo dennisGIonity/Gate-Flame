@@ -9,9 +9,8 @@
  */
 
 import React, { useState } from 'react';
-import { 
-  SCRIPT_AUTOPILOT, SCRIPT_DEPLOY, SCRIPT_UNBOUND, SCRIPT_PADD, HARDWARE_TIERS 
-} from '../data/mockData';
+import { SCRIPT_AUTOPILOT, SCRIPT_DEPLOY, SCRIPT_UNBOUND, SCRIPT_PADD } from '../data/referenceScripts';
+import { HARDWARE_TIERS } from '../data/productCatalog';
 import { Terminal, Copy, Check, Download, Calculator, ShieldCheck, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';

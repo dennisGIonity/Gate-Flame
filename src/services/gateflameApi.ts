@@ -1,24 +1,25 @@
 /**
  * Gate^Flame — the seam.
  *
- * One facade the UI calls. Underneath it is either the real node or the
- * simulator, and the caller is always told which. This is the single place
- * where that decision is made.
+ * One facade the UI calls. Underneath it is a real node or nothing, and the
+ * caller is always told which. This is the single place where that decision is
+ * made.
  *
  * Resolution order:
- *   1. VITE_USE_MOCK_DATA=true  → demo, flagged as forced.
- *   2. A node answers discovery  → live.
- *   3. VITE_STRICT_LIVE=true     → error. No silent fallback.
- *   4. Otherwise                 → demo, flagged with the reason.
+ *   1. A node answers discovery  → live.
+ *   2. VITE_STRICT_LIVE=true     → error. Data calls throw.
+ *   3. Otherwise                 → offline. Data calls return EMPTY responses.
  *
- * Step 3 exists so QA cannot mistake a broken API for a working one: in strict
- * mode a failure shows as a failure rather than as plausible fabricated data.
+ * "Empty" is the load-bearing word. Until 2026-09-10 step 3 routed to a
+ * simulator (`mockAdapter`) that generated plausible telemetry, threat rows and
+ * client lists behind an amber banner. That file is deleted. An unreachable
+ * node now yields nulls and empty lists — `lib/format.ts` renders a null as
+ * "—" — so nothing on any screen can be a number the app made up.
  */
 
 import { config } from '../config/env';
 import { apiRequest, ApiRequestError, storeToken } from './apiClient';
 import { discoverNode } from './nodeDiscovery';
-import { mockAdapter } from './mockAdapter';
 import type {
   ClientsResponse,
   ConnectionState,
@@ -31,6 +32,38 @@ import type {
   TelemetrySummaryResponse,
   ThreatLogResponse,
 } from '../types/api';
+import type { SystemTelemetry } from '../types';
+
+/* ── Honest empties ──────────────────────────────────────────────────── */
+
+/**
+ * The summary returned while offline. Every measured field is null; the
+ * local-only fields (protection/pause/filter) are carried over from the
+ * previous value so a paused state is not silently un-paused by a network
+ * blip.
+ */
+export const emptyTelemetry = (prev: SystemTelemetry): TelemetrySummaryResponse => ({
+  totalQueriesToday: null,
+  queriesBlockedToday: null,
+  blockPercentage: null,
+  domainsOnGravity: null,
+  activeClientsCount: null,
+  dataSavedMB: null,
+  avgLatencyMs: null,
+  uptimeSeconds: 0,
+  protectionStatus: prev.protectionStatus,
+  filterLevel: prev.filterLevel,
+  pauseTimeRemainingSeconds: prev.pauseTimeRemainingSeconds,
+});
+
+export const EMPTY_THREATS: ThreatLogResponse = { entries: [], total: 0 };
+export const EMPTY_CLIENTS: ClientsResponse = { clients: [] };
+export const EMPTY_SERVICES: ServicesResponse = { modules: [] };
+export const emptyModuleMetrics = (id: string): ModuleMetricsResponse => ({
+  id,
+  tiles: [],
+  series: [],
+});
 
 let connection: ConnectionState = {
   dataSource: 'connecting',
@@ -40,7 +73,6 @@ let connection: ConnectionState = {
   agentVersion: null,
   lastError: null,
   lastSuccessAt: null,
-  mockForced: false,
 };
 
 type Listener = (state: ConnectionState) => void;
@@ -66,16 +98,6 @@ const isLive = (): boolean => connection.dataSource === 'live' && connection.nod
  * retry from the banner.
  */
 export async function connect(signal?: AbortSignal): Promise<ConnectionState> {
-  if (config.forceMockData) {
-    setConnection({
-      dataSource: 'demo',
-      mockForced: true,
-      nodeBaseUrl: null,
-      lastError: null,
-    });
-    return connection;
-  }
-
   setConnection({ dataSource: 'connecting', lastError: null });
 
   try {
@@ -88,7 +110,6 @@ export async function connect(signal?: AbortSignal): Promise<ConnectionState> {
       agentVersion: status.agentVersion,
       lastError: null,
       lastSuccessAt: new Date().toISOString(),
-      mockForced: false,
     });
   } catch (err) {
     const reason =
@@ -97,13 +118,12 @@ export async function connect(signal?: AbortSignal): Promise<ConnectionState> {
         : 'Could not reach a Gate^Flame node on this network.';
 
     setConnection({
-      dataSource: config.strictLive ? 'error' : 'demo',
+      dataSource: config.strictLive ? 'error' : 'offline',
       nodeBaseUrl: null,
       nodeId: null,
       nodeName: null,
       agentVersion: null,
       lastError: reason,
-      mockForced: false,
     });
   }
 
@@ -111,11 +131,12 @@ export async function connect(signal?: AbortSignal): Promise<ConnectionState> {
 }
 
 /**
- * Run a live call, and on unreachability drop to demo rather than throwing at
- * the UI. A node that goes offline mid-session must degrade visibly, not blank
- * the dashboard.
+ * Run a live call, and on unreachability drop to `offline` and return the
+ * caller's honest empty rather than throwing at the UI. A node that goes away
+ * mid-session must degrade visibly — dashes and an amber banner — not blank
+ * the whole dashboard, and never fill it with invented numbers.
  */
-async function liveOrFallback<T>(call: (baseUrl: string) => Promise<T>, fallback: () => T): Promise<T> {
+async function liveOrEmpty<T>(call: (baseUrl: string) => Promise<T>, empty: () => T): Promise<T> {
   if (isLive() && connection.nodeBaseUrl) {
     try {
       const result = await call(connection.nodeBaseUrl);
@@ -128,11 +149,11 @@ async function liveOrFallback<T>(call: (baseUrl: string) => Promise<T>, fallback
           throw err;
         }
         setConnection({
-          dataSource: 'demo',
+          dataSource: 'offline',
           nodeBaseUrl: null,
           lastError: `Lost contact with the node: ${err.message}`,
         });
-        return fallback();
+        return empty();
       }
       // The node answered and refused. That is a real answer — surface it.
       throw err;
@@ -143,7 +164,7 @@ async function liveOrFallback<T>(call: (baseUrl: string) => Promise<T>, fallback
     throw new ApiRequestError(connection.lastError ?? 'Not connected to a node');
   }
 
-  return fallback();
+  return empty();
 }
 
 export const gateflameApi = {
@@ -151,34 +172,34 @@ export const gateflameApi = {
   getConnection,
   subscribeConnection,
 
-  telemetry: (prev: Parameters<typeof mockAdapter.telemetryTick>[0]) =>
-    liveOrFallback<TelemetrySummaryResponse>(
+  telemetry: (prev: SystemTelemetry) =>
+    liveOrEmpty<TelemetrySummaryResponse>(
       (base) => apiRequest<TelemetrySummaryResponse>(base, '/telemetry/summary'),
-      () => mockAdapter.telemetryTick(prev),
+      () => emptyTelemetry(prev),
     ),
 
   threats: (limit = 20) =>
-    liveOrFallback<ThreatLogResponse>(
+    liveOrEmpty<ThreatLogResponse>(
       (base) => apiRequest<ThreatLogResponse>(base, `/threats/recent?limit=${limit}`),
-      () => mockAdapter.threats(),
+      () => EMPTY_THREATS,
     ),
 
   clients: () =>
-    liveOrFallback<ClientsResponse>(
+    liveOrEmpty<ClientsResponse>(
       (base) => apiRequest<ClientsResponse>(base, '/clients'),
-      () => mockAdapter.clients(),
+      () => EMPTY_CLIENTS,
     ),
 
   services: () =>
-    liveOrFallback<ServicesResponse>(
+    liveOrEmpty<ServicesResponse>(
       (base) => apiRequest<ServicesResponse>(base, '/services'),
-      () => mockAdapter.services(),
+      () => EMPTY_SERVICES,
     ),
 
   moduleMetrics: (moduleId: string) =>
-    liveOrFallback<ModuleMetricsResponse>(
+    liveOrEmpty<ModuleMetricsResponse>(
       (base) => apiRequest<ModuleMetricsResponse>(base, `/modules/${moduleId}/metrics`),
-      () => mockAdapter.moduleMetrics(moduleId),
+      () => emptyModuleMetrics(moduleId),
     ),
 
   /**
@@ -190,17 +211,27 @@ export const gateflameApi = {
    * and tears down the firewall table, so a stolen phone must not be able to
    * switch the product off. See docs/PAIRING-AND-TELEMETRY.md §3.2.
    */
-  toggleService: (moduleId: string, slug: string, enable: boolean) =>
-    liveOrFallback<ServiceActionResponse>(
+  toggleService: (moduleId: string, slug: string, enable: boolean): Promise<ServiceActionResponse> => {
+    // A control action has no honest empty. Pretending a module started when
+    // no node exists is exactly the fiction this seam was built to prevent, so
+    // offline it refuses — loudly, with the module named.
+    const verb = enable ? 'start' : 'stop';
+    if (!isLive() || !connection.nodeBaseUrl) {
+      return Promise.reject(
+        new ApiRequestError(`No node connected — cannot ${verb} ${moduleId}. Nothing on your network changed.`),
+      );
+    }
+    return liveOrEmpty<ServiceActionResponse>(
       (base) =>
-        apiRequest<ServiceActionResponse>(base, `/services/${slug}/${enable ? 'start' : 'stop'}`, {
-          method: 'POST',
-        }),
-      () => mockAdapter.toggleService(moduleId, enable),
-    ),
+        apiRequest<ServiceActionResponse>(base, `/services/${slug}/${verb}`, { method: 'POST' }),
+      () => {
+        throw new ApiRequestError(`Lost contact with the node while trying to ${verb} ${moduleId}.`);
+      },
+    );
+  },
 
   /**
-   * Pairing has no demo fallback — either a real node answers, or the screen
+   * Pairing has no offline fallback — either a real node answers, or the screen
    * shows a real error. Faking a pairing code would be worse than useless.
    *
    * `requestPairingCode` is only ever called from the kiosk, which reaches
@@ -231,7 +262,7 @@ export const gateflameApi = {
   },
 
   pairedDevices: () =>
-    liveOrFallback<PairedDevicesResponse>(
+    liveOrEmpty<PairedDevicesResponse>(
       (base) => apiRequest<PairedDevicesResponse>(base, '/pair/devices'),
       () => ({ devices: [] }),
     ),

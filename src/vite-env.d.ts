@@ -17,16 +17,8 @@ interface ImportMetaEnv {
   readonly VITE_NODE_BASE_URL?: string;
 
   /**
-   * Force simulated data regardless of whether a node is reachable.
-   * `'true'` enables it. Used for sales demos and for UI work without hardware.
-   * When unset, simulation is a *fallback* — the app tries the real node first.
-   */
-  readonly VITE_USE_MOCK_DATA?: string;
-
-  /**
-   * Never auto-fall back to simulation. `'true'` makes the app show connection
-   * errors instead of demo data. Use in QA so a broken API cannot hide behind
-   * plausible-looking numbers.
+   * Treat an unreachable node as a hard error instead of the 'offline' state.
+   * `'true'` enables it. There is no simulated fallback in either case.
    */
   readonly VITE_STRICT_LIVE?: string;
 

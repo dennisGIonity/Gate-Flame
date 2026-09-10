@@ -4,7 +4,8 @@
  * A LEAF module: it imports nothing from this project, by design.
  *
  * This lived in serviceManager.ts until 2026-08-18, which created a genuine
- * import cycle:
+ * import cycle (mockAdapter has since been deleted, 2026-09-10, but the leaf
+ * rule stays — it is what stops the cycle coming back by another route):
  *
  *   gateflameApi → mockAdapter → serviceManager → gateflameApi
  *
