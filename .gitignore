@@ -24,6 +24,7 @@ play-service-account*.json
 
 # ── Dependencies ─────────────────────────────────────
 node_modules/
+desktop/node_modules/
 .pnp
 .pnp.js
 bun.lock
@@ -35,6 +36,7 @@ dist-mobile/
 dist-standalone/
 build/
 release/
+desktop/dist/
 *.apk
 *.aab
 *.tar.gz
