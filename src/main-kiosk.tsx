@@ -50,6 +50,7 @@ import { createRoot } from 'react-dom/client';
 
 import './index.css';
 import KioskApp from './components/kiosk/KioskApp';
+import { WithSplash } from './components/brand/Splash';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {
@@ -62,6 +63,10 @@ document.documentElement.classList.add('dark');
 
 createRoot(rootEl).render(
   <StrictMode>
-    <KioskApp />
+    {/* Splash paints over the console while it starts polling underneath;
+        honours reduced motion (OS or the box-side accessibility pref). */}
+    <WithSplash surface="kiosk">
+      <KioskApp />
+    </WithSplash>
   </StrictMode>,
 );

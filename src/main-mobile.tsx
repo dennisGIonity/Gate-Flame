@@ -19,6 +19,7 @@ import { createRoot } from 'react-dom/client';
 
 import './index.css';
 import MobileApp from './mobile/MobileApp';
+import { WithSplash } from './components/brand/Splash';
 
 // One palette, always. The app is designed dark; `dark:` variants inherited
 // from the old build would otherwise render a light-mode phone half-styled.
@@ -31,6 +32,8 @@ if (!rootEl) {
 
 createRoot(rootEl).render(
   <StrictMode>
-    <MobileApp />
+    <WithSplash surface="phone">
+      <MobileApp />
+    </WithSplash>
   </StrictMode>,
 );

@@ -22,7 +22,9 @@ import { useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
-import { kioskApi, num, type Polled } from '../../components/kiosk/kioskClient';
+import { kioskApi, num, usePolled, type Polled } from '../../components/kiosk/kioskClient';
+import { useAccessibility } from '../../hooks/useAccessibility';
+import type { ProfileId, ProfilesResponse } from '../../types/guard';
 import { CH, Meter } from '../../components/kiosk/charts';
 import { Card, Chip, Gap, Screen, ScreenTitle, Warning } from '../mobileUi';
 
@@ -169,6 +171,9 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
         </div>
       </Card>
 
+      {/* ------------------------------------------------------ profile */}
+      <ProfileCard busy={busy} onApply={(id) => run(`profile-${id}`, () => kioskApi.applyProfile(id))} />
+
       {/* ---------------------------------------------------- categories */}
       <Card>
         <p className="mb-1 text-sm font-semibold text-slate-100">Block whole categories</p>
@@ -269,6 +274,116 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
       </Card>
 
       <Gap text={f.lastError} />
+      {/* ------------------------------------------------- accessibility */}
+      <AccessibilityCard />
+
     </Screen>
+  );
+}
+
+
+/**
+ * One tap sets threat level and categories together. Reads the box's own
+ * view of which preset is active — derived on the node from live settings, so
+ * a category toggled above moves this to "Custom" instead of lying.
+ */
+function ProfileCard({ busy, onApply }: { busy: string | null; onApply: (id: ProfileId) => void }) {
+  const profiles = usePolled<ProfilesResponse>('/profiles', 10000);
+  const p = profiles.data;
+  if (!p) {
+    return (
+      <Card>
+        <p className="mb-1 text-sm font-semibold text-slate-100">Profile</p>
+        <p className="text-xs text-[#64748B]">
+          {profiles.error ? `Your box did not answer for profiles: ${profiles.error.message}` : 'Loading…'}
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <div className="mb-1 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-100">Profile</p>
+        <Chip tone={p.active === 'custom' ? 'slate' : 'cyan'}>{p.activeLabel}</Chip>
+      </div>
+      <p className="mb-3 text-xs leading-relaxed text-[#64748B]">
+        One choice that sets the level and the categories together.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {p.presets.map((preset) => {
+          const active = preset.id === p.active;
+          return (
+            <button
+              key={preset.id}
+              disabled={busy !== null}
+              onClick={() => onApply(preset.id)}
+              className={`min-h-[64px] rounded-xl border px-3 py-2 text-left disabled:opacity-60 ${
+                active ? 'border-brand-teal/60 bg-brand-teal/10' : 'border-[#1E293B] bg-[#0F1B2D]'
+              }`}
+            >
+              <span className="block text-sm text-slate-200">{preset.label}</span>
+              <span className="mt-0.5 block text-[11px] leading-relaxed text-[#64748B]">{preset.description}</span>
+            </button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * This phone's own display preferences. Local, not the box's: a person's
+ * handset is theirs, the wall panel's settings are the household's.
+ */
+function AccessibilityCard() {
+  const { prefs, update } = useAccessibility(undefined, { scaleMin: 0.9, scaleMax: 1.4 });
+  const rows = [
+    ['reducedMotion', 'Reduce motion', 'Static splash and transitions.'],
+    ['highContrast', 'High contrast', 'Stronger borders and text.'],
+    ['verboseLabels', 'Label every control', 'Text beside icon-only buttons.'],
+  ] as const;
+  return (
+    <Card>
+      <p className="mb-1 text-sm font-semibold text-slate-100">Accessibility</p>
+      <p className="mb-3 text-xs leading-relaxed text-[#64748B]">For this phone only. Nothing here changes the box.</p>
+      <div className="flex flex-col gap-2">
+        {rows.map(([key, label, hint]) => (
+          <button
+            key={key}
+            onClick={() => update({ [key]: !prefs[key] })}
+            className="flex min-h-[56px] items-center gap-3 rounded-xl border border-[#1E293B] bg-[#0F1B2D] px-3 py-3 text-left"
+            role="switch"
+            aria-checked={prefs[key]}
+          >
+            <span className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${prefs[key] ? 'bg-[#38BDF8]' : 'bg-[#334155]'}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${prefs[key] ? 'left-[1.125rem]' : 'left-0.5'}`} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm text-slate-200">{label}</span>
+              <span className="mt-0.5 block text-[11px] leading-relaxed text-[#64748B]">{hint}</span>
+            </span>
+          </button>
+        ))}
+        <div className="rounded-xl border border-[#1E293B] bg-[#0F1B2D] px-3 py-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-200">Text size</span>
+            <span className="font-mono text-xs text-[#94A3B8]">{Math.round(prefs.textScale * 100)}%</span>
+          </div>
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {[0.9, 1.0, 1.15, 1.3].map((v) => (
+              <button
+                key={v}
+                onClick={() => update({ textScale: v })}
+                className={`rounded-lg border py-2 text-sm ${
+                  Math.abs(prefs.textScale - v) < 0.01 ? 'border-brand-teal/60 bg-brand-teal/10 text-slate-100' : 'border-[#1E293B] text-slate-300'
+                }`}
+              >
+                {Math.round(v * 100)}%
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }

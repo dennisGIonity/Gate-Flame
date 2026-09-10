@@ -71,6 +71,33 @@
   }
 }
 
+/* ── Accessibility, applied on <html> by src/hooks/useAccessibility.ts ── */
+@layer base {
+  /* Reduced motion: the OS setting AND the owner's box-side/local preference
+     both land here. Every animation and transition stops; layout is untouched. */
+  html.reduce-motion *,
+  html.reduce-motion *::before,
+  html.reduce-motion *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* High contrast: hairlines become visible borders, muted text steps up. */
+  html.high-contrast {
+    --glass-border-color: rgba(231, 235, 242, 0.85) !important;
+  }
+  html.high-contrast .text-slate-500,
+  html.high-contrast .text-slate-400,
+  html.high-contrast .text-\[\#64748B\],
+  html.high-contrast .text-\[\#475569\] {
+    color: #cbd5e1 !important;
+  }
+  html.high-contrast .border-\[\#1E293B\] {
+    border-color: #64748b !important;
+  }
+}
+
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;

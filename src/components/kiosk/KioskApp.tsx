@@ -61,6 +61,8 @@ import { FirewallPanel, ModulesPanel, SystemPanel, WanPanel } from './panelsSyst
 import { ShieldPanel, SHIELD_TAB_ICON } from './panelsShield';
 import { GuardPanel, GUARD_TAB_ICON } from './panelsGuard';
 import { buildKioskIonibotContext, learnKioskGateway } from './kioskIonibot';
+import { useAccessibility } from '../../hooks/useAccessibility';
+import type { AccessibilityResponse } from '../../types/guard';
 
 /* Lazy, like IonicrobesGame and for the same reason: the console boots on a Pi
    behind a TV, and Ionibot is ~46 kB of a bundle that most people will never
@@ -99,6 +101,10 @@ export default function KioskApp() {
   // LAN-gated like /system/status, so it answers even when every scoped read is
   // refused. That makes it the one thing worth showing on the refusal screen.
   const kioskMount = usePolled<KioskMount>('/system/kiosk', 60000);
+  // The wall panel's display prefs live on the box (Guard tab writes them);
+  // this applies them to <html> and caches them for the next boot's splash.
+  const a11y = usePolled<AccessibilityResponse>('/profiles/accessibility', 30000);
+  useAccessibility(a11y.data?.prefs ?? null, { scaleMin: 0.8, scaleMax: 1.6 });
 
   // Asked once and cached. The Ionibot screens that need the gateway are the
   // ones a customer reaches when the network is already broken, so the value
