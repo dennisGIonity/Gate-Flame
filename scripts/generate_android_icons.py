@@ -20,16 +20,22 @@ and the release tarball.
 
 BRAND
 
-Colours sampled directly from Ionity_Global_Pty_LTD_Transparrent.png in the
-ionity-assets repo:
-    blue   #006FD3
-    orange #FF8700
-The mark is a gate (shield) in Ionity blue containing a flame in Ionity orange -
-literally "Gate" + "Flame".
+Colours from the canonical token file, brand/tokens/ionity-tokens.json v1.1.0
+in github.com/Ionity-Global-Pty-Ltd/ASSETS-IONITY-2026- (vendored at
+src/assets/brand/ionity-tokens.json):
+    purple  #5746E3  primary
+    teal    #00D4B8  secondary
+    cyan    #00D2FF  web accent
+    ink     #06061E  AEDI mark field
+    bg      #0B0D12  canvas
+The mark is a gate (shield) on the ink field containing a flame in the brand
+gradient (purple -> teal -> cyan) - literally "Gate" + "Flame". It is the same
+geometry as src/components/brand/GateFlameMark.tsx, so the launcher icon, the
+splash and the in-app mark agree. Until 2026-09-10 this file used a blue/orange
+pair sampled off one PNG; those were not brand colours.
 
-STATUS: build-correct, not design-reviewed. Replace with final artwork before
-Play Store submission. The geometry lives here, so restyling or regenerating at
-any size is one command.
+STATUS: build-correct and on-token. The geometry lives here, so regenerating
+at any size is one command.
 
 Usage:  python scripts/generate_android_icons.py android/app/src/main/res
 """
@@ -39,11 +45,26 @@ import sys
 
 from PIL import Image, ImageDraw
 
-BLUE = (0, 111, 211, 255)        # #006FD3
-BLUE_DARK = (0, 78, 150, 255)
-BLUE_MID = (0, 92, 176, 255)
-ORANGE = (255, 135, 0, 255)      # #FF8700
-ORANGE_LIGHT = (255, 183, 77, 255)
+import json
+import pathlib
+
+_TOKENS = json.loads(
+    (pathlib.Path(__file__).resolve().parents[1] / "src" / "assets" / "brand" / "ionity-tokens.json")
+    .read_text(encoding="utf-8")
+)
+
+
+def _rgba(hexstr):
+    h = hexstr.lstrip("#")
+    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4)) + (255,)
+
+
+# Names kept so the drawing code below reads the same; the values are tokens.
+BLUE = _rgba(_TOKENS["color"]["brand"]["purple"]["value"])        # shield stroke: brand purple
+BLUE_DARK = _rgba(_TOKENS["color"]["surface"]["ink"]["value"])    # background: AEDI ink field
+BLUE_MID = _rgba(_TOKENS["color"]["surface"]["bg"]["value"])      # shield fill: canvas
+ORANGE = _rgba(_TOKENS["color"]["brand"]["teal"]["value"])        # flame: brand teal
+ORANGE_LIGHT = _rgba(_TOKENS["color"]["brand"]["cyan"]["value"])  # flame core: brand cyan
 
 SS = 4  # supersample factor, downsampled with LANCZOS
 

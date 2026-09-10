@@ -1,0 +1,71 @@
+{
+  "$schema": "https://design-tokens.org/schema.json",
+  "meta": {
+    "name": "Ionity Global Design Tokens",
+    "version": "1.1.0",
+    "organisation": "Ionity (Pty) Ltd — AEDI — Antwerp Designs",
+    "author": "Johan Wilhelm van Antwerp",
+    "governance": "Policy 986 AED",
+    "licence": "AED 900 | CC BY-NC-SA 4.0 where stated",
+    "rights": "(c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM2",
+    "web": ["https://www.ionity.today", "https://www.ionity.world"],
+    "reference": "https://www.ionity.co.za",
+    "updated": "2026-08-30"
+  },
+  "color": {
+    "brand": {
+      "purple":  { "value": "#5746e3", "rgb": [87, 70, 227],  "role": "primary" },
+      "teal":    { "value": "#00d4b8", "rgb": [0, 212, 184],  "role": "secondary" },
+      "cyan":    { "value": "#00d2ff", "rgb": [0, 210, 255],  "role": "web accent" },
+      "skyblue": { "value": "#00bfff", "rgb": [0, 191, 255],  "role": "legacy accent" },
+      "c6ff":    { "value": "#00c6ff", "rgb": [0, 198, 255],  "role": "pwa theme-color" }
+    },
+    "surface": {
+      "bg":        { "value": "#0b0d12", "rgb": [11, 13, 18] },
+      "bg-legacy": { "value": "#0d1b2a", "rgb": [13, 27, 42], "role": "pwa background-color" },
+      "surface-1": { "value": "#151922", "rgb": [21, 25, 34] },
+      "border":    { "value": "#242b38", "rgb": [36, 43, 56] },
+      "ink":       { "value": "#06061e", "rgb": [6, 6, 30],   "role": "AEDI mark field" }
+    },
+    "text": {
+      "default": { "value": "#e7ebf2", "rgb": [231, 235, 242] },
+      "muted":   { "value": "#8b93a4", "rgb": [139, 147, 164] },
+      "inverse": { "value": "#0b0d12", "rgb": [11, 13, 18] }
+    },
+    "document": {
+      "header":    { "value": "#1a1a2e" },
+      "accent":    { "value": "#e94560" },
+      "body":      { "value": "#16213e" },
+      "secondary": { "value": "#0f3460" },
+      "watermark": { "value": "#b8c5d6" },
+      "rule":      { "value": "#d4e6f1" },
+      "band":      { "value": "#f0f7fa" }
+    }
+  },
+  "gradient": {
+    "brand":  { "value": "linear-gradient(90deg, #5746e3 0%, #00d4b8 50%, #00d2ff 100%)" },
+    "surface":{ "value": "linear-gradient(180deg, #151922 0%, #0b0d12 100%)" }
+  },
+  "typography": {
+    "family": {
+      "sans": { "value": "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif" },
+      "mono": { "value": "'JetBrains Mono', 'Cascadia Mono', Consolas, monospace" }
+    },
+    "size": {
+      "body":      { "value": "11pt" },
+      "subheader": { "value": "14pt" },
+      "header":    { "value": "18pt" }
+    }
+  },
+  "radius": { "sm": {"value":"4px"}, "md": {"value":"10px"}, "lg": {"value":"18px"}, "pill": {"value":"999px"} },
+  "space":  { "xs": {"value":"4px"}, "sm": {"value":"8px"}, "md": {"value":"16px"}, "lg": {"value":"24px"}, "xl": {"value":"40px"} },
+  "asset": {
+    "logo-primary":  { "value": "brand/logos/ionity-global-logo-primary.png" },
+    "logo-white":    { "value": "brand/logos/ionity-logo-white.png" },
+    "logo-dark":     { "value": "brand/logos/ionity-logo-dark.png" },
+    "mark-aedi":     { "value": "brand/marks/aedi-mark.svg" },
+    "mark-eagle":    { "value": "brand/marks/ionity-ecosystems-eagle.svg" },
+    "favicon":       { "value": "derivatives/favicon/favicon-ionity-global.ico" },
+    "og-card":       { "value": "derivatives/social/ionity-global-logo-primary/ionity-global-logo-primary-og-facebook-linkedin-1200x630.png" }
+  }
+}

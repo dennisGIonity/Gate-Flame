@@ -6,6 +6,21 @@
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-display: "Outfit", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+
+  /* Ionity Global design tokens v1.1.0 — src/assets/brand/ionity-tokens.json.
+     Exposed as Tailwind colours: bg-brand-purple, text-brand-teal, etc.
+     Values are the token file's, not retyped from a screenshot. */
+  --color-brand-purple: #5746e3;
+  --color-brand-teal: #00d4b8;
+  --color-brand-cyan: #00d2ff;
+  --color-brand-skyblue: #00bfff;
+  --color-brand-theme: #00c6ff;
+  --color-brand-bg: #0b0d12;
+  --color-brand-surface: #151922;
+  --color-brand-border: #242b38;
+  --color-brand-ink: #06061e;
+  --color-brand-text: #e7ebf2;
+  --color-brand-muted: #8b93a4;
   
   --color-slate-950: #050505;
   --color-slate-900: #0a0a0a;

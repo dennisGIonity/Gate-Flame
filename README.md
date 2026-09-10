@@ -2,10 +2,12 @@
 
 # Gate^Flame Network Security Node
 
-**Mobile command dashboard, device onboarding simulator, and server sync architecture
-for the Gate^Flame digital perimeter security node.**
+**Phone app, wall-panel console, desktop console and node agent for the
+Gate^Flame network security & privacy node.**
 
 Ionity (Pty) Ltd — AEDI · Building Tomorrow, Today.
+
+Built and operated by **Dennis Grobler (Wabakipi)** · Founded by **Johan Wilhelm van Antwerp**
 
 </div>
 
@@ -14,8 +16,9 @@ Ionity (Pty) Ltd — AEDI · Building Tomorrow, Today.
 ```
 ========================================================================================
 GATE^FLAME NETWORK SECURITY NODE — SOURCE REPOSITORY
-Author: Johan Wilhelm van Antwerp | Ionity (Pty) Ltd | AEDI
-Document ID: DOC-2026-08-013 | Version: 1.0 | Updated: 2026-08-13 SAST
+Author: Dennis Grobler (Wabakipi) | Ionity Global (Pty) Ltd | AEDI
+Founder: Johan Wilhelm van Antwerp | Ionity (Pty) Ltd | AEDI
+Document ID: DOC-2026-08-013 | Version: 1.1 | Updated: 2026-09-10 SAST
 Governance: Policy 986 AED | License: AED 900 | CC BY-NC-SA 4.0 where stated
 (c) 2018-2026 Antwerp Designs | Ionity (Pty) Ltd - All Rights Reserved - TM2
 Web: https://www.ionity.today | https://www.ionity.world | Ref: https://www.ionity.co.za

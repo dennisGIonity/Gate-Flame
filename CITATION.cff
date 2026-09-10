@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+title: "Gate^Flame — network security & privacy node"
+message: "If you reference this software, please cite as below."
+type: software
+version: "1.0.2"
+date-released: "2026-09-10"
+license: LicenseRef-AED-900
+url: "https://www.ionity.today"
+repository-code: "https://github.com/dennisGIonity/Gate-Flame"
+abstract: >-
+  Gate^Flame is an Ionity Global network security and privacy appliance: a
+  side-car DNS filtering node (Pi-hole + unbound recursion) with a wall-panel
+  console, a paired phone app and a desktop console. Governed by Policy 986 AED.
+keywords:
+  - Ionity
+  - AEDI
+  - Gate^Flame
+  - DNS filtering
+  - network security
+  - Policy 986 AED
+authors:
+  - family-names: "Grobler"
+    given-names: "Dennis"
+    alias: "Wabakipi"
+    affiliation: "Ionity Global (Pty) Ltd"
+    email: "dennis.g@ionity.today"
+    city: "Centurion"
+    region: "Gauteng"
+    country: "ZA"
+  - family-names: "van Antwerp"
+    given-names: "Johan Wilhelm"
+    orcid: "https://orcid.org/0009-0005-7181-0347"
+    affiliation: "Ionity (Pty) Ltd — AEDI"
+    email: "johan@ionity.today"
+    city: "Centurion"
+    region: "Gauteng"
+    country: "ZA"
+identifiers:
+  - type: other
+    value: "POL-986-AED"
+    description: "Governing policy"
+  - type: other
+    value: "https://github.com/Ionity-Global-Pty-Ltd/ASSETS-IONITY-2026-"
+    description: "Canonical brand assets and design tokens (v1.1.0) used by this software"
