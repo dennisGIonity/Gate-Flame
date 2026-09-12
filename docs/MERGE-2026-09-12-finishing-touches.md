@@ -37,6 +37,47 @@ had already claimed the opposite.
 
 Eleven items. Each was verified on the tree today, not inherited.
 
+> ## ✅ UPDATE, same day — five of them are now fixed
+>
+> Dennis read this list and said fix it. The descriptions below are left as
+> written, because the record of *what was wrong and how long it survived* is
+> the useful part. What changed:
+>
+> | Item | Now |
+> |---|---|
+> | **A1** fabricated `gf_live_` credential | **Fixed**, and it turned out to be three fabrications in that one screen, not one — see below. Pinned by `src/services/noFabricatedCredentials.test.ts` |
+> | **A2** `THIRD_PARTY_NOTICES.md` | **Written**, from installed package metadata rather than memory. The Pi-hole EUPL-1.2 question is stated as unresolved rather than answered — it is a lawyer's call |
+> | **A4** feed-receiver not in CI | **Fixed.** New `feed-receiver` job in `ci.yml` |
+> | **A6** `mobile.html` fallback fonts | **Fixed.** Three lines, identical to `index.html` |
+> | **A7** `LINKS.md` wrong `/24` | **Fixed** (already noted below) |
+>
+> Verified after the changes: `tsc --noEmit` clean, **vitest 198/198** (195
+> before; the three new ones are the credential guard).
+>
+> **Still open and not touched:** A3 (the history database — 15 days of work,
+> not a fix), A5 (ruff gate — a recorded decision), A8 (the 344 MB bundle),
+> A9 (credentials — yours to revoke), A10 (branch protection).
+>
+> ### A1 turned out to be worse than reported
+>
+> Opening the file to fix line 146 found two more lies in the same component,
+> both of which had also survived the 2026-09-10 sweep:
+>
+> - `handleTestApiCall` waited 1200 ms and then rendered a **fabricated success
+>   payload** — "38,851 queries", "14,397 ads blocked", "37.1%", "6,755,558
+>   domains" — in green, as though a real API had answered. It now calls the node
+>   for real through `gateflameApi.telemetry()`. Offline that returns nulls,
+>   which is the honest answer.
+> - The displayed URL was `http://192.168.1.105/admin/api.php?summary&auth=<token>`
+>   — **the same wrong `/24` as A7**, and it put a bearer credential in a query
+>   string, which the 2026-08-13 audit had flagged separately (§19). Now the real
+>   route, with the credential in the header where it belongs.
+>
+> The surrounding panels — the `api.ionity.today/v1/sync` endpoint, the R45/mo
+> subscription, the warranty date — are still brochure furniture. **Not touched:
+> the recorded decision (roadmap Sprint 5.2) is to delete this screen from the
+> shipping app or gate it behind `/demo`, and that is a product call.**
+
 ## A1 🔴 A fake production credential is still shipping
 
 `src/components/ServerSyncArchitecture.tsx:146` mints

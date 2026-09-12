@@ -8,35 +8,71 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 import { useAppStore } from "../store/useAppStore";
+import { gateflameApi } from '../services/gateflameApi';
 
 interface ServerSyncArchitectureProps {
   userAccount: IonityUserAccount;
   onUpdateUserAccount: (updated: Partial<IonityUserAccount>) => void;
 }
 
+/**
+ * Gate^Flame — this screen used to lie in three separate places.
+ *
+ * Fixed 2026-09-12. All three had survived the 2026-09-10 "remove every
+ * simulated data path" sweep, which deleted `mockData.ts` and `mockAdapter.ts`
+ * but never reached this component. Recorded here so they are not reintroduced:
+ *
+ *  1. A button minted `gf_live_ionity_${Math.random()...}` into a field
+ *     labelled "API Token". A random string wearing a production-credential
+ *     prefix. First flagged 2026-08-18, three times in total. Removed — the
+ *     field now shows the real token or an honest "Not issued".
+ *
+ *  2. `handleTestApiCall` slept 1200 ms and then rendered a fabricated success
+ *     payload — "38,851 queries", "14,397 ads blocked", "37.1%", "6,755,558
+ *     domains" — in green, as though a real API had answered. It now calls the
+ *     node for real via `gateflameApi.telemetry()`. Offline that returns nulls,
+ *     which is the honest answer and the whole point.
+ *
+ *  3. The displayed URL was `http://192.168.1.105/admin/api.php?summary&auth=<token>`
+ *     — the wrong /24 entirely (the box has always been on 192.168.0.x), and it
+ *     put a bearer credential in a query string. Now the real route, no
+ *     credential in the URL.
+ *
+ * `src/services/noFabricatedCredentials.test.ts` fails if (1) comes back.
+ *
+ * Still outstanding, and a product call rather than a technical one: the
+ * surrounding panels (the "api.ionity.today/v1/sync" endpoint, the R45/mo
+ * subscription, the warranty date) are AI-Studio-era brochure furniture. The
+ * recorded decision — roadmap Sprint 5.2 — is to delete this screen from the
+ * shipping app or gate it behind a /demo route. That has not been done.
+ */
 export const ServerSyncArchitecture: React.FC = () => {
-  const { userAccount, updateUserAccount: onUpdateUserAccount } = useAppStore();
+  const { userAccount, telemetry } = useAppStore();
   const [selectedTierId, setSelectedTierId] = useState<HardwareTierId>('tier3_visual');
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiResponseJson, setApiResponseJson] = useState<string | null>(null);
 
-  const handleTestApiCall = () => {
+  /**
+   * A real request to the real node. No timer, no invented numbers.
+   * `gateflameApi.telemetry` already returns an all-null summary when there is
+   * no node, so the offline path needs no special case here — it renders the
+   * nulls, and nulls are the truth.
+   */
+  const handleTestApiCall = async () => {
     setIsTestingApi(true);
     setApiResponseJson(null);
-    setTimeout(() => {
-      setIsTestingApi(false);
+    try {
+      const summary = await gateflameApi.telemetry(telemetry);
+      setApiResponseJson(JSON.stringify(summary, null, 2));
+    } catch (err) {
       setApiResponseJson(JSON.stringify({
-        status: "success",
-        node_mac: userAccount.linkedDeviceMac,
-        dns_queries_today: "38,851",
-        ads_blocked_today: "14,397",
-        ads_percentage_today: "37.1%",
-        domains_being_blocked: "6,755,558",
-        unbound_status: "active_recursive",
-        subscription_warranty: "active_r45_zar",
-        gravity_last_updated: "2026-07-20 04:00:00"
+        error: 'request_failed',
+        detail: err instanceof Error ? err.message : String(err),
+        note: 'No measurement was taken. This is the request failing, not the node reporting zero.',
       }, null, 2));
-    }, 1200);
+    } finally {
+      setIsTestingApi(false);
+    }
   };
 
   const selectedTier = HARDWARE_TIERS.find((t) => t.id === selectedTierId) || HARDWARE_TIERS[2];
@@ -135,20 +171,18 @@ export const ServerSyncArchitecture: React.FC = () => {
               </div>
               <div>
                 <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">API Token</label>
-                <div className="flex items-center gap-2">
+                {userAccount.apiKey ? (
                   <input
                     type="text"
                     readOnly
                     value={userAccount.apiKey}
-                    className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-2 text-sky-400 font-mono text-xs focus:outline-none"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-2 text-sky-400 font-mono text-xs focus:outline-none"
                   />
-                  <button
-                    onClick={() => onUpdateUserAccount({ apiKey: `gf_live_ionity_${Math.random().toString(36).substring(2, 9)}` })}
-                    className="p-2.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl border border-white/10 transition-colors"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                ) : (
+                  <div className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-2 font-mono text-xs text-slate-500">
+                    — Not issued
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -186,7 +220,10 @@ export const ServerSyncArchitecture: React.FC = () => {
             
             <div className="bg-black/50 border border-white/10 rounded-2xl p-4 font-mono text-xs overflow-hidden">
               <div className="text-slate-500 mb-4 pb-4 border-b border-white/5 break-all">
-                URL: <span className="text-sky-400">http://192.168.1.105/admin/api.php?summary&auth={userAccount.apiKey}</span>
+                URL: <span className="text-sky-400">GET /api/v1/telemetry/summary</span>
+                <span className="block mt-1 text-slate-600">
+                  on the discovered node. Bearer token in the header, never in the URL.
+                </span>
               </div>
               
               <AnimatePresence mode="wait">

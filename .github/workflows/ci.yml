@@ -230,6 +230,39 @@ jobs:
           done
           echo "::error::agent did not answer /api/v1/system/status within 20s"; exit 1
 
+  feed-receiver:
+    name: Feed-receiver tests
+    runs-on: ubuntu-latest
+    # 83 pytest cases, and until 2026-09-12 not one of them ran in CI.
+    #
+    # That gap has already cost a fortnight. `test_client_contract.py` pins the
+    # payload the agent actually sends; when the agent gained a `shield` field
+    # the strict schema rejected it, and the receiver 422'd EVERY real check-in
+    # for ten days. The contract test was red that whole time and nobody looked,
+    # because nothing looked. A test that only runs when someone remembers to
+    # run it is documentation, not a gate.
+    #
+    # `test_privacy_contract.py` is the one that matters most: it asserts the
+    # feed is health-fields-only, and that contract is a POPIA commitment, not a
+    # preference. It belongs somewhere that fails a pull request.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install
+        working-directory: feed-receiver
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Pytest
+        working-directory: feed-receiver
+        run: python -m pytest tests/ -q
+
   audit:
     name: Dependency advisories
     runs-on: ubuntu-latest
