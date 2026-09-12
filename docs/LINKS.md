@@ -120,10 +120,25 @@ Reference docs cited in the build chain:
 | Dev server (web dashboard) | `http://localhost:3000` |
 | Device kiosk | `http://localhost:8080/device-kiosk` |
 | Mobile app preview (IDE) | `http://localhost:63342/Gate^Flame/gateflame_mobile_app.html` |
-| Node admin API — summary | `http://192.168.1.100/admin/api.php?summaryRaw` |
-| Node admin API — disable | `http://192.168.1.100/admin/api.php?disable=300&auth=<TOKEN>` |
-| Secondary node | `http://192.168.1.105/admin/api.php?summary&auth=<API_KEY>` |
+| Node agent API (eth0) | `http://192.168.0.10:8080/api/v1/…` — **the canonical node** |
+| Node agent API (wlan0) | `http://192.168.0.13:8080/api/v1/…` — same node, dual-homed. API only, **no port 53** |
+| Node discovery (mDNS) | `http://gateflame.local:8080` |
+| Unauthenticated health probe | `http://192.168.0.10:8080/api/v1/system/status` — 200, reports `nodeId` and `provisioned` |
+| Fleet dashboard | `http://192.168.0.6:8080` |
 | Hosted app URL | injected at runtime as `APP_URL` (Cloud Run service URL) |
+
+> **Corrected 2026-09-12.** This table listed the node at `192.168.1.100` with a
+> "secondary node" at `192.168.1.105` — a different `/24` from the box that has always
+> existed. The conflict was flagged as open on 2026-08-18 and had gone unfixed since.
+>
+> Two things it implied are also wrong and worth stating outright: there is **no
+> secondary node** (and no secondary DNS — see `ADR-001`, clients query both in
+> arbitrary order and protection becomes intermittent), and the household's devices are
+> **never pointed at this box directly** — the router forwards to it as its upstream.
+>
+> `.env.example` and `README.md` still use `192.168.1.105` as an illustrative
+> `VITE_NODE_BASE_URL` value. That is deliberate: an example address that cannot be
+> mistaken for the real one.
 
 ### Upstream dependencies of the node
 

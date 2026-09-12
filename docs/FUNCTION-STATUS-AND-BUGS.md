@@ -218,6 +218,28 @@ Three answers needed before any code is worth writing:
    customer's home. POPIA applies, and Play's data-safety form must match.
 3. **Whether it is premium-only.** A product call, not a technical one.
 
+---
+
+# 7 — RE-CONFIRMED OPEN, 2026-09-12
+
+Found during the merge of the "Gate^Flame Finishing touches" project. Each was
+raised in August, and each was **re-verified against this tree on 2026-09-12** —
+these are not inherited claims. Full reasoning and evidence:
+`MERGE-2026-09-12-finishing-touches.md`.
+
+| Bug | State | Evidence |
+|---|---|---|
+| `ServerSyncArchitecture.tsx:146` mints `gf_live_ionity_${Math.random()}` into a field labelled **"API Token"** | 🔴 | Flagged three times (2026-08-18 §4.2, and twice on 2026-08-24) and still present. The 2026-09-10 "remove every simulated data path" sweep did not reach it. A random string wearing a production-credential prefix |
+| `DeploymentScriptViewer.tsx` still reachable in the shipping web app | 🟡 | Last of the brochure set; the other three are gone |
+| `THIRD_PARTY_NOTICES.md` does not exist | 🔴 | **Pi-hole is EUPL-1.2** — its redistribution terms apply to a pre-installed image, not just to this repo. Unresolved |
+| No history/telemetry persistence — end-game clause **E6**, *"including yesterday's"* | 🔴 | Zero matches for `history/summary`, `telemetry_samples`, `query_rollup` anywhere in `node-agent/` or `src/`. `.DUMP/history/anomaly.jsonl` is an anomaly log, not a time series. Every chart is still instantaneous polling; a reboot is still amnesia. **~15 days, the largest single item left** |
+| `feed-receiver`'s 83 tests are not in CI | 🟡 | `git grep feed-receiver -- .github` → no hits. This is the gap that let feed-receiver 422 every real check-in for ten days with a red contract test nobody read (see `PIN-2026-09-10.md`) |
+| Ruff is `continue-on-error: true` | 🟡 | `ci.yml:189`. A recorded decision, not an oversight — but not yet a gate |
+| `mobile.html` has no font link or `@font-face` | 🟡 | `index.html` ✅ · `kiosk.html` ✅ · `mobile.html` ❌. The phone is the primary surface |
+| `docs/LINKS.md` pointed at `192.168.1.100` / `.105` | ✅ | **Fixed 2026-09-12.** Flagged open on 2026-08-18; a different `/24` from the box that has always existed |
+| The only copy of the lost Docker backend is one 344 MB file on one machine | 🔴 | `_fix-2026-08-13\E-App-SAFETY-2026-08-16.bundle`, confirmed present. Three commits, **none of those SHAs on GitHub**. The agreed extraction to `docs/archive/lost-backend/` was never done |
+| Two GitHub PATs + `GEMINI_API_KEY` unrevoked; keystore unbacked | 🔴 | Open since 2026-08-14. `TempGateFlameBuild\.env.local` still holds a live plaintext copy of the key — confirmed today, and it is inside two zip archives as well |
+
 ```
 © 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM2
 Governance: Policy 986 AED | Building Tomorrow, Today.

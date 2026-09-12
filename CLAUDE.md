@@ -133,6 +133,25 @@ about. Advertising ourselves narrows the gap; it never closes it.
   This is the cheap way to honour "confirm the route answers on the box the
   customer has" when the SSH key is not loaded. `/system/status` answers 200
   unauthenticated and reports `nodeId` and `provisioned`.
+- **`revoke_all` must NEVER clear `provisioned`.** Revoking every paired device
+  touches the `devices` table and nothing else. `provisioned` is set once, on the
+  first successful claim, and nothing may unset it — otherwise a lost phone
+  re-arms first-boot admin and any tokenless loopback caller is treated as day
+  one. Correct in `storage.py:450`, pinned by
+  `test_pairing.py::test_revoke_all_does_not_unprovision_node`. Same shape as the
+  factory-reset rule: wipe history, keep node identity.
+- **Nothing binary that came down a text-mode path can be trusted.** Three
+  binaries were destroyed this way before anyone spotted the pattern: 26 Android
+  PNGs (`ef bf bd 50 4e 47` — the `0x89` replaced by U+FFFD), `gradle-wrapper.jar`,
+  and a 1.2 MB release tarball that was 68.5% replacement characters and
+  unsalvageable. `.gitattributes` (21 binary types) and the CI magic-byte +
+  `EF BF BD` gate in `ci.yml`/`release.yml` close it as a class. **Do not remove
+  either, and never "fix" a binary by re-saving it through anything text-aware.**
+- **Prove the push path BEFORE doing work that has to be pushed.** `git ls-remote`
+  succeeding proves nothing — the repo is public, so anonymous read needs no
+  credential. Only `git push --dry-run` reveals a block. Learning this the other
+  way round cost ~7,500 lines of backend once, because the refusal only surfaced
+  after the work existed and only somewhere ephemeral.
 
 ---
 
