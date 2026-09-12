@@ -157,13 +157,41 @@ about. Advertising ourselves narrows the gap; it never closes it.
   telemetry returns **one** `gap` for the whole payload, not one per field, and there
   is **no top-domains endpoint** — the console derives it from the entries it already
   has, so it can never disagree with the list printed below it.
-- **`bypass` does not mean the filter is off.** It means the watchdog caught a failure
-  and fell back to unfiltered resolvers **so the household keeps working internet** —
-  unprotected, but online. Never show the raw token: `active → PROTECTED`,
-  `paused → PAUSED`, `bypass → UNPROTECTED`. And **on bypass, do not render `reason`**
-  — that field is the free text the owner typed when *pausing*, so on a fault it is
-  null and prints "Reason not reported by the node", which reads as though we failed
-  to ask. Same rule as the row above it.
+- **`protectionStatus` has FIVE values, and a UI that knows three is the bug.**
+  `active | paused | bypass | degraded`, plus `applying` while a change is in flight,
+  and `lastError` carrying the reason. Verified on the live box 2026-09-06, which
+  returned `degraded` twice — `"Pi-hole unreachable"` and `"gravity rebuild failed"`.
+  A switch that handles three renders the fifth as *nothing at all*, which is the
+  failure this whole section exists to prevent.
+  - **`bypass` does not mean the filter is off.** The watchdog caught a failure and
+    fell back to unfiltered resolvers **so the household keeps working internet** —
+    unprotected, but online.
+  - Never show the raw token: `active → PROTECTED`, `paused → PAUSED`,
+    `bypass → UNPROTECTED`.
+  - **On bypass, do not render `reason`** — that field is the free text the owner typed
+    when *pausing*, so on a fault it is null and prints "Reason not reported by the
+    node", which reads as though we failed to ask. Same rule as the row above it.
+- **A timeout is not a failure, and a warm run does not size a cold one.** The threat
+  dial looked broken after the blocklists grew. It was not: `"gravity rebuild failed"`
+  was the agent's own 30-second HTTP timeout, while Pi-hole finished the job and logged
+  *"Gravity database has been updated"*. At 347,905 domains the rebuild fit; at
+  **3,081,748** it did not. Settled as **POST timeout = 3× measured, verify window = 10
+  minutes**, on a background thread so the UI shows `applying` throughout (`654dbf4`,
+  `6db09d5`). The trap underneath it: `time docker exec gateflame-pihole pihole -g`
+  measures **~13s warm** and many minutes cold — size from the cold download, never the
+  cache hit.
+- **A fix the customer has to perform is not a fix.** Told that the phone drops would
+  stop if he turned IPv6 off on his router, Dennis's answer was *"NO no no no no no
+  please no, this cannot be sold like this what are you thinking we cannot tell clients
+  o yeah and turn of ip6 aswell as this and that"*. This is what the whole standard tier
+  is built on. It is also why `install-dns-stack.sh` calls the `filter-AAAA` fallback
+  *"hides someone else's broken network. Prefer (1)."* — the box absorbs the problem, the
+  household never hears about it.
+- **Per-device history is not wanted. A device LIST is.** ADR-001 books per-client
+  attribution as an accepted loss; Dennis does not want the feature it would buy —
+  *"i dont get why you need to filter each device if you just filter all the traffic at
+  the main port… we just need a list of each device connecting to the router"*. Build the
+  list, and stop apologising for the rest.
 - **Copy the product has already been corrected on, twice.** "Your family is safe" →
   **"Your network is filtered"**: the box filters DNS, it cannot make a family safe,
   and that sentence would be quoted back at us. "Intrusions are being dropped" →
@@ -191,6 +219,8 @@ about. Advertising ourselves narrows the gap; it never closes it.
 | `NODE_ENV` is wrong on both machines | wabakipi: `production` + npm `omit=dev` → `npm ci` silently strips devDependencies. raspberrypi: `development` → ~2× React **dev** bundles. Always `set NODE_ENV=` / `unset NODE_ENV` before building. |
 | `sudo` on the Pi needs a password | **It does. Do not be fooled by `sudo -n true` succeeding** — sudo caches credentials for a few minutes after Dennis runs something, so a check made shortly after his own `sudo` returns "passwordless" and is *wrong*. I made exactly that mistake on 2026-08-31, edited this row to say sudo was passwordless, and only found out when the cache expired and the next deploy failed. Verify with `sudo -n -l` **well after** any human sudo, or just assume a password is needed. `wabapi` **is** in the `docker` group, so `docker`/`docker exec` work unprivileged; `/opt/gateflame`, `/usr/local/bin/` and `dns-stack/.env` (root, 0600) do not. **Stage a script and have Dennis run one `sudo` command.** |
 | Pi paths | `/home/wabapi/node-agent/` is **not a git repo** — deploy with `scp`, not `git pull`. The watchdog runs from `/usr/local/bin/gateflame-dns-watchdog`, *not* the repo copy. |
+| **Pi names — every one of these has been guessed wrong and cost a session** | Guessing any of them returns an empty result or "No such container", which reads exactly like a dead box. Containers: **`gateflame-pihole`**, **`gateflame-unbound`** — *not* `pihole`. Service: **`gateflame-node-agent.service`** — *not* `gateflame-agent`; the wrong name gives an empty journal. Also live: `gateflame-kiosk.service`, `gateflame-mdns-alias.service`. **`sqlite3` is NOT in the Pi-hole container** — use `docker exec gateflame-pihole pihole-FTL sqlite3 …`. Pi-hole admin is on **:8081**, not :80. |
+| **`load-key.cmd` fails on a stale agent socket** | `unix_listener: cannot bind to path /c/Users/DGMic/.ssh/agent.sock: Address already in use` (also seen as `Operation not supported`). Reads like a broken script; it is a leftover socket file. Fix, from Git-bash: `rm -f ~/.ssh/agent.sock && eval "$(ssh-agent -a ~/.ssh/agent.sock -s)" && ssh-add ~/.ssh/id_ed25519`. |
 | `pathlib.Path` on appliance paths | Appliance paths are always POSIX. `Path` is platform-dependent and mangles them on Windows. Use `PurePosixPath`. |
 | Don't test in BlueStacks | `emulator-5554` is BlueStacks: NATs, no LAN, no mDNS, Android 9 x86_64. |
 
@@ -204,7 +234,40 @@ about. Advertising ourselves narrows the gap; it never closes it.
   its real UPnP description (`:1900/…/gatedesc.xml`), which is now a test fixture.
   Returns **406 to every path** unless `Accept` matches its own JS. Telnet open on 23.
 - **Workstation**: `Wabakipi`, `192.168.0.7`, DNS manually set to `192.168.0.10`.
+- **Fleet control plane**: `GATEFLAME_FEED_URL=http://192.168.0.3:8091/api/v1/nodes`
+  as of 2026-08-31 — it **moved from `.6`**, and `DENNIS-OUTSTANDING-ACTIONS.md` still
+  says `192.168.0.6:8080`. Confirmed by an install read-back on the box, not by a doc.
 - Canonical repo `E:\Gateflame`; mobile work in `C:\Users\DGMic\GateFlame-Repo`.
+
+## The business model — decided, and it changes the architecture
+
+The roadmap asks: *"decide now whether there is a recurring component — it changes the
+architecture."* **Decided: yes.** In Dennis's words, a hosted dashboard the boxes report
+into *"so that i can log status reports and provide customer services in order to charge a
+monthly fee"*, and the VPN because *"that function alone justifies us asking a
+subscription"*. The fleet console is therefore not a convenience — **it is the billable
+surface**, and it has to carry hundreds of devices, per-device support access, and build
+deployment.
+
+**On the VPN, he has already ruled out the two cheap answers:** Oracle's Always Free tier
+one-country-per-account (*"Nope not gonna work"*) and customers' boxes acting as exit nodes
+for each other (*"nope"*). Country **and continent** choice, per-device rather than global,
+on both editions, Ionity-branded. WireGuard is the direction. He called handing a `.ovpn`
+to a third-party app *"rather dodgy"*, so the config hand-off is not the finished answer.
+
+**IoniBot is scoped and the scope is his:** *"I said a chat bot not a live AI, it would
+really only be a question menue the customer could choose from"* — mobile app only, never
+the kiosk, a tab or pop-up rather than a standalone part, *"basically a live instruction
+manual"*. That is the deterministic decision tree from the two-tier doc, and the reason is
+commercial: *"so that I do not need a call center."*
+
+⚠ **The base board is a `Cubie A7A-6GB`** (robotics.org.za, with the `XSG-0504000HEU` PSU)
+— **not** the Orange Pi Zero 2W that `gateflame-two-tier-endgame.md` assumes. And 6 GB
+reopens a closed question, asked and never answered: *"how would this change and work if i
+was to say lets change it, because of radxa 6gb we can go inline and take over dns?"*
+ADR-001 dropped CLAIM on load-shedding grounds as much as capability, and load shedding
+does not care how much RAM the board has — so answer it deliberately rather than letting
+it drift.
 
 ## Where things live
 

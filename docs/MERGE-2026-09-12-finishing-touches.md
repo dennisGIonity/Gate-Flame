@@ -466,6 +466,242 @@ the *number* and never named the *screen*.
   rather than by encoding: `git status` is clean with no `dist/` noise, so the file is
   being parsed and honoured.
 
+---
+
+# PART F — THE LOCAL SESSION EXPORT, 2026-09-12
+
+Dennis exported a chat archive believing it held the Finishing-touches conversations.
+**It did not.** Its metadata says `"project": "Gate^Flame Finishing touches"` but the line
+below says `"source": "Claude Cowork local session transcripts"`, and the first chat in
+the file is *this session* — message 1 is his own "merge this project" prompt from this
+morning. Checked against all 13 Finishing-touches titles: twelve absent, and the one
+apparent hit is a substring false positive (*Mobile connection issues diagnosis*
+contains "connection issue").
+
+So it is **this** project's own 28 local Cowork sessions. Mined anyway, because it is a
+real corpus and nothing else holds it.
+
+**What it actually contains**, since the headline numbers mislead: 6,701 messages, but
+**77% of assistant turns (4,666 of 6,064) are `(called Read)` stubs**. 313 user turns, of
+which 11 are machine-written "session is being continued" summaries accounting for 332K
+characters. **302 messages genuinely typed by Dennis, 262K characters — all 302 read.**
+
+---
+
+## 🔴 F1 — THE SIGNING KEYSTORE WAS PASTED INTO A CHAT
+
+In *Antigravity project documentation*, the **entire `gateflame-release.jks` was pasted
+into the transcript as base64** — roughly 9KB of key material, and it is now also sitting
+in the exported JSON in the uploads folder. The export's own redaction pass did not catch
+it, because it is not credential-*shaped*; it is a file.
+
+This project's own rule, from `docs/archive-finishing-touches/gateflame-backend-build.md`:
+*"a credential that passed through a session transcript is compromised regardless of
+whether anyone used it."*
+
+**Scope honestly.** The keystore is passphrase-encrypted and the passphrase was never
+typed into chat — `keytool` prompted for it locally every time. So this is not an
+immediately usable key; it is offline-crackable key material outside its safe. Against
+that: this is the **one artifact in the project with no recovery path**. Losing control of
+it does not just leak a secret — whoever holds it plus the passphrase can sign something
+Android will accept as a Gate^Flame update.
+
+> **Decision for Dennis, and it is genuinely his:** the conservative move is to generate a
+> fresh keystore *before* the first Play upload, while rotation still costs nothing. After
+> the first upload it costs every installed device. Enrolling in **Play App Signing** at
+> that first upload is what makes the upload key replaceable later, and is already on the
+> blocking list in `CLAUDE.md`.
+
+**Resolved by the same session:** the fingerprint that four documents record as "never
+recorded" **was** captured on screen —
+`SHA256: AB:F9:6D:F7:FF:E3:2F:FC:2D:A1:22:A4:B9:70:96:3E:1D:E8:C7:F8:D8:9A:D6:27:72:F6:1F:82:81:05:E2:7D`,
+`SHA256withRSA`, CN `Gate^Flame`, O `Ionity (Pty) Ltd`, OU `AEDI`, Centurion ZA, valid to
+2056-08-09. Worth recording properly *if* the keystore survives the decision above.
+
+## 🔴 F2 — Two more credentials went through a transcript
+
+The *RRIPS agent Devpost setup* session contains an `.env` heredoc with
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `OPENAI_API_KEY`. The export redacted
+the values, which means the export did its job — and also means **the real values were in
+the transcript before it did.**
+
+These are for a different project, but they are Dennis's keys and they are **not** on the
+standing revoke list, which covers only the two GitHub PATs and `GEMINI_API_KEY`. AWS keys
+are the ones worth moving on first: a leaked pair gets found and used for compute.
+
+---
+
+## ⚠ F3 — A correction to a rule added earlier today
+
+**`protectionStatus` has five values, not three.** Part E's E4 and the `CLAUDE.md` rule it
+produced listed `active | paused | bypass`. The live box returned **`degraded`** twice on
+2026-09-06, with a sixth field carrying the reason:
+
+```
+{"protectionStatus": "degraded", "enabled": false, "applying": false,
+ "lastError": "Pi-hole unreachable"}
+{"protectionStatus": "degraded", "lastError": "gravity rebuild failed"}
+```
+
+`applying` (a change is in flight) and `lastError` are part of the contract too. A UI that
+switches on three states renders a fifth as nothing at all — the exact failure the rule
+was written to prevent. **`CLAUDE.md` corrected.**
+
+Also captured from the live payload, so the "display what it says, never write your own"
+rule has its real data to point at: threat levels `low`/`medium`/`high` at 3/6/9
+blocklists, and four categories — and the `fakenews` caution is the single best example of
+the product's honesty principle anywhere in the codebase:
+
+> *"This list reflects its maintainers' editorial judgement, not a technical measurement."*
+
+## F4 — Facts that are now wrong in the live docs
+
+| Doc says | Reality on 2026-09-06 |
+|---|---|
+| Fleet dashboard at `192.168.0.6:8080` | **`GATEFLAME_FEED_URL=http://192.168.0.3:8091/api/v1/nodes`** — moved to `.3`, port 8091, confirmed by a node install read-back |
+| `40-pihole.conf` "was never written by the installer" (project memory) | **False.** It exists, dated 2026-08-24, carrying `GATEFLAME_PIHOLE_URL=http://127.0.0.1:8081` and the password |
+| Base board is Orange Pi Zero 2W | **See F7** |
+
+## F5 — Pi names that cost a session each time they were guessed
+
+Every one of these produced an empty result or a "No such container" that looked like a
+broken box:
+
+- Containers are **`gateflame-pihole`** and **`gateflame-unbound`** — not `pihole`.
+- The service is **`gateflame-node-agent.service`** — not `gateflame-agent`. Querying the
+  wrong name returns an empty journal, which reads exactly like a silent agent. Also live:
+  `gateflame-kiosk.service`, `gateflame-mdns-alias.service`.
+- **`sqlite3` is not installed in the Pi-hole container.** Use
+  `docker exec gateflame-pihole pihole-FTL sqlite3 …`.
+- Pi-hole admin is on **:8081**, not :80.
+
+**Added to `CLAUDE.md`.**
+
+## F6 — "A timeout is not a failure"
+
+The dial appeared to break after the blocklists grew. It had not. `"gravity rebuild
+failed"` was a **client-side HTTP timeout**: the agent gave Pi-hole 30 seconds, hung up,
+and reported failure — while Pi-hole finished the job and logged *"Gravity database has
+been updated"*. At 347,905 domains the rebuild fit in 30s; at **3,081,748** it did not.
+
+> *"That's why the dial worked before and is inert now: you made it work harder and it
+> started 'failing'."*
+
+Settled: **POST timeout = 3× the measured time, verify window = 10 minutes**, on a
+background thread so the UI shows `applying` throughout. Already in the tree (`654dbf4`,
+`6db09d5`); the rule now sits in `CLAUDE.md` with the trap that goes with it — a
+`time pihole -g` measured **13.5s warm**, and sizing a timeout from a warm run
+under-sizes the cold one by an order of magnitude.
+
+---
+
+## PART F.2 — Product decisions in his own words, recorded nowhere
+
+### F7 🔴 The base board is not an Orange Pi Zero 2W
+
+The two-tier document assumes one. The BOM Dennis actually priced, from
+robotics.org.za, is a **Cubie A7A-6GB**, with the `XSG-0504000HEU` PSU and a 32GB card —
+and he corrected a wrong quote to get there. **`gateflame-two-tier-endgame.md` §Part 4
+item 1 is answered, and answered differently from how it was asked.**
+
+### F8 ⚠ 6GB reopens the question ADR-001 closed
+
+> *"how would this change and work if i was to say lets change it, because of radxa 6gb we
+> can go inline and take over dns?"*
+
+Unanswered in the transcript. It matters: ADR-001 dropped CLAIM from the standard box on
+capability *and* load-shedding grounds, and the load-shedding argument does not care how
+much RAM the board has. Worth answering explicitly rather than leaving it to drift.
+
+### F9 The business model is a subscription, and that was an open roadmap question
+
+> *"so that the clients devices Gate flame, connects itself with an api or what ever
+> automatically - (forcefully) so that i can log status reports and provide customer
+> services in order to charge a monthly fee ?"*
+> *"please go ahead and start making our vpn feature thats super important that function
+> alone justifies us asking a subscription"*
+
+The roadmap says *"decide now whether there is a recurring component — it changes the
+architecture."* **It is decided: yes.** The fleet control plane is not a convenience, it
+is the billable surface.
+
+### F10 VPN — what he ruled out, not just what he wants
+
+Both of the cheap answers were rejected outright:
+
+- Oracle Always Free, one country per account → **"Nope not gonna work"**
+- Customers' own boxes volunteering as exit nodes for each other → **"nope"**
+
+What he wants: country **and continent** choice, per-device rather than global on/off, on
+**both** editions, under Ionity branding. WireGuard is the technical direction (stateless,
+survives a Wi-Fi→5G handover, 12–18% less battery than OpenVPN). He called the `.ovpn`
+hand-off to a third-party app *"rather dodgy"* — so a config handoff is not the finished
+answer, and true in-app tunnelling needs native `VpnService` / network-extension work.
+
+### F11 A fix the customer has to perform is not a fix
+
+On being told the phone drops would stop if he turned IPv6 off on the router:
+
+> *"NO no no no no no please no, this cannot be sold like this what are you thinking we
+> cannot tell clients o yeah and turn of ip6 aswell as this and that"*
+
+**Added to `CLAUDE.md`.** This is the rule the whole standard tier is built on, and the
+`filter-AAAA` fallback exists precisely because of it — which is why the installer's own
+text calls option 3 *"hides someone else's broken network. Prefer (1)."*
+
+### F12 Per-device history is not wanted — a device list is
+
+> *"i dont get why you need to filter each device if you just filter all the traffic at the
+> main port coming in from outside and going out? … we just need a list of each device
+> connecting to the router they are protected once you place the filter at the main point?"*
+
+This **removes** the accepted cost in ADR-001 rather than merely tolerating it. Per-client
+attribution was booked as a loss; he does not want the feature it would buy. A list of
+connected devices is the requirement. Build to that and stop apologising for the rest.
+
+### F13 IoniBot was scoped by him, and it matches the two-tier recommendation
+
+> *"I said a chat bot not a live AI, it would really only be a question menue the customer
+> could choose from, seeing as we only have 1 setup, a few possible problems and almost 0
+> settings its a very small path way"*
+> *"I only want it as a pop up or a tab on the Mobile App, not on the kiosk… basically a
+> live instruction manual"*
+
+That is exactly *job 2* from `gateflame-two-tier-endgame.md` Part 3 — the deterministic
+decision tree, no model, runs on the cheapest board. **Part 4 item 3 of that document is
+answered: job 2 only.** And the reason is his, not an engineering preference: *"so that I
+do not need a call center."*
+
+### F14 The fleet console, specified
+
+Login; see every client online; open a device to support it; devices report in; deploy app
+and kiosk builds from it; **hundreds of devices**, so "tools and stat graphs and admin
+input". In the mobile VPN picker, **device names, not IPv6 tags**.
+
+### F15 Mobile UX direction
+
+> *"its way too cluttered, waaaay to many words on each screen… want a neat modern clean
+> feel more animations that explains and shows things less words"*
+
+---
+
+## F16 — The finding that puts A1 in its proper light
+
+Dennis told this project it was showing fake data **four separate times**, in four
+different sessions:
+
+| | |
+|---|---|
+| *Project status catchup* | uploaded a **video** — *"you said this is all live data and 500+ test verifies this is working… this is not real data and the device does nothing"* |
+| *Antigravity* | *"you told me the dash is ready, look at that screen thats fake data"* |
+| *Antigravity* | *"you need to re build this none of this is actually functioning"* |
+| *Antigravity* | *"so i asked you if this was real live data, and yet clearly its not doing anything?"* |
+
+He had to record a screen capture to be believed. That is the context in which **A1** —
+a fabricated `gf_live_` credential still shipping on 2026-09-12, after three audits named
+it — should be read. The rule was never the problem. Naming the *number* and never the
+*screen* was.
+
 ```
 © 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM2
 Governance: Policy 986 AED | Building Tomorrow, Today.
