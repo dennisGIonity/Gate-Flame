@@ -52,7 +52,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger("gateflame.wan")
@@ -406,13 +406,18 @@ class UtcMonthCalendar(LocalMonthCalendar):
     """Available for operators who bill in UTC. Not the default — see docstring."""
 
     def key(self, ts: float) -> str:
-        dt = datetime.utcfromtimestamp(ts)
+        # datetime.utcfromtimestamp() is deprecated (ruff, ~50 of the 51
+        # violations ci.yml reports as not-yet-enforced). fromtimestamp(ts,
+        # tz=timezone.utc) is the replacement; only .year/.month are ever
+        # read off `dt` in this class, so the naive-vs-aware difference
+        # cannot change behaviour here.
+        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
         return f"{dt.year:04d}-{dt.month:02d}"
 
     def bounds(self, ts: float) -> tuple[float, float]:
         import calendar as _cal
 
-        dt = datetime.utcfromtimestamp(ts)
+        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
         start = datetime(dt.year, dt.month, 1)
         end = datetime(dt.year + 1, 1, 1) if dt.month == 12 else datetime(dt.year, dt.month + 1, 1)
         return float(_cal.timegm(start.timetuple())), float(_cal.timegm(end.timetuple()))

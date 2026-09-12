@@ -30,5 +30,15 @@ export default defineConfig({
     restoreMocks: true,
     unstubEnvs: true,
     unstubGlobals: true,
+    // BUG-02 (docs/FUNCTION-STATUS-AND-BUGS.md): 34 tests fail with
+    // "React.act is not a function" when the shell's NODE_ENV is `production`
+    // (true on wabakipi today - see CLAUDE.md's machine traps table), because
+    // react-dom then loads its production build, which strips act(). CI
+    // already works around this with an env: block in ci.yml; this is the
+    // same fix for every local run, so a developer's shell can't reintroduce
+    // it. `test.env` applies only inside the test process, same as CI's step.
+    env: {
+      NODE_ENV: 'test',
+    },
   },
 });
