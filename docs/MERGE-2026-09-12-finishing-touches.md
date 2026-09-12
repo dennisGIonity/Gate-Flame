@@ -341,20 +341,130 @@ root**, dated 2026-08-15, with steps 1–3 long complete. It was flagged as spen
 
 ---
 
-# PART E — CHATS: NOT YET MERGED
+# PART E — CHATS: MERGED 2026-09-12
 
-The instruction was *all chats*. The project's conversation history is **not** in the
-local cache — only the nine knowledge documents synced down. Reading it needs
-claude.ai in a browser, and the browser pane's profile is not signed in to that account.
+The conversation history was not in the local cache — only the nine documents synced
+down — so this needed a signed-in browser. Dennis signed in and the pass was done.
 
-**Status: outstanding, and it needs Dennis.** Sign in to claude.ai in the browser pane
-and the conversations can be read and any decision made-but-never-written-down folded
-in as an addendum to this document.
+**13 conversations, 2026-08-13 → 2026-08-25.** Three were read in full, chosen because
+they were the newest and the likeliest to hold something the documents never captured.
+The other ten were judged from their titles and their own auto-summaries, every one of
+which describes a git-push or SSH-authorisation blocker — all long since resolved.
+**That is a sampling, not an exhaustive read, and this section should not be taken as
+proof that nothing else is in there.**
 
-The honest expectation: these nine documents *are* the distilled output of those chats,
-and the repo's own history since 2026-08-22 already reflects most of what was decided in
-them. The gap is likely small — but it has not been checked, and this document should
-not imply otherwise.
+I was wrong about the yield. Part E previously predicted the gap would be small because
+the documents are the distilled output of the chats. Five things came out that are in no
+document, and two of them are rules rather than facts.
+
+## E1 🔑 The router-credential decision, pinned in chat and written down nowhere
+
+Decided in *Gate^Flame pi device setup and testing*: **one-time credentials, held in
+memory, discarded after use.** Per-vendor adapters, guided fallback, and mandatory
+verification.
+
+What makes it worth keeping is the argument, because Dennis overturned the first one.
+The original case was a threat-model case — router admin credentials on the box means
+compromise the box, own the network. He rejected it: at home nobody cares about the
+router password, and the realistic attacker is *a neighbour trying to steal Wi-Fi, not
+someone physically breaking into your house*. That reasoning belongs to the business and
+SIEM tier, not a household.
+
+The conclusion survived on two entirely different grounds, and these are the ones to
+quote:
+
+1. **It is simpler.** No credential store, so no encryption-at-rest question, no "where
+   does the key live on an SD card", no rotation. It is *less* code than storing them.
+2. **POPIA.** Storing credentials makes them personal information you are processing —
+   which drags in retention, breach notification, and a line in the privacy notice. Not
+   storing them means none of that applies. On a product sold in South Africa that is a
+   real cost avoided for free.
+
+The one argument for storing — re-applying the setting after a router firmware update or
+factory reset — is answered by the verification loop: the box notices queries stopped
+arriving and prompts again.
+
+> **Status against today.** `ADR-001` (2026-08-24) went *further* than this chat: the
+> credentialed login is deliberately unbuilt, guided-only. So the "write per-vendor
+> adapters" half is superseded. **The POPIA reasoning is not** — it is the strongest
+> written justification for never storing router credentials and belongs in the privacy
+> notice.
+>
+> ⚠ The same conversation told Dennis to set the router's **DHCP** DNS to the box.
+> `ADR-001` reversed exactly that four days later. Do not follow it.
+
+## E2 📏 A rule the product depends on, stated in no document
+
+From *Kiosk interface redesign and project status*, on the third round of a UI build
+inventing policy text:
+
+> **We are not permitted to describe what the filter blocks — only to display what it
+> says it blocks.**
+
+The node supplies the threat-level descriptions, the category labels, descriptions and
+cautions, and the pause-duration labels. The UI renders them **verbatim**. The build had
+written its own — "zero-trust: blocks newly registered domains", "aggressive ad
+trackers" — which is *a security product telling a customer what it blocks based on a
+guess*. That is the same class of error as a fabricated number, and it is arguably worse,
+because it is a claim rather than a measurement.
+
+**Added to `CLAUDE.md`.**
+
+## E3 ✍ Copy that was argued over, and why
+
+Three rewrites worth not undoing:
+
+| Rejected | Shipped | Why |
+|---|---|---|
+| "Your family is safe" | **"Your network is filtered"** | The box filters DNS. It cannot make a family safe, *and that sentence would be quoted back at us* |
+| "Intrusions and malicious queries are being dropped" | **"Malicious and unwanted domains are being blocked before your devices can reach them"** | We do not currently detect intrusions |
+| — | Fault hero: **"Protection has failed over"** — *"the appliance detected a fault and fell back to unfiltered internet, so your connection still works — but nothing is being blocked"* | Says the true thing about a state that is easy to describe wrongly in either direction |
+
+## E4 ⚠ `bypass` does not mean the filter is off
+
+It means a watchdog detected a failure and fell back to unfiltered resolvers **so the
+household keeps working internet**. Unprotected, but online.
+
+- **Never show the raw token.** `BYPASS` means nothing to a customer. Display only:
+  `active → PROTECTED`, `paused → PAUSED`, `bypass → UNPROTECTED`.
+- **On bypass, do not render `reason`.** That field is the free text the owner typed when
+  *pausing*; on a fault it is null and prints "Reason not reported by the node", which
+  reads as though we failed to ask. A textbook instance of the rule already in
+  `CLAUDE.md` — "cannot reach it" and "reached it, nothing there" must never share a
+  sentence.
+
+**Added to `CLAUDE.md`.**
+
+## E5 Two API facts worth not rediscovering
+
+- **Telemetry returns ONE `gap` for the whole payload**, not one per field. A type with
+  `queriesGap` / `blockedGap` / `percentageGap` / `devicesGap` forces an adapter to
+  fabricate three explanations per render.
+- **There is no top-domains endpoint.** The console derives that list client-side from
+  the threat entries it already has — which means *it can never disagree with the list
+  printed below it*.
+
+## E6 The pattern, which is the most transferable thing in the whole set
+
+> "Three rounds, three inventions — first gap strings, then endpoints, now policy
+> descriptions. It reliably fixes what you name and reliably invents in whatever you
+> haven't named yet."
+
+Assume the next unnamed surface is invented. That is precisely the failure a contract
+test catches and a code review does not — and it is the same disease as **A1** in this
+document, which sat in the tree for three and a half weeks because three audits named
+the *number* and never named the *screen*.
+
+## What was not new, and what is settled
+
+- *Project review and next steps* (2026-08-22) is the two-tier document being written.
+  Nothing in the conversation that is not in the file, which is already archived here.
+- The ten unread conversations are push and SSH blockers — resolved; everything is on
+  `origin` and the doctor confirms it.
+- *App review and optimization* (2026-08-13) flagged **`.gitignore` as UTF-16LE**, which
+  would mean git silently ignored nothing. **Resolved** — verified today by behaviour
+  rather than by encoding: `git status` is clean with no `dist/` noise, so the file is
+  being parsed and honoured.
 
 ```
 © 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — All Rights Reserved — TM2

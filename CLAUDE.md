@@ -147,6 +147,28 @@ about. Advertising ourselves narrows the gap; it never closes it.
   unsalvageable. `.gitattributes` (21 binary types) and the CI magic-byte +
   `EF BF BD` gate in `ci.yml`/`release.yml` close it as a class. **Do not remove
   either, and never "fix" a binary by re-saving it through anything text-aware.**
+- **We do not describe what the filter blocks. We display what it SAYS it blocks.**
+  The node supplies the threat-level descriptions, the category labels, descriptions
+  and cautions, and the pause-duration labels. The UI renders them **verbatim** and
+  never writes its own. A UI build invented "zero-trust: blocks newly registered
+  domains" and "aggressive ad trackers" — a security product telling a customer what
+  it blocks *based on a guess*. That is the same class of error as a fabricated
+  number and arguably worse, because it is a claim rather than a measurement. Also:
+  telemetry returns **one** `gap` for the whole payload, not one per field, and there
+  is **no top-domains endpoint** — the console derives it from the entries it already
+  has, so it can never disagree with the list printed below it.
+- **`bypass` does not mean the filter is off.** It means the watchdog caught a failure
+  and fell back to unfiltered resolvers **so the household keeps working internet** —
+  unprotected, but online. Never show the raw token: `active → PROTECTED`,
+  `paused → PAUSED`, `bypass → UNPROTECTED`. And **on bypass, do not render `reason`**
+  — that field is the free text the owner typed when *pausing*, so on a fault it is
+  null and prints "Reason not reported by the node", which reads as though we failed
+  to ask. Same rule as the row above it.
+- **Copy the product has already been corrected on, twice.** "Your family is safe" →
+  **"Your network is filtered"**: the box filters DNS, it cannot make a family safe,
+  and that sentence would be quoted back at us. "Intrusions are being dropped" →
+  **"Malicious and unwanted domains are being blocked before your devices can reach
+  them"**: we do not detect intrusions.
 - **Prove the push path BEFORE doing work that has to be pushed.** `git ls-remote`
   succeeding proves nothing — the repo is public, so anonymous read needs no
   credential. Only `git push --dry-run` reveals a block. Learning this the other
