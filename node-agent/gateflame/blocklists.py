@@ -141,7 +141,10 @@ def _post(path: str, payload: dict, timeout: float | None = None) -> dict | None
     try:
         r = httpx.post(
             f"{base}{path}",
-            headers={"sid": sid},
+            # X-FTL-SID, not "sid" - see pihole.py's module docstring
+            # (RE-CHECKED 2026-09-14): a bare "sid" header is not one of
+            # Pi-hole v6's four documented ways to send the session id.
+            headers={"X-FTL-SID": sid},
             json=payload,
             timeout=_TIMEOUT if timeout is None else timeout,
         )
@@ -160,7 +163,7 @@ def _delete(path: str) -> bool:
     if not sid:
         return False
     try:
-        r = httpx.delete(f"{base}{path}", headers={"sid": sid}, timeout=_TIMEOUT)
+        r = httpx.delete(f"{base}{path}", headers={"X-FTL-SID": sid}, timeout=_TIMEOUT)
         return r.status_code in (200, 204)
     except httpx.HTTPError:
         return False

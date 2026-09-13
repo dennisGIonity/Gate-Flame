@@ -17,12 +17,30 @@ against a running v6 container on 2026-08-16:
 The replacement is an authenticated REST API:
 
     POST   /api/auth  {"password": "..."}  -> {"session": {"sid": ..., "validity": 1800}}
-    GET    /api/stats/summary  header `sid: <sid>`
-    DELETE /api/auth           header `sid: <sid>`
+    GET    /api/stats/summary  header `X-FTL-SID: <sid>`
+    DELETE /api/auth           header `X-FTL-SID: <sid>`
 
 This module previously spoke the v5 API, so on a v6 install every field came
 back null and the dashboard reported "Pi-hole not configured or unreachable"
 while Pi-hole was up, filtering, and holding the numbers. Honest, but wrong.
+
+RE-CHECKED 2026-09-14 against docs.pi-hole.net/api/auth/ (current official
+docs, updated Feb 2026 per the page's own date): the SID can be sent in the
+query string, in the request body, in an `X-FTL-SID` header, or as a `sid`
+cookie (which additionally needs an `X-FTL-CSRF` header) - those are the
+FOUR documented methods, and a bare `sid` header is not one of them. This
+module (and blocklists.py's `_post`/`_delete`, which share this session
+cache) were sending `headers={"sid": sid}` - not a name Pi-hole's current
+API recognises - which would 401 every authenticated call. Corrected to
+`X-FTL-SID` here and in blocklists.py.
+
+This could not be confirmed against a live box this session (no LAN reach
+from here) - the module's own docstring previously claimed "verified
+against a running v6 container on 2026-08-16" for the old header name, so
+either that verification predates this API detail changing, or it was
+never actually correct. Prove this one on the real Pi before trusting it:
+a 200 from `GET /api/v1/system/status` reporting real (non-null) Pi-hole
+figures is the read-back that matters, not this comment.
 
 Sessions are limited in number and expire after `validity` seconds, so the sid
 is cached and reused rather than re-authenticating on every 4-second poll -
@@ -115,7 +133,7 @@ def _get(path: str) -> dict | None:
         if not sid:
             return None
         try:
-            r = httpx.get(f"{base}{path}", headers={"sid": sid}, timeout=_TIMEOUT)
+            r = httpx.get(f"{base}{path}", headers={"X-FTL-SID": sid}, timeout=_TIMEOUT)
         except httpx.HTTPError:
             return None
 
@@ -159,7 +177,7 @@ def api_patch(path: str, payload: dict) -> dict | None:
         if not sid:
             return None
         try:
-            r = httpx.patch(f"{base}{path}", headers={"sid": sid}, json=payload, timeout=_TIMEOUT)
+            r = httpx.patch(f"{base}{path}", headers={"X-FTL-SID": sid}, json=payload, timeout=_TIMEOUT)
         except httpx.HTTPError:
             return None
 

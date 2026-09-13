@@ -86,6 +86,14 @@ def recent(limit: int = 20) -> dict:
         }
 
     scan = min(max(limit * _SCAN_MULTIPLE, 200), _SCAN_CAP)
+    # UNVERIFIED PATH (2026-09-14): some v6 references describe this as
+    # `/api/dns/queries` rather than `/api/queries`. Unlike blocklists.py's
+    # /api/lists (confirmed live against a v6 container, 2026-08-24), nothing
+    # in this file's history shows this path was ever exercised against a real
+    # box - and pihole.api_get() already turns a 404 here into the same
+    # honest "gap" a real outage would produce, so a wrong path fails safe
+    # rather than lying. Check it against the box's own /api/docs (exact for
+    # its installed version) before trusting the Threats screen has real data.
     data = pihole.api_get(f"/api/queries?length={scan}")
     if data is None:
         # api_get has already collapsed "no route", "auth refused" and "bad

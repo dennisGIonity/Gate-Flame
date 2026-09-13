@@ -171,6 +171,18 @@ about. Advertising ourselves narrows the gap; it never closes it.
   - **On bypass, do not render `reason`** — that field is the free text the owner typed
     when *pausing*, so on a fault it is null and prints "Reason not reported by the
     node", which reads as though we failed to ask. Same rule as the row above it.
+- **The Pi-hole v6 session id goes in an `X-FTL-SID` header, not a `sid` header.**
+  `pihole.py` and `blocklists.py` sent `headers={"sid": sid}` for every authenticated
+  call — every list add/remove, every gravity trigger, every upstream PATCH. Re-checked
+  2026-09-14 against docs.pi-hole.net/api/auth/ and a Pi-hole FTL dev's own reply on the
+  v6 beta discourse thread: the four documented ways to send a SID are the query string,
+  the request body, an `X-FTL-SID` header, or a `sid` cookie plus `X-FTL-CSRF` — a bare
+  `sid` header is not one of them. Fixed in both files; **not yet confirmed against a
+  live box** (no LAN reach that session). This module's own docstring previously claimed
+  the old header was "verified against a running v6 container on 2026-08-16" — so either
+  that verification predates this detail changing, or it never actually held. Read-back
+  before trusting either version: real (non-null) numbers on the Threats/Filtering screen
+  is the proof, not a comment in either version of this file.
 - **A timeout is not a failure, and a warm run does not size a cold one.** The threat
   dial looked broken after the blocklists grew. It was not: `"gravity rebuild failed"`
   was the agent's own 30-second HTTP timeout, while Pi-hole finished the job and logged

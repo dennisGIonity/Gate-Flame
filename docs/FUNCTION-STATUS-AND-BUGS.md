@@ -175,6 +175,7 @@ established. Then every open bug and problem.
 | **BUG-07** | **Fleet feed URL is a hardcoded DHCP address** | `50-feed.conf` on the Pi points at `192.168.0.6`. The workstation is on DHCP and **has already moved once** (.7 → .6). When it moves again the dashboard goes quiet with no warning. Needs a reservation, a hostname, or mDNS. |
 | **BUG-11** | **Release keystore has no verified backup** | `~/.gateflame-signing/gateflame-release.jks` is irreplaceable. SHA-256 is recorded; the file is not backed up. Losing it means never updating the Play listing again. |
 | **BUG-12** | **Live secrets still in plaintext** | Two GitHub PATs and `GEMINI_API_KEY` in `TempGateFlameBuild\.env.local`. Revoke and rotate. |
+| **BUG-18** | **Every authenticated Pi-hole v6 call was sending the session id in the wrong header** | `pihole.py` and `blocklists.py` sent `headers={"sid": sid}`. Re-checked against docs.pi-hole.net/api/auth/ (current official docs) and a Pi-hole FTL dev's own reply on the v6 beta discourse thread: the SID goes in the query string, the body, an `X-FTL-SID` header, or a `sid` cookie (+`X-FTL-CSRF`) — a bare `sid` header is not one of the four. **Fixed 2026-09-14** in both files. This means every list add/remove, every gravity rebuild trigger, and every upstream-config PATCH may have been 401'ing from day one — not confirmed against a live box (no LAN reach this session). First thing to check once the 09-10 agent redeploy happens: does the Threats/Filtering screen actually show real Pi-hole numbers now? |
 
 ## 🟡 Real, not urgent
 
