@@ -118,6 +118,36 @@ def _shield_snapshot(store: Store) -> dict:
 # Where the node's own feed credential lives once the server has issued one.
 FEED_TOKEN_KEY = "feed_node_token"
 
+# In-memory only — restarts the count, not the world. BUG-07's complaint was
+# "the dashboard goes quiet with no warning": a stale GATEFLAME_FEED_URL (the
+# workstation's DHCP address moved again, or the drop-in was never updated)
+# used to fail exactly one log line per interval, at WARNING, indistinguishable
+# from a single dropped packet. There was nothing loud, and nothing anyone
+# checking the box locally (SSH, journalctl) rather than the fleet dashboard
+# itself would ever see — which is self-defeating, since the dashboard is
+# precisely the thing that has gone dark. This does not fix the address moving
+# (that is the DHCP-reservation-or-hostname decision CLAUDE.md already flags as
+# Dennis's to make, not a code fix); it fixes the silence.
+_consecutive_failures = 0
+_last_success_at: float | None = None
+_last_error: str | None = None
+# Escalate to ERROR once a stale URL has clearly stopped being a blip. At the
+# default 900s interval that is 45 minutes — long enough to not cry wolf over
+# one bad cycle, short enough that it lands in the same day's log.
+_LOUD_AFTER_FAILURES = 3
+
+
+def feed_health() -> dict:
+    """What a human checking THIS box (not the fleet dashboard) can see about
+    its own outbound feed. Read by GET /api/v1/system/feed."""
+    return {
+        "enabled": config.feed_enabled,
+        "url": config.feed_url,
+        "lastSuccessAt": _last_success_at,
+        "consecutiveFailures": _consecutive_failures,
+        "lastError": _last_error,
+    }
+
 
 def _send_once(store: Store) -> bool:
     """Post one check-in, and pick up a per-node token if the server offers one.
@@ -132,6 +162,7 @@ def _send_once(store: Store) -> bool:
     never returns one leaves behaviour exactly as it was. Neither side has to
     be upgraded first.
     """
+    global _consecutive_failures, _last_success_at, _last_error
     payload = build_payload(store)
     token = store.get_setting(FEED_TOKEN_KEY) or config.feed_token
     headers = {"Authorization": f"Bearer {token}"} if token else {}
@@ -150,9 +181,37 @@ def _send_once(store: Store) -> bool:
             if issued:
                 store.set_setting(FEED_TOKEN_KEY, issued)
                 logger.info("health feed: stored this node's own feed token")
-        return r.status_code < 300
+        ok = r.status_code < 300
+        if ok:
+            if _consecutive_failures >= _LOUD_AFTER_FAILURES:
+                logger.warning(
+                    "health feed recovered after %d failed check-ins", _consecutive_failures
+                )
+            _consecutive_failures = 0
+            _last_error = None
+            _last_success_at = time.time()
+        else:
+            _consecutive_failures += 1
+            _last_error = f"HTTP {r.status_code}"
+            logger.warning("health feed post to %s rejected: HTTP %d", config.feed_url, r.status_code)
+        return ok
     except httpx.HTTPError as exc:
-        logger.warning("health feed post failed, dropping: %s", exc)
+        _consecutive_failures += 1
+        _last_error = str(exc)
+        # One dropped cycle is noise (a reboot, a Wi-Fi blip). Several in a row
+        # against the SAME url is exactly the "feed URL went stale and nobody
+        # noticed" failure BUG-07 was named for, so it earns a louder line
+        # naming the URL — the one piece of information a person SSHed into
+        # the box actually needs to fix it.
+        if _consecutive_failures >= _LOUD_AFTER_FAILURES:
+            logger.error(
+                "health feed has failed %d checks in a row against %s: %s "
+                "— if this box's target moved (DHCP), the drop-in needs updating; "
+                "see tools/install-pi-update.sh and BUG-07 in docs/FUNCTION-STATUS-AND-BUGS.md",
+                _consecutive_failures, config.feed_url, exc,
+            )
+        else:
+            logger.warning("health feed post failed, dropping: %s", exc)
         return False
 
 

@@ -31,7 +31,10 @@
   --bg:#050505; --panel:rgba(0,0,0,.6); --panel-2:#0a0a0a; --line:#262626;
   --text:#f8fafc; --muted:#8ba0b6; --dim:#64748b;
   --sky-400:#38bdf8; --sky-500:#0ea5e9;
-  --green:#10b981; --amber:#f59e0b; --red:#f43f5e; --purple:#a855f7;
+  /* --red matches kiosk's COLORS.fault (#E11D48), not the app's rose-500 —
+     "the product IS the kiosk" per CLAUDE.md, so where the two disagree the
+     kiosk's value wins. rgba(225,29,72,…) below is that same hex, alpha-blended. */
+  --green:#10b981; --amber:#f59e0b; --red:#e11d48; --purple:#a855f7;
   --glass-border:rgba(14,165,233,.6); --glass-glow:0 0 16px 2px rgba(14,165,233,.25);
   --font-display:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font-sans:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -111,12 +114,12 @@ tbody tr:hover{background:rgba(14,165,233,.05)}
 .pill.online .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
 .pill.stale{color:var(--amber);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35)}
 .pill.stale .dot{background:var(--amber)}
-.pill.offline{color:var(--red);background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.35)}
+.pill.offline{color:var(--red);background:rgba(225,29,72,.1);border:1px solid rgba(225,29,72,.35)}
 .pill.offline .dot{background:var(--red)}
 .bill{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.12em;
   padding:3px 8px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
 .bill.active{color:var(--green);border-color:rgba(16,185,129,.35)}
-.bill.suspended,.bill.unpaid{color:var(--red);border-color:rgba(244,63,94,.35)}
+.bill.suspended,.bill.unpaid{color:var(--red);border-color:rgba(225,29,72,.35)}
 .bill.trial{color:var(--purple);border-color:rgba(168,85,247,.35)}
 .tag{font-family:var(--font-mono);font-size:9.5px;padding:3px 7px;border-radius:6px;
   background:#0a0a0a;border:1px solid var(--line);color:var(--muted);margin-right:4px}
@@ -151,7 +154,7 @@ tbody tr:hover{background:rgba(14,165,233,.05)}
   background:#0a0a0a;border:1px solid var(--line);color:var(--muted)}
 .mod.running{color:var(--green);border-color:rgba(16,185,129,.35)}
 .mod.degraded{color:var(--amber);border-color:rgba(245,158,11,.35)}
-.mod.failed{color:var(--red);border-color:rgba(244,63,94,.35)}
+.mod.failed{color:var(--red);border-color:rgba(225,29,72,.35)}
 .gap{margin-top:12px;padding:10px 13px;border-radius:12px;background:rgba(245,158,11,.07);
   border:1px solid rgba(245,158,11,.28);color:#fbbf24;font-size:11.5px;line-height:1.55}
 .gap b{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.14em;
@@ -163,7 +166,7 @@ tbody tr:hover{background:rgba(14,165,233,.05)}
    green "all fine" row would be one more thing to read past. */
 .find{padding:13px 15px;border-radius:14px;border:1px solid var(--line);
   background:var(--panel-2);margin-bottom:10px}
-.find.critical{border-color:rgba(244,63,94,.4);background:rgba(244,63,94,.06)}
+.find.critical{border-color:rgba(225,29,72,.4);background:rgba(225,29,72,.06)}
 .find.warning{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.05)}
 .find h4{margin:0 0 7px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:9px}
 .find.critical h4{color:var(--red)} .find.warning h4{color:var(--amber)}
@@ -201,7 +204,7 @@ tbody tr:hover{background:rgba(14,165,233,.05)}
 .state h2{font-family:var(--font-display);font-weight:300;font-size:21px;margin:0 0 9px}
 .state p{color:var(--muted);margin:0 auto;max-width:560px;font-size:13.5px;line-height:1.65}
 .state code{font-family:var(--font-mono);font-size:12px;color:var(--sky-400)}
-.state.fault{border-style:solid;border-color:rgba(244,63,94,.45)}
+.state.fault{border-style:solid;border-color:rgba(225,29,72,.45)}
 .state.fault h2{color:var(--red)}
 
 footer{margin-top:30px;padding-top:16px;border-top:1px solid #141414;display:flex;
@@ -562,7 +565,14 @@ function renderNode(){
             <span style="color:var(--dim)">first seen <b style="color:var(--text)">${fmtDate(n.firstSeenAt)}</b></span>
           </div>
           <div class="mods" style="margin-top:14px">
-            ${(n.modules||[]).map(m=>`<span class="mod ${esc(m.status)}">${esc((m.id||'').replace('module_',''))}</span>`).join('')}
+            ${(n.modules||[]).map(m=>{
+              // Same rule as kiosk's StatusPill (kioskUi.tsx): a module carrying
+              // a gap note can never render as green "running" — the box is
+              // telling us something is off, and a green chip would bury that
+              // next to the very .gap box explaining it.
+              const effective = (m.gap && m.status==='running') ? 'degraded' : m.status;
+              return `<span class="mod ${esc(effective)}">${esc((m.id||'').replace('module_',''))}</span>`;
+            }).join('')}
           </div>
           ${gaps}
         </div>

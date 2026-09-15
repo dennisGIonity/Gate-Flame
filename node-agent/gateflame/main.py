@@ -25,6 +25,7 @@ from . import anomaly, blocklists, content_categories, datadir, filtering_state,
 from . import clients as clients_mod
 from . import pihole, services, telemetry, threats
 from .config import config
+from . import health_feed
 from .health_feed import HealthFeedLoop
 from .security import ScopeChecker, is_loopback, require_lan
 from .storage import Store
@@ -519,6 +520,23 @@ def kiosk_status(request: Request):
     """
     require_lan(request)
     return {**request.app.state.kiosk, "consolePinEnabled": bool(config.console_pin)}
+
+
+@app.get("/api/v1/system/feed")
+def feed_status(request: Request):
+    """Whether THIS box's outbound fleet check-in is actually landing anywhere.
+
+    LAN-only, unauthenticated like /system/status: this answers "is the feed
+    working", not "here is fleet data" — nothing from the fleet dashboard
+    flows back through this box, so there is nothing sensitive to gate.
+
+    Exists because a fleet-feed outage used to be invisible from the box's own
+    side — one WARNING line per dropped cycle, identical whether the network
+    hiccuped once or the target URL has been stale for a week. See BUG-07 in
+    docs/FUNCTION-STATUS-AND-BUGS.md and the escalation logic in health_feed.py.
+    """
+    require_lan(request)
+    return health_feed.feed_health()
 
 
 # ---------------------------------------------------------------------------
