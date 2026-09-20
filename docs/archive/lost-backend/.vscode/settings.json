@@ -1,0 +1,12 @@
+{
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-21",
+            "path": "e:\\\\.App\\\\.jdk21\\\\jdk-21.0.4+7",
+            "default": true
+        }
+    ],
+    "java.import.gradle.java.home": "e:\\\\.App\\\\.jdk21\\\\jdk-21.0.4+7",
+    "java.import.gradle.wrapper.enabled": true,
+    "java.configuration.updateBuildConfiguration": "interactive"
+}

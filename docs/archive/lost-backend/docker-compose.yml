@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  backend-api:
+    build: .
+    container_name: gateflame-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    # Zero-Trust Segregation
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Required if arp-scan or ping is executed from inside the container
+      - NET_RAW 
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # Mount configuration and logs as read-only to prevent tampering
+      - ./.env:/app/.env:ro
+      - /etc/pihole/dhcp.leases:/etc/pihole/dhcp.leases:ro
+      - /var/log/suricata:/var/log/suricata:ro
+      - /var/log/fail2ban.log:/var/log/fail2ban.log:ro
+      # Settings needs to be writable if saved via API
+      - ./settings.json:/app/settings.json
+
+  suricata:
+    image: jasonish/suricata:latest
+    container_name: gateflame-suricata
+    network_mode: "host" # Needs host network to sniff interfaces
+    restart: unless-stopped
+    # Zero-Trust Segregation
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE # Recommended for packet processing priority
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev
+      - /var/run:noexec,nosuid,nodev
+    volumes:
+      - ./suricata_logs:/var/log/suricata # Store output to be read by backend
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gateflame-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    # Zero-Trust Segregation
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev
+    volumes:
+      # Writable volume for time-series data
+      - ./prometheus_data:/prometheus
+      # Read-only configuration
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
