@@ -1,0 +1,43 @@
+GATE^FLAME - GEMINI_API_KEY: ROTATE
+Preserved 2026-08-13 by a Claude session before scrubbing 14 plaintext copies.
+Carried into this repo 2026-09-20, WITH THE TOKEN REMOVED.
+Governance: Policy 986 AED | (c) 2018-2026 Ionity (Pty) Ltd
+
+WHY THIS EXISTS
+  The token sat in plaintext in 14 identical .env files across the
+  Antigravity workspaces. It never reached the git repo - a full history scan
+  for AIza/sk-/ghp_/Bearer/PEM came back clean. Nothing in the app reads
+  GEMINI_API_KEY (no import.meta.env reference, no define: block, @google/genai
+  imported nowhere), so removing it broke nothing.
+
+WHAT TO DO
+  1. Revoke the token at https://aistudio.google.com/apikey
+  2. Issue a replacement only if something actually needs one.
+  3. Delete every remaining plaintext copy (see below).
+
+THE TOKEN IS NOT IN THIS FILE
+  The original of this note carried the live token on its last line. That line
+  was removed on 2026-09-20 rather than committed, because committing it would
+  have put a live credential into the repository's permanent history - which is
+  the one place the 2026-08-13 scan proved it had never been.
+
+  The original, token and all, is still at:
+    C:\Users\DGMic\GateFlame-Backup-2026-08-13\_fix-2026-08-13\ROTATE-ME.txt
+  Read the token there if you need it to identify the right key at Google.
+  Once it is revoked, delete that file.
+
+THIS FILE'S OWN CLAIM WAS FALSE, TWICE
+  The original said "All 14 copies are now the .env.example placeholder. This
+  is the only copy left."
+
+  - 2026-08-18 found that untrue: C:\Users\DGMic\TempGateFlameBuild\.env.local
+    held a live copy, and so did two zip archives.
+  - 2026-09-20 confirmed .env.local is STILL there - 105 bytes, still plaintext,
+    thirty-eight days after the file above declared itself the last copy.
+
+  This is why the instruction is "revoke at the provider", not "hunt the
+  copies". Revocation is one action and it makes every copy worthless at once.
+  Hunting copies has now failed twice.
+
+STATUS: OPEN. Tracked as BUG-12 and as A9 in
+docs/MERGE-2026-09-12-finishing-touches.md.

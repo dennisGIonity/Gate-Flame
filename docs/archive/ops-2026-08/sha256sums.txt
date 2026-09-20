@@ -1,0 +1,3 @@
+2a89b18d86e766276aa335a7809ab09934f67b08c7bd814a51a481656c14344d  GateFlame-Mobile-1.0.1-debug.apk
+cf89c5b36f0946955bd9cd501d994c944cbc60fffc5d164fd2e117efdcaf881a  gateflame-pi-v2-2026-08-15.tar.gz
+abc046dad1639e1fc7e4b189ee91df4c3e4e6d8e5822b1ac2c55831a2d9a9343  gateflame-2026-08-15-DEPLOY.bundle
