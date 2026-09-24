@@ -8,9 +8,16 @@
 > (repo `Ionity-Lab`). Restart GF on the lab: `tools\LAB-RESUME-GATEFLAME.cmd`
 > (refuses unless the Pi holds a `192.168.124.x` address). ESP32 parts for later
 > models: `docs/ESP32-PARTS-INVENTORY-2026-09-24.md`.
-> ⚠ 2026-09-24: Pi seen at `192.168.0.11` (household Wi-Fi), GF paused by the lab
-> scripts, and **Open WebUI holds :8080 on the Pi** — so a route's status code on
-> :8080 no longer proves anything about Gate^Flame until that is moved.
+> ✅ 2026-09-24 (`tools\LAB-MOVE-PI.cmd`, log `tools\lab-move-pi.last.txt`): Pi is
+> **`wabapi@192.168.124.3` on eth0 only** — household Wi-Fi profiles set autoconnect=no
+> (kept, not deleted). `dns-stack/.env` → `192.168.124.3`, Pi-hole DHCP off, feed URL →
+> `192.168.124.4:8091`. Agent answers `/system/status` 200 on `:8080`; blocking proven
+> (`doubleclick.net → 0.0.0.0`). **Open WebUI was stopped (restart=no, volume kept)**
+> because it held :8080 in host-network mode — undo:
+> `docker update --restart=always open-webui && docker start open-webui`.
+> ⚠ **The lab has no internet** (H3C WAN not uplinked): Unbound SERVFAILs every
+> non-blocked name and the Pi's clock is stuck ~4 days behind (NTP can't resolve).
+> A timestamp on the Pi reads as 2026-09-20 — that is the clock, not old data.
 > Addresses in "The live estate" below are stale.
 
 Working notes for Claude. Not documentation — this is the set of things that have
