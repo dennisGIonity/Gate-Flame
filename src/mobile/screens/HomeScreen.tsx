@@ -70,7 +70,9 @@ const LOOK: Record<
   // actually wrong and there is a reason to read it.
   protected: {
     icon: ShieldCheck,
-    title: 'Protected',
+    // The approved line. "Protected"/"safe" were corrected twice: the box filters
+    // DNS, it cannot make a family safe, and the shorter word drifts back to that.
+    title: 'Your network is filtered',
     sub: '',
     ring: 'border-[#10B981]/50',
     text: 'text-[#10B981]',

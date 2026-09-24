@@ -119,16 +119,23 @@ def describe(
 ) -> dict:
     """The full protection state, for the app, the display and the API.
 
-    `protectionStatus` is the field every surface should render from. It has
-    three values and they are deliberately blunt:
+    `protectionStatus` is the field every surface should render from. THIS
+    FUNCTION PRODUCES ONLY THE FIRST TWO; main.py's `_filtering_state_payload`
+    overrides it to the others after asking the watchdog and Pi-hole. The full
+    contract, which every UI must handle exhaustively, is FIVE values:
 
-        active   filtering, household protected
-        paused   OFF because the OWNER asked - their choice, clearly shown
-        bypass   OFF because the box FAILED - see dns-watchdog.sh
+        active        filtering, household protected
+        paused        OFF because the OWNER asked - their choice, clearly shown
+        bypass        OFF because the box FAILED and the watchdog fell back to an
+                      unfiltered resolver so the household keeps working internet
+        degraded      Pi-hole reachable once, but not blocking now (empty gravity,
+                      failed apply, not answering) - `lastError` says why
+        unconfigured  no Pi-hole URL at all - the agent structurally cannot block
 
-    'paused' and 'bypass' are both unprotected, and both must look unprotected.
-    They are distinguished because the remedy differs completely: one is a
-    button the owner presses, the other is a fault.
+    plus two sidecar fields: `applying: bool` while a change is in flight, and
+    `lastError: str | None` carrying the node's own sentence about the fault.
+    Every value except `active` is unprotected and must LOOK unprotected. A UI
+    that knows three of these renders the other two as nothing - see CLAUDE.md.
     """
     if enabled:
         return {

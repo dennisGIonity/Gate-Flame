@@ -71,7 +71,9 @@ export async function learnKioskGateway(): Promise<string | null> {
   const cached = recallGateway();
   if (cached) return cached;
   try {
-    const r = await fetch(`${apiRoot()}/system/netcheck`, { headers: { Accept: 'application/json' } });
+    // /posture/netcheck - `/system/netcheck` never existed, and the swallowed 404
+    // meant every {{gateway}} screen said "I do not know your router address".
+    const r = await fetch(`${apiRoot()}/posture/netcheck`, { headers: { Accept: 'application/json' } });
     if (!r.ok) return null;
     const body = (await r.json()) as { gateway?: string | null };
     if (body.gateway) {

@@ -53,7 +53,11 @@ STATE_DIR="/var/lib/gateflame"
 # household has no DNS. That is the exact shape of the "devices keep losing
 # connection and nothing is in the logs" report. The customer-facing listener is the
 # one that must be healthy, so it is the one that is now tested.
-LAN_IP="${GATEFLAME_LAN_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}"
+# `-` not `:-`: an operator who sets GATEFLAME_LAN_IP="" is saying "do not probe a LAN
+# address", and the test for the detection-failure path relies on an empty value
+# surviving. With `:-` an empty override was silently replaced by route detection, so
+# that path was only ever exercised on machines with no `ip` binary (Windows).
+LAN_IP="${GATEFLAME_LAN_IP-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}"
 FAIL_COUNT_FILE="$STATE_DIR/dns-watchdog-fails"
 BYPASS_FLAG="$STATE_DIR/bypass"
 
@@ -144,6 +148,51 @@ dns_answers() {
   return 0
 }
 
+# ------------------------------------------------------- LAN renumber self-heal
+#
+# THE ADDRESS IN .env IS A SNAPSHOT. THE ROUTE IS THE TRUTH.
+#
+# docker-compose.yml publishes port 53 on ${GATEFLAME_LAN_IP}, and the only thing
+# that ever wrote that key was install-dns-stack.sh, on install day. On 2026-09-21
+# the household's router was replaced and the LAN moved from 192.168.0.0/24 to
+# 192.168.124.0/24. The box came up on .17/.18, docker tried to bind 192.168.0.10:53,
+# which the box no longer held, and Pi-hole could not start. Every escalation in
+# this file - restart, recreate, even bypass - re-read the same stale .env and failed
+# identically, forever. A watchdog whose recovery path cannot recover from the one
+# event that is guaranteed to happen (a router swap) is theatre.
+#
+# So before any `compose up` the recorded address is compared with what the box
+# actually holds right now. If they differ, .env is rewritten to match and the
+# change is logged loudly - a renumber is news an operator wants, not a blip.
+# Rewrite only; the caller decides when to recreate, so this cannot thrash.
+current_lan_ip() { ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}'; }
+
+sync_lan_ip_env() {
+  local envfile="$STACK/.env" recorded="" live="${LAN_IP:-}"
+  [[ -n "$live" ]] || live="$(current_lan_ip)"
+  if [[ -z "$live" ]]; then
+    log "WARNING: cannot determine the box's LAN address - leaving $envfile untouched"
+    return 1
+  fi
+  [[ -f "$envfile" ]] || { log "WARNING: $envfile missing - nothing to reconcile"; return 1; }
+  recorded="$(grep -oP '(?<=^GATEFLAME_LAN_IP=).*' "$envfile" 2>/dev/null || true)"
+  if [[ "$recorded" == "$live" ]]; then
+    return 0
+  fi
+  log "LAN RENUMBERED: .env says GATEFLAME_LAN_IP=${recorded:-<unset>} but this box now holds ${live}. Rewriting so the resolver can bind."
+  if grep -q '^GATEFLAME_LAN_IP=' "$envfile"; then
+    awk -v v="$live" 'BEGIN{FS=OFS="="} $1=="GATEFLAME_LAN_IP" {print "GATEFLAME_LAN_IP=" v; next} {print}' \
+        "$envfile" > "${envfile}.new" || return 1
+    chmod 600 "${envfile}.new" 2>/dev/null || true
+    mv "${envfile}.new" "$envfile" || return 1
+  else
+    printf 'GATEFLAME_LAN_IP=%s\n' "$live" >> "$envfile" || return 1
+  fi
+  # The probe target moves with the address, or the next tick tests the old one.
+  LAN_IP="$live"
+  return 0
+}
+
 read_fails() { cat "$FAIL_COUNT_FILE" 2>/dev/null || echo 0; }
 write_fails() { echo "$1" > "$FAIL_COUNT_FILE" 2>/dev/null || true; }
 
@@ -156,6 +205,7 @@ enter_bypass() {
   # cannot run at once - which is deliberate: it makes it structurally impossible for
   # queries to leak past the filter while things are healthy.
   compose down >/dev/null 2>&1
+  sync_lan_ip_env   # bypass binds the same published address - a stale one fails the same way
   compose -f docker-compose.bypass.yml up -d >/dev/null 2>&1
   sleep 5
   if dns_answers; then
@@ -172,6 +222,7 @@ leave_bypass() {
   log "attempting to restore filtered DNS"
   cd "$STACK" || return 1
   compose -f docker-compose.bypass.yml down >/dev/null 2>&1
+  sync_lan_ip_env
   compose up -d >/dev/null 2>&1
   for _ in $(seq 1 20); do
     sleep 3
@@ -308,6 +359,8 @@ if (( fails == 2 )); then
 else
   log "restart did not help ($fails failures) - recreating the stack"
   compose down >/dev/null 2>&1
+  # A recreate re-reads .env. If the LAN moved under us this is the moment it matters.
+  sync_lan_ip_env
   compose up -d >/dev/null 2>&1
 fi
 

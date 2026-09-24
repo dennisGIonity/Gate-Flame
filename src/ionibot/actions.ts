@@ -23,6 +23,12 @@ import type { ActionKind, LocalContext, ScreenId } from './types';
 
 export interface ActionDeps {
   fetch: typeof fetch;
+  /**
+   * The paired handset's bearer token. Every control route on the node needs it;
+   * until 2026-09-21 actions sent none, so pause/resume/restart all 401'd on a
+   * live box and Ionibot told the customer to "check it has power".
+   */
+  authToken?: () => string | null;
   ctx: LocalContext;
   /** Opens a URL outside the app - the OS browser, or system settings. */
   openExternal: (url: string) => Promise<void>;
@@ -52,24 +58,82 @@ function agent(ctx: LocalContext, path: string): string | null {
   return ctx.nodeIp ? `http://${ctx.nodeIp}:8080${path}` : null;
 }
 
-async function post(
+/**
+ * One call, three honest outcomes. "Cannot reach it" and "reached it, it said
+ * no" need opposite remedies (power vs. a real error message), and a 404 is a
+ * third thing again: the box is fine and the feature is not built on it.
+ */
+export interface CallResult {
+  ok: boolean;
+  /** HTTP status, or null when nothing answered at all. */
+  status: number | null;
+  /** The node's own sentence, when it gave one. */
+  detail: string | null;
+  body: unknown;
+}
+
+const UNREACHABLE: CallResult = { ok: false, status: null, detail: null, body: null };
+
+async function call(
   deps: ActionDeps,
+  method: 'GET' | 'POST' | 'PUT',
   path: string,
   body?: unknown,
-): Promise<boolean> {
+): Promise<CallResult> {
   const url = agent(deps.ctx, path);
-  if (!url) return false;
+  if (!url) return UNREACHABLE;
+  const token = deps.authToken?.() ?? null;
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (token) headers.Authorization = `Bearer ${token}`;
   try {
     const res = await deps.fetch(url, {
-      method: 'POST',
+      method,
       cache: 'no-store',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    return res.ok;
+    let parsed: unknown = null;
+    try {
+      parsed = await res.json();
+    } catch {
+      parsed = null;
+    }
+    const p = parsed as { detail?: unknown; message?: unknown; error?: unknown } | null;
+    const detailRaw = p?.message ?? p?.detail ?? p?.error;
+    const detail =
+      typeof detailRaw === 'string'
+        ? detailRaw
+        : detailRaw && typeof detailRaw === 'object' && 'error' in (detailRaw as object)
+          ? String((detailRaw as { error: unknown }).error)
+          : null;
+    return { ok: res.ok, status: res.status, detail, body: parsed };
   } catch {
-    return false;
+    return UNREACHABLE;
   }
+}
+
+async function post(deps: ActionDeps, path: string, body?: unknown): Promise<CallResult> {
+  return call(deps, 'POST', path, body);
+}
+
+/** Turn a failed CallResult into the sentence the customer should read. */
+function explain(r: CallResult, doing: string): string {
+  if (r.status === null) return `I could not reach your box to ${doing}. Check it has power, then try again.`;
+  if (r.status === 401 || r.status === 403) {
+    return `Your box answered, but this phone is not allowed to ${doing}. Pair it again from Settings.`;
+  }
+  if (r.status === 404) return `Your box is running, but it cannot ${doing} yet - that part is not installed on it.`;
+  return `Your box would not ${doing}: ${r.detail ?? `it answered ${r.status}`}.`;
+}
+
+/** Tree args for `pause` are node duration ids ('5m' | '30m' | '2h' | 'until_reboot' | 'indefinite'). */
+function pauseDuration(arg: string | number | undefined): string {
+  if (typeof arg === 'string') return arg;
+  if (arg === 5) return '5m';
+  if (arg === 30) return '30m';
+  if (arg === 60 || arg === 120) return '2h';
+  return '5m';
 }
 
 export async function runAction(
@@ -112,55 +176,52 @@ export async function runAction(
      * Deliberately a START and never a STOP.
      */
     case 'restartResolver': {
-      const ok = await post(deps, '/api/v1/services/dns/start');
-      return ok
-        ? { go }
-        : { problem: 'I could not reach your box to restart it. Check it has power, then try again.' };
+      const r = await post(deps, '/api/v1/services/dns/start');
+      return r.ok ? { go } : { problem: explain(r, 'restart its filter') };
     }
 
     case 'pause': {
-      const indefinite = arg === 'indefinite';
-      const ok = await post(deps, '/api/v1/filtering/pause', {
-        minutes: indefinite ? null : Number(arg),
-        indefinite,
+      // The route takes PauseBody {duration, reason}. It used to be sent
+      // {minutes, indefinite} - a 422 on every tap, reported as a power fault.
+      const r = await post(deps, '/api/v1/filtering/pause', {
+        duration: pauseDuration(arg),
+        reason: 'Paused from Ionibot',
       });
-      return ok
-        ? { go }
-        : { problem: 'I could not reach your box to pause protection. Check it has power, then try again.' };
+      return r.ok ? { go } : { problem: explain(r, 'pause protection') };
     }
 
     case 'resume': {
-      const ok = await post(deps, '/api/v1/filtering/resume');
-      return ok
-        ? { go }
-        : { problem: 'I could not reach your box to turn protection back on. Check it has power, then try again.' };
+      const r = await post(deps, '/api/v1/filtering/resume');
+      return r.ok ? { go } : { problem: explain(r, 'turn protection back on') };
     }
 
     case 'allowSite': {
       if (!deps.site) return { problem: 'I did not catch which website you meant.' };
-      const ok = await post(deps, '/api/v1/filtering/allow', { domain: deps.site });
-      return ok
-        ? { go }
-        : { problem: 'I could not reach your box to allow that website. Check it has power, then try again.' };
+      // There is no per-site allow route on the node today. Ask anyway so that
+      // the day one exists this starts working, and until then say what is true:
+      // the box is fine, the feature is not on it. Never "check it has power".
+      const r = await post(deps, '/api/v1/filtering/allow', { domain: deps.site });
+      if (r.ok) return { go };
+      if (r.status === 404) {
+        return {
+          problem: `Your box cannot allow a single website yet - that is not built. To reach ${deps.site} now, pause protection for five minutes.`,
+        };
+      }
+      return { problem: explain(r, 'allow that website') };
     }
 
     case 'disableCategory': {
       if (!deps.categoryId) return { problem: 'I did not catch which category you meant.' };
-      const url = agent(deps.ctx, '/api/v1/filtering/categories');
-      if (!url) return { problem: 'I cannot reach your box right now.' };
-      try {
-        const res = await deps.fetch(url, {
-          method: 'PUT',
-          cache: 'no-store',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ [deps.categoryId]: false }),
-        });
-        return res.ok
-          ? { go }
-          : { problem: 'Your box did not accept that change. Try again in a moment.' };
-      } catch {
-        return { problem: 'I could not reach your box. Check it has power, then try again.' };
-      }
+      // The route takes {categories: string[]} - the FULL list to keep on. So
+      // read what is on, drop this one, write the rest back. The old code sent
+      // {[id]: false}, which the node rejected with 422 every time.
+      const current = await call(deps, 'GET', '/api/v1/filtering');
+      if (!current.ok) return { problem: explain(current, 'read its category settings') };
+      const cats = (current.body as { categories?: Array<{ id: string; enabled: boolean }> } | null)?.categories;
+      if (!Array.isArray(cats)) return { problem: 'Your box answered, but not with a category list I recognise.' };
+      const keep = cats.filter((c) => c.enabled && c.id !== deps.categoryId).map((c) => c.id);
+      const r = await call(deps, 'PUT', '/api/v1/filtering/categories', { categories: keep });
+      return r.ok ? { go } : { problem: explain(r, 'change that category') };
     }
 
     /**
@@ -174,14 +235,20 @@ export async function runAction(
      */
     case 'revertRouterAndRemove': {
       const reverted = await post(deps, '/api/v1/pair/router/revert');
-      if (!reverted) {
-        return {
-          problem:
-            'I could not put your router back yet, so I have not removed anything. Your box must be switched on for this. Check its power light and try again.',
-        };
+      if (!reverted.ok) {
+        if (reverted.status === 404) {
+          // The route is not built (router_adapters.py: credentialed login is
+          // deliberately unbuilt). Refusing to unpair is still right - but the
+          // reason must be the true one, not "check its power light".
+          const gw = deps.ctx.gateway ? ` at http://${deps.ctx.gateway}/` : '';
+          return {
+            problem: `Your box cannot change your router by itself yet. Set the router's DNS back to automatic in its admin page${gw}, then you can remove the box from Settings. I have not removed anything.`,
+          };
+        }
+        return { problem: `${explain(reverted, 'put your router back')} I have not removed anything.` };
       }
       const cleared = await post(deps, '/api/v1/pair/devices/revoke-all');
-      if (!cleared) {
+      if (!cleared.ok) {
         return {
           problem:
             'Your router is back to normal and it is safe to unplug the box. I could not finish clearing the paired phones - you can do that later from the app.',

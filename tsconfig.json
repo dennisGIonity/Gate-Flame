@@ -23,5 +23,18 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-mobile",
+    "dist-kiosk",
+    "dist-standalone",
+    "android",
+    "release",
+    "docs",
+    "desktop",
+    "NVIDIA Corporation",
+    "VSCode"
+  ]
 }

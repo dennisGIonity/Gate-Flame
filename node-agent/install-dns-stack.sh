@@ -459,7 +459,11 @@ fi
 if (( USE_LOCALLY )); then
   say "Pointing THIS box's own resolver at Pi-hole"
   [[ -f "$RESOLV_BACKUP" ]] || cp /etc/resolv.conf "$RESOLV_BACKUP"
-  printf 'nameserver 127.0.0.1\nnameserver 1.1.1.1\n' > /etc/resolv.conf
+  # ONE nameserver. A second one here is the exact secondary-DNS pattern this
+  # script warns the customer about 50 lines below: glibc rotates between them,
+  # so the box's own lookups would leak past Pi-hole to Cloudflare unfiltered,
+  # and upstream.py's read-back would pass for an upstream that never answered.
+  printf 'nameserver 127.0.0.1\noptions timeout:2 attempts:2\n' > /etc/resolv.conf
   ok "/etc/resolv.conf updated (original saved to $RESOLV_BACKUP)"
   warn "NetworkManager may overwrite this on reconnect - that is fine, re-run to reapply"
 fi

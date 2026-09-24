@@ -257,8 +257,19 @@ export async function apiRequest<T>(
         notifyTokenRejected();
       }
 
+      // FastAPI raises {"detail": "..."} (or a list of validation errors); our own
+      // envelope uses {"error", "message"}. Until 2026-09-21 only the latter was
+      // read, so every node refusal on the phone rendered as "PUT /x failed with
+      // 409" and the node's actual sentence was thrown away.
+      const detail = parsed?.detail;
+      const detailText =
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d) => d?.msg).filter(Boolean).join('; ') || undefined
+            : undefined;
       throw new ApiRequestError(
-        parsed?.message ?? parsed?.error ?? `${method} ${path} failed with ${response.status}`,
+        parsed?.message ?? detailText ?? parsed?.error ?? `${method} ${path} failed with ${response.status}`,
         { status: response.status, body: parsed },
       );
     }

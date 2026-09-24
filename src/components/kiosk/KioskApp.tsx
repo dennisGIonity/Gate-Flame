@@ -213,7 +213,7 @@ export default function KioskApp() {
             ? `${filtering.durationLabel ?? 'Paused'}${filtering.reason ? ` — “${filtering.reason}”` : ''}`
             : filtering?.protectionStatus === 'bypass'
               ? 'The DNS watchdog fell back to an unfiltered resolver. This is a fault.'
-              : (telemetry.data?.gap ?? null)
+              : (filtering?.lastError ?? telemetry.data?.gap ?? null)
         }
         reachable={reachable}
         refused={refused}
@@ -235,7 +235,7 @@ export default function KioskApp() {
           value anyone could read off it: this is atmosphere, not a chart, and
           the distinction is the reason it is allowed to move at all. */}
       <LiveBackdrop
-        intensity={Math.min(1, (telemetry.data?.blockPercentage ?? 12) / 45)}
+        intensity={Math.min(1, (telemetry.data?.blockPercentage ?? 0) / 45)}
         tone={
           filtering?.protectionStatus === 'active'
             ? CH.blue

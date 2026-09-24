@@ -53,7 +53,7 @@ export function ActivityScreen({ telemetry }: { telemetry: Polled<TelemetrySumma
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-slate-200">Share of lookups blocked</p>
             <p className="mt-1 text-xs leading-relaxed text-[#64748B]">
-              Ads and trackers your devices asked for and did not get. A low number on a quiet
+              Lookups your devices made that the blocklists refused. A low number on a quiet
               network is normal.
             </p>
             <div className="mt-3">

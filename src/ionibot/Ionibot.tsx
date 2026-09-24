@@ -165,6 +165,7 @@ export const Ionibot: React.FC<IonibotProps> = ({
   const actionDeps: ActionDeps = useMemo(
     () => ({
       fetch: probeDeps.fetch,
+      authToken: probeDeps.authToken,
       ctx,
       openExternal,
       openWifiSettings,

@@ -61,8 +61,8 @@ services:
       # too - manual recovery required", and the household is left with no internet
       # at all. The recovery path must be the LEAST brittle thing in the system,
       # not the most.
-      - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/tcp"
-      - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/udp"
+      - "${GATEFLAME_LAN_IP:?GATEFLAME_LAN_IP missing from dns-stack/.env - run install-dns-stack.sh, or let the watchdog rewrite it}:53:53/tcp"
+      - "${GATEFLAME_LAN_IP:?GATEFLAME_LAN_IP missing from dns-stack/.env}:53:53/udp"
       - "127.0.0.1:53:53/tcp"
       - "127.0.0.1:53:53/udp"
     volumes:

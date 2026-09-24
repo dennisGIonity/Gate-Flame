@@ -59,6 +59,10 @@ echo "==> 3. timers"
 # template reads. Secrets stay root:root 0600, same as the agent's drop-ins.
 ENV_FILE="/etc/gateflame/jobs.env"
 install -d -m 0755 /etc/gateflame
+# Create the file at 0600 BEFORE anything is written into it. The old order -
+# redirect first, chmod two lines later - left GATEFLAME_PIHOLE_PASSWORD
+# world-readable for the gap between them, at the shell's default umask.
+install -m 0600 /dev/null "$ENV_FILE"
 systemctl show "$UNIT" -p Environment --value 2>/dev/null | tr ' ' '\n' | grep -E '^GATEFLAME_' > "$ENV_FILE" || true
 grep -q '^GATEFLAME_DATA_ROOT=' "$ENV_FILE" || echo "GATEFLAME_DATA_ROOT=$DATA_ROOT" >> "$ENV_FILE"
 chmod 0600 "$ENV_FILE"

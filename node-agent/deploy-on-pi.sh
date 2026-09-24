@@ -67,7 +67,7 @@ if command -v ss >/dev/null 2>&1; then
       die "Port ${PORT} is already in use by something that is not Gate^Flame:
   ${HOLDER}
 Free it, or re-run with a different port:
-  sudo GATEFLAME_PORT=8081 bash deploy-on-pi.sh"
+  sudo GATEFLAME_PORT=8090 bash deploy-on-pi.sh"   # NOT 8081 - that is Pi-hole's admin port
     fi
   else
     echo "  port ${PORT}: free"
@@ -135,14 +135,15 @@ systemctl --no-pager --lines=0 status gateflame-node-agent || true
 # when DHCP moves the node. This is an *alias* — the Pi's own hostname is left
 # alone, so nothing else on the box changes.
 say "3b/4  Publishing gateflame.local over mDNS"
-cat > /etc/avahi/services/gateflame.service <<'EOF'
+# Unquoted heredoc so ${PORT} expands; the only other special token is avahi's %h.
+cat > /etc/avahi/services/gateflame.service <<EOF
 <?xml version="1.0" standalone='no'?><!--*-nxml-*-->
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
 <service-group>
   <name replace-wildcards="yes">Gate^Flame Node on %h</name>
   <service>
     <type>_http._tcp</type>
-    <port>8080</port>
+    <port>${PORT}</port>
     <txt-record>path=/api/v1/system/status</txt-record>
   </service>
 </service-group>

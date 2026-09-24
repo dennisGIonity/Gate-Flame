@@ -255,7 +255,12 @@ def _rollup_and_prune() -> None:
     the write lock long enough to delay a check-in.
     """
     now = time.time()
-    raw_cutoff = now - RAW_RETENTION_DAYS * 86400
+    # Floor to a whole hour. A moving mid-hour cutoff rolled up a PARTIAL hour,
+    # `ON CONFLICT DO NOTHING` then refused the rest of it on the next pass while
+    # the DELETE below removed the source rows - so every bucket at the boundary
+    # was a biased average, permanently. Only whole hours strictly below the
+    # cutoff are folded, and the same cutoff drives the delete.
+    raw_cutoff = float(int((now - RAW_RETENTION_DAYS * 86400) // 3600) * 3600)
     hourly_cutoff = now - HOURLY_RETENTION_DAYS * 86400
     with _write_lock, db() as conn:
         conn.execute(
@@ -839,6 +844,35 @@ def node_history(node_id: str, window: str = "24h", authorization: str | None = 
     use_raw = span <= RAW_RETENTION_DAYS * 86400
 
     with db() as conn:
+        if not use_raw:
+            # Hourly rows only exist for samples OLDER than the raw window. A 30d
+            # or 90d chart read from samples_hourly alone was therefore missing
+            # its most recent seven days - the week anyone is actually looking
+            # at - with no gap marker. Union in the raw window, averaged per hour
+            # so the two halves mean the same thing. fleet_summary already did
+            # this; node_history did not.
+            hourly = conn.execute(
+                "SELECT hour, cpu, mem_pct mem, disk, temp, pihole_ok_pct "
+                "FROM samples_hourly WHERE node_id = ? AND hour >= ? ORDER BY hour",
+                (node_id, since / 3600),
+            ).fetchall()
+            recent = conn.execute(
+                "SELECT CAST(at/3600 AS INTEGER) hour, AVG(cpu) cpu, "
+                "AVG(CASE WHEN mem_total>0 THEN 100.0*mem_used/mem_total END) mem, "
+                "AVG(disk) disk, AVG(temp) temp, 100.0*AVG(COALESCE(pihole_ok,0)) pihole_ok_pct "
+                "FROM samples WHERE node_id = ? AND at >= ? GROUP BY hour ORDER BY hour",
+                (node_id, since),
+            ).fetchall()
+            seen = {r["hour"] for r in hourly}
+            merged = list(hourly) + [r for r in recent if r["hour"] not in seen]
+            merged.sort(key=lambda r: r["hour"])
+            points = [
+                {"t": r["hour"] * 3600, "cpu": r["cpu"], "mem": r["mem"], "disk": r["disk"],
+                 "temp": r["temp"], "piholeOk": (r["pihole_ok_pct"] or 0) / 100.0}
+                for r in merged
+            ]
+            return JSONResponse({"window": window, "resolution": "hourly averages", "points": points})
+
         if use_raw:
             rows = conn.execute(
                 "SELECT at, cpu, disk, temp, "

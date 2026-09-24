@@ -1,5 +1,9 @@
 # Gate^Flame — read this first
 
+> 📌 **CURRENT PIN: `docs/PIN-2026-09-21.md`** — the LAN moved to `192.168.124.x`,
+> the box is down, and a deep-audit session stopped mid-way. Read it before anything
+> else; it says exactly where to pick up. Addresses in "The live estate" below are stale.
+
 Working notes for Claude. Not documentation — this is the set of things that have
 already cost time at least once. `docs/gateflame-STATE-resume-here.md` is the
 "what's next"; this file is "how this project works and what will bite you".

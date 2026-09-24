@@ -96,7 +96,9 @@ fi
 # Refuse to advertise an address this box does not actually hold. Announcing a
 # resolver that is not there is worse than announcing nothing: clients would add
 # it, try it, and time out on every lookup.
-if ! ip -6 addr show 2>/dev/null | grep -qF "$DNS_ADDR"; then
+# Exact match on the address field: `grep -F 2001:db8::1` also matches a held
+# 2001:db8::10, and we would announce a resolver that does not exist.
+if ! ip -6 -o addr show 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -qxF "$DNS_ADDR"; then
   die "$DNS_ADDR is not an address on this box - refusing to advertise a resolver that does not exist"
 fi
 

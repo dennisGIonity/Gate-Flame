@@ -271,7 +271,8 @@ def get_clients(_=Depends(read_scope)):
     # Owner-typed names are merged in here rather than inside clients.py so
     # that module stays a pure reader of the system - it does no I/O against
     # our own database, which keeps it testable without a Store.
-    return {"clients": clients_mod.list_clients(store.device_names())}
+    rows, gap = clients_mod.list_clients_with_gap(store.device_names())
+    return {"clients": rows, "gap": gap}
 
 
 class DeviceNameBody(BaseModel):
@@ -302,7 +303,8 @@ def set_client_name(mac: str, body: DeviceNameBody, _=Depends(control_scope)):
             detail={"error": "bad_mac", "advisory": "That is not a MAC address."},
         )
     store.set_device_name(normalised, body.name)
-    return {"clients": clients_mod.list_clients(store.device_names())}
+    rows, gap = clients_mod.list_clients_with_gap(store.device_names())
+    return {"clients": rows, "gap": gap}
 
 
 # ---- Modules / services -----------------------------------------------------
@@ -921,7 +923,14 @@ def get_vpn_continents(request: Request, _=Depends(read_scope)):
     already resolved to its own best country right now. See
     vpngate.list_continents() for why this doesn't need its own storage
     concept."""
-    return {"continents": vpngate.list_continents()}
+    # Same three flags as /vpn/regions, for the same reason: an empty list on a
+    # cold cache must not read as "there is nothing on offer". Shield showed
+    # "Not set up on this box yet" for exactly this on 2026-08-31.
+    return {
+        "continents": vpngate.list_continents(),
+        "vpnGateAvailable": vpngate.last_fetch_ok(),
+        "refreshing": vpngate.is_refreshing(),
+    }
 
 
 @app.get("/api/v1/vpn/devices/{mac}/vpngate-config")

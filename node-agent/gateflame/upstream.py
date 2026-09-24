@@ -160,18 +160,39 @@ def read_current() -> list[str] | None:
     return None
 
 
-def _resolve_through_box(name: str, timeout: float = 4.0) -> bool:
-    """Does a lookup through the local resolver come back? Loopback only
-    proves the local half; the LAN address is checked by netcheck. Here we are
-    proving the UPSTREAM answers, for which loopback is the right vantage."""
+def _resolve_through_box(name: str, timeout: float = 4.0, server: str = "127.0.0.1") -> bool:
+    """Does a lookup THROUGH PI-HOLE come back? Loopback only proves the local
+    half; the LAN address is checked by netcheck. Here we are proving the
+    UPSTREAM answers, for which loopback is the right vantage.
+
+    This used to call socket.getaddrinfo(), which asks whatever /etc/resolv.conf
+    says - the router, or a stray 1.1.1.1 - and so reported `resolves: True` for
+    an upstream Pi-hole had never successfully used. A read-back that does not
+    pass through the thing being read is not a read-back. So: one hand-rolled
+    UDP query to 127.0.0.1:53, same shape as dns-watchdog.sh's probe. Any
+    well-formed response with RCODE 0 and at least one answer counts.
+    """
+    import random
+    import struct
+
+    qid = random.randint(0, 0xFFFF)
+    q = struct.pack(">HHHHHH", qid, 0x0100, 1, 0, 0, 0)
+    for part in name.strip(".").split("."):
+        q += bytes([len(part)]) + part.encode()
+    q += b"\x00" + struct.pack(">HH", 1, 1)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(timeout)
     try:
-        socket.setdefaulttimeout(timeout)
-        socket.getaddrinfo(name, 443, proto=socket.IPPROTO_TCP)
-        return True
-    except (socket.gaierror, socket.timeout, OSError):
+        sock.sendto(q, (server, 53))
+        data, _ = sock.recvfrom(512)
+    except (socket.timeout, OSError):
         return False
     finally:
-        socket.setdefaulttimeout(None)
+        sock.close()
+    if len(data) < 12:
+        return False
+    rid, flags, _qd, ancount = struct.unpack(">HHHH", data[:8])
+    return rid == qid and (flags & 0x000F) == 0 and ancount > 0
 
 
 def describe() -> dict:

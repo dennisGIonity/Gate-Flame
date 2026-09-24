@@ -85,8 +85,8 @@ services:
       # every subsequent boot, until a human edits this file. An appliance must not
       # have a LAN address baked into it. Set GATEFLAME_LAN_IP in dns-stack/.env;
       # install-dns-stack.sh now writes it there from the live routing table.
-      - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/tcp"
-      - "${GATEFLAME_LAN_IP:-192.168.0.10}:53:53/udp"
+      - "${GATEFLAME_LAN_IP:?GATEFLAME_LAN_IP missing from dns-stack/.env - run install-dns-stack.sh, or let the watchdog rewrite it}:53:53/tcp"
+      - "${GATEFLAME_LAN_IP:?GATEFLAME_LAN_IP missing from dns-stack/.env}:53:53/udp"
       - "127.0.0.1:53:53/tcp"
       - "127.0.0.1:53:53/udp"
       # IPv6. Phones PREFER it, so a resolver that only answers on IPv4 is a

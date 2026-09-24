@@ -180,7 +180,7 @@ export function MobileApp() {
           Sits under a radial glow for depth; the design system asks for this
           rather than drop shadows, which turn to mud on an OLED panel. */}
       <LiveBackdrop
-        intensity={Math.min(1, (telemetry.data?.blockPercentage ?? 10) / 40)}
+        intensity={Math.min(1, (telemetry.data?.blockPercentage ?? 0) / 40)}
         tone={backdropTone}
         className="opacity-[0.55]"
       />

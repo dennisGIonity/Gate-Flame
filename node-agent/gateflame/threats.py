@@ -25,7 +25,7 @@ error" — which reads like a network fault and was an API-version fault.
 The replacement is the authenticated REST endpoint, whose real shape was read
 off the live box rather than from documentation:
 
-    GET /api/queries?length=N   header `sid: <sid>`
+    GET /api/queries?length=N   header `X-FTL-SID: <sid>`   (NOT a bare `sid` header - see BUG-18)
 
     {"queries": [
       {"id": 3025, "time": 1786968066.970423, "type": "A",

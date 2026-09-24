@@ -108,12 +108,39 @@ def list_clients(owner_names: dict[str, str] | None = None) -> list[dict]:
 
     `owner_names` maps mac -> the name the owner typed for it (storage.py).
     Passing nothing is valid and simply means no device has been named yet.
+
+    Returns the rows only; use `list_clients_with_gap()` from a route so that a
+    neighbour table that could not be READ is reported as a gap rather than as
+    an empty house.
     """
+    rows, _gap = list_clients_with_gap(owner_names)
+    return rows
+
+
+def list_clients_with_gap(
+    owner_names: dict[str, str] | None = None,
+) -> tuple[list[dict], str | None]:
+    """(rows, gap). `gap` is None when the table was read, otherwise one sentence.
+
+    "Could not look" and "looked, nothing there" must never share a payload: the
+    device list is the one client-facing feature ADR-001 keeps, and an empty list
+    reads as "no devices on your network" to a customer whose phone is in their
+    hand. A missing `ip` binary, a timeout or a non-zero exit are all the former.
+    """
+    gap: str | None = None
     try:
         out = subprocess.run(["ip", "neigh"], capture_output=True, text=True, timeout=2)
-        table = out.stdout if out.returncode == 0 else ""
-    except (OSError, subprocess.SubprocessError):
+        if out.returncode == 0:
+            table = out.stdout
+        else:
+            table = ""
+            gap = f"could not read the neighbour table (`ip neigh` exited {out.returncode})"
+    except subprocess.TimeoutExpired:
         table = ""
+        gap = "could not read the neighbour table (`ip neigh` timed out)"
+    except (OSError, subprocess.SubprocessError) as exc:
+        table = ""
+        gap = f"could not read the neighbour table ({exc.__class__.__name__})"
 
     leases = _read_leases()
     owner_names = {k.lower(): v for k, v in (owner_names or {}).items()}
@@ -166,7 +193,8 @@ def list_clients(owner_names: dict[str, str] | None = None) -> list[dict]:
 
     # Named devices first, then anything with a vendor, then bare MACs - so
     # the list the owner has curated stays at the top as it grows.
-    return sorted(
+    rows = sorted(
         by_mac.values(),
         key=lambda c: (c["ownerName"] is None, c["vendor"] is None, c["label"].lower()),
     )
+    return rows, gap

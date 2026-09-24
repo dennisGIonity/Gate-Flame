@@ -474,7 +474,7 @@ export const TREE: Tree = {
         'If you want to be completely sure it is not us, pause protection for five minutes and try again.',
       ],
       actions: [
-        { label: 'Pause for 5 minutes', kind: 'pause', arg: 5, go: 'IB-502', weight: 'primary' },
+        { label: 'Pause for 5 minutes', kind: 'pause', arg: '5m', go: 'IB-502', weight: 'primary' },
         { label: 'OK', kind: 'close' },
       ],
     },
@@ -504,8 +504,9 @@ export const TREE: Tree = {
         'Your settings are remembered. Nothing is lost when protection comes back on.',
       ],
       actions: [
-        { label: '5 minutes', kind: 'pause', arg: 5, go: 'IB-502', weight: 'primary' },
-        { label: '1 hour', kind: 'pause', arg: 60, go: 'IB-502' },
+        { label: '5 minutes', kind: 'pause', arg: '5m', go: 'IB-502', weight: 'primary' },
+        { label: '30 minutes', kind: 'pause', arg: '30m', go: 'IB-502' },
+        { label: '2 hours', kind: 'pause', arg: '2h', go: 'IB-502' },
         { label: 'Until I turn it back on', kind: 'pause', arg: 'indefinite', go: 'IB-502', weight: 'danger' },
         { label: 'Cancel', kind: 'back' },
       ],

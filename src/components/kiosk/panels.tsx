@@ -10,7 +10,7 @@
 import { useMemo, useState } from 'react';
 import { ShieldCheck, ShieldOff, ShieldAlert } from 'lucide-react';
 
-import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
+import type { FilteringState, PauseDurationId, ProtectionStatus, ThreatLevelId } from '../../types/filtering';
 import {
   DASH,
   clockTime,
@@ -54,11 +54,21 @@ export interface PanelContext {
 // Overview
 // ===========================================================================
 
-const PROTECTION_COPY: Record<string, { icon: typeof ShieldCheck; title: string; tone: string }> = {
-  active: { icon: ShieldCheck, title: 'Network filtered', tone: 'text-[#10B981]' },
+// Record<ProtectionStatus, …> not Record<string, …>: the compiler now refuses a
+// build that forgets a state. Until 2026-09-21 this knew three of five, and a
+// `degraded` box - the exact GF-72TYTITQ failure - showed "Reading protection
+// state…" on the wall, forever, in grey. Every non-active state is unprotected
+// and must look it; they differ only so the remedy can be named.
+export const PROTECTION_COPY: Record<ProtectionStatus, { icon: typeof ShieldCheck; title: string; tone: string }> = {
+  active: { icon: ShieldCheck, title: 'Your network is filtered', tone: 'text-[#10B981]' },
   paused: { icon: ShieldOff, title: 'Filtering paused by you', tone: 'text-[#F59E0B]' },
   bypass: { icon: ShieldAlert, title: 'Unprotected — the box fell back', tone: 'text-[#E11D48]' },
+  degraded: { icon: ShieldAlert, title: 'Unprotected — not blocking', tone: 'text-[#E11D48]' },
+  unconfigured: { icon: ShieldAlert, title: 'Unprotected — setup incomplete', tone: 'text-[#E11D48]' },
 };
+
+const FAULT_STATES: ReadonlySet<ProtectionStatus> = new Set(['bypass', 'degraded', 'unconfigured']);
+export const isFault = (s: ProtectionStatus | null | undefined): boolean => !!s && FAULT_STATES.has(s);
 
 export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
   const clients = usePolled<{ clients: LanClient[] }>('/clients', 8000, active);
@@ -89,7 +99,7 @@ export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
     <div className="grid grid-cols-12 gap-6">
       <Card
         className="col-span-12"
-        accent={status === 'active' ? 'good' : status === 'bypass' ? 'fault' : status ? 'warn' : 'none'}
+        accent={status === 'active' ? 'good' : isFault(status) ? 'fault' : status ? 'warn' : 'none'}
       >
         <div className="flex flex-wrap items-center justify-between gap-8">
           <div className="flex items-center gap-6">
@@ -114,9 +124,13 @@ export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
                     it needs the Filtering tab.
                   </>
                 )}
+                {(status === 'degraded' || status === 'unconfigured') && (
+                  // The node's own sentence, verbatim. We do not guess at why.
+                  <>{filtering?.lastError ?? 'The box is not blocking anything right now. See the Filtering tab.'}</>
+                )}
                 {status === 'active' && (
                   <>
-                    Threat level {filtering?.threatLevel.level ?? DASH} ·{' '}
+                    Malicious and unwanted domains are being blocked before your devices can reach them · threat level {filtering?.threatLevel.level ?? DASH} ·{' '}
                     {num(filtering?.threatLevel.blocklistCount)} blocklists ·{' '}
                     {filtering?.categories.filter((c) => c.enabled).length ?? 0} content categories on
                   </>
@@ -138,6 +152,13 @@ export function OverviewPanel({ telemetry, filtering, active }: PanelContext) {
             </div>
           </div>
         </div>
+        {filtering?.applying && (
+          <p className="mt-4 flex items-center gap-2 text-sm text-[#38BDF8]">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#38BDF8]" />
+            Applying — the blocklists are rebuilding.
+          </p>
+        )}
+        {status !== 'degraded' && status !== 'unconfigured' && <GapNote text={filtering?.lastError} />}
         <GapNote text={telemetry?.gap} />
       </Card>
 
@@ -291,7 +312,9 @@ export function FilteringPanel({
         subtitle={
           filtering.protectionStatus === 'bypass'
             ? 'The watchdog has fallen back to an unfiltered resolver. This is a fault, not a setting — resuming will not fix it on its own.'
-            : 'Filtering can be switched off deliberately. It always says so, and a timed pause always expires on its own.'
+            : isFault(filtering.protectionStatus)
+              ? 'The box is not blocking. This is a fault, not a pause — Resume cannot fix it. The reason below is the node’s own.'
+              : 'Filtering can be switched off deliberately. It always says so, and a timed pause always expires on its own.'
         }
         accent={filtering.protectionStatus === 'active' ? 'good' : filtering.protectionStatus === 'bypass' ? 'fault' : 'warn'}
         right={
@@ -345,14 +368,18 @@ export function FilteringPanel({
             <p className="text-lg text-slate-200">
               {filtering.protectionStatus === 'bypass'
                 ? 'Unfiltered because the DNS stack failed over.'
-                : `Paused — ${filtering.durationLabel ?? 'unknown duration'}`}
+                : isFault(filtering.protectionStatus)
+                  ? (filtering.lastError ?? 'Not blocking — the node did not say why.')
+                  : `Paused — ${filtering.durationLabel ?? 'unknown duration'}`}
             </p>
             {filtering.secondsRemaining !== null && (
               <p className="mt-1 font-mono text-3xl tabular-nums text-[#F59E0B]">
                 {duration(filtering.secondsRemaining)} remaining
               </p>
             )}
-            {filtering.reason && <p className="mt-2 text-sm text-slate-400">Reason given: “{filtering.reason}”</p>}
+            {filtering.protectionStatus === 'paused' && filtering.reason && (
+              <p className="mt-2 text-sm text-slate-400">Reason given: “{filtering.reason}”</p>
+            )}
           </div>
         )}
       </Card>
@@ -461,7 +488,7 @@ export function FilteringPanel({
       <Card
         className="col-span-7"
         title="Threat level"
-        subtitle="How much danger is blocked. Every list behind this dial blocks something actively hostile — malware, phishing, command-and-control, tracking."
+        subtitle="Which blocklists the node loads. Each level’s description below is the node’s own, not ours."
       >
         {!canWrite && <ViewerNotice what="The threat level" />}
         <SegmentedControl<ThreatLevelId>
@@ -626,7 +653,9 @@ export function ThreatsPanel({ active }: PanelContext) {
             title="Nothing has been blocked in this window"
             detail={
               threats.data?.gap ??
-              `The node examined the last ${threats.data?.scanned ?? 0} queries and refused none of them. That is a real answer, not a missing one.`
+              (threats.data?.scanned == null
+                ? 'The node did not report how many queries it examined.'
+                : `The node examined the last ${threats.data.scanned} queries and refused none of them. That is a real answer, not a missing one.`)
             }
           />
         ) : (

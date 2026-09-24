@@ -10,6 +10,14 @@ Classification: PUBLIC | Building Tomorrow, Today. | Anything is Possible with G
 ========================================================================================
 ```
 
+> ## ⚠️ NEWER PIN: [`docs/PIN-2026-09-21.md`](PIN-2026-09-21.md) — READ THAT FIRST
+>
+> **The LAN renumbered to `192.168.124.0/24`; the Pi is at `.124.17/.18` with every
+> port refusing; DNS is down because `dns-stack/.env` still says `192.168.0.10`.**
+> The 2026-09-21 deep audit fixed ~30 bugs (fix + tests, not deployed) and stopped
+> at step 5 of 6 (screenshots). Everything below this box is **2026-08-31** and its
+> addresses are now wrong.
+
 > Pinned at end of day, 2026-08-31. Everything below is accurate as of the
 > moment it was written — read this first, it is the actual state, not a plan.
 

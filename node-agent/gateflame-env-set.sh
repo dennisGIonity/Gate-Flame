@@ -52,7 +52,11 @@ if grep -q "^${KEY}=" "$ENVFILE"; then
 else
   printf '%s=%s\n' "$KEY" "$VALUE" >> "$ENVFILE"
 fi
-log "$KEY set to '$VALUE' (was '${CURRENT:-unset}')"
+if [[ "$KEY" =~ (PASSWORD|TOKEN|SECRET|KEY) ]]; then
+  log "$KEY updated (value redacted - it is a credential)"
+else
+  log "$KEY set to '$VALUE' (was '${CURRENT:-unset}')"
+fi
 
 cd "$STACK" || die "cannot enter $STACK"
 docker compose up -d >/dev/null 2>&1 || die "docker compose up -d failed"

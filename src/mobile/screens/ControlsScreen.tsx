@@ -59,7 +59,9 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
         <Card>
           <p className="text-sm text-[#64748B]">
             {filtering.error
-              ? 'Cannot reach your box.'
+              ? filtering.error.unreachable
+                ? 'Cannot reach your box.'
+                : `Your box answered, but with an error: ${filtering.error.message}`
               : 'Reading your settings from the box…'}
           </p>
         </Card>
@@ -136,7 +138,7 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
       <Card>
         <p className="mb-1 text-sm font-semibold text-slate-100">How much to block</p>
         <p className="mb-3 text-xs leading-relaxed text-[#64748B]">
-          Higher blocks more, and more false positives.
+          Each level’s description is the node’s own.
         </p>
         <div className="flex flex-col gap-2">
           {f.availableLevels.map((lvl) => {

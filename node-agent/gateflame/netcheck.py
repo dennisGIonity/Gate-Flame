@@ -57,7 +57,23 @@ class NetcheckRunner:
     def _find_bash(self) -> str | None:
         if self._bash:
             return self._bash
-        return shutil.which("bash")
+        # Probe, do not trust the name. On Windows shutil.which("bash") returns
+        # the WSL launcher, which prints a banner and exits 0 - the exact trap
+        # CLAUDE.md names, and the one the shell tests already avoid.
+        for candidate in ("/bin/bash", "/usr/bin/bash", shutil.which("bash")):
+            if not candidate:
+                continue
+            try:
+                probe = subprocess.run(
+                    [candidate, "-c", "echo GATEFLAME_BASH_OK"],
+                    capture_output=True, text=True, timeout=5,
+                )
+            except (OSError, subprocess.SubprocessError):
+                continue
+            if "GATEFLAME_BASH_OK" in probe.stdout:
+                self._bash = candidate
+                return candidate
+        return None
 
     def _run_subprocess(self, argv: list[str]) -> tuple[int, str, str]:
         proc = subprocess.run(

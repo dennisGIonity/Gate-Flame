@@ -23,6 +23,8 @@ import type {
 export interface ApiError {
   error: string;
   message?: string;
+  /** FastAPI's native envelope: HTTPException(detail=...) lands here, not in `message`. */
+  detail?: string | Array<{ msg?: string; loc?: unknown[] }>;
   attemptsRemaining?: number;
   retryAfterSeconds?: number;
 }
