@@ -1,8 +1,17 @@
 # Gate^Flame — read this first
 
-> 📌 **CURRENT PIN: `docs/PIN-2026-09-21.md`** — the LAN moved to `192.168.124.x`,
-> the box is down, and a deep-audit session stopped mid-way. Read it before anything
-> else; it says exactly where to pick up. Addresses in "The live estate" below are stale.
+> 📌 **CURRENT STATUS: `docs/STATUS-2026-09-24-where-we-are.md`** (supersedes the
+> reading of `docs/PIN-2026-09-21.md`). The household LAN did **not** renumber —
+> `192.168.124.x` is Dennis's new **isolated lab** (H3C Magic, `192.168.124.1`).
+> **All Gate^Flame work happens on the lab. Leave the TP-Link (`192.168.0.1`) alone —
+> it is household internet only.** Lab definition: `E:\.IONITY-LAB\lab.json`
+> (repo `Ionity-Lab`). Restart GF on the lab: `tools\LAB-RESUME-GATEFLAME.cmd`
+> (refuses unless the Pi holds a `192.168.124.x` address). ESP32 parts for later
+> models: `docs/ESP32-PARTS-INVENTORY-2026-09-24.md`.
+> ⚠ 2026-09-24: Pi seen at `192.168.0.11` (household Wi-Fi), GF paused by the lab
+> scripts, and **Open WebUI holds :8080 on the Pi** — so a route's status code on
+> :8080 no longer proves anything about Gate^Flame until that is moved.
+> Addresses in "The live estate" below are stale.
 
 Working notes for Claude. Not documentation — this is the set of things that have
 already cost time at least once. `docs/gateflame-STATE-resume-here.md` is the
