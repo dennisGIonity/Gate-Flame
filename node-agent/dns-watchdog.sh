@@ -175,7 +175,9 @@ sync_lan_ip_env() {
     return 1
   fi
   [[ -f "$envfile" ]] || { log "WARNING: $envfile missing - nothing to reconcile"; return 1; }
-  recorded="$(grep -oP '(?<=^GATEFLAME_LAN_IP=).*' "$envfile" 2>/dev/null || true)"
+  # awk, not `grep -oP`: PCRE is not compiled into every grep (Git-for-Windows' is not),
+  # and a failed grep read as "<unset>" - which silently rewrote a key it never read.
+  recorded="$(awk '/^GATEFLAME_LAN_IP=/{sub(/^GATEFLAME_LAN_IP=/,""); sub(/\r$/,""); print; exit}' "$envfile" 2>/dev/null || true)"
   if [[ "$recorded" == "$live" ]]; then
     return 0
   fi
