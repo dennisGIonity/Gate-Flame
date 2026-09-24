@@ -39,7 +39,9 @@ $candidates = @(Get-NetIPAddress -AddressFamily IPv4 |
         $_.IPAddress -notlike '192.168.137.*'   # ICS, never the household LAN
     })
 
-$nodeSubnet = '192.168.0.'
+# 2026-09-24: the boxes live on the Ionity lab (H3C, 192.168.124.0/24); the laptop is
+# pinned at 192.168.124.4 there. The household 192.168.0.x network carries no boxes.
+$nodeSubnet = '192.168.124.'
 $preferred = $candidates | Where-Object { $_.IPAddress -like "$nodeSubnet*" } | Select-Object -First 1
 $ip = if ($preferred) { $preferred.IPAddress } else { ($candidates | Select-Object -First 1).IPAddress }
 

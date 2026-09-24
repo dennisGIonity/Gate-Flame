@@ -16,7 +16,9 @@
 # ========================================================================================
 set -u
 FEED_HOST="${1:-192.168.124.4}"
-STAGE=/tmp/gfstage
+# The directory this script sits in IS the staged release: /tmp/gfstage when pushed by
+# stage-pi-release.sh, or the unpacked GateFlame-Node tarball when run as upgrade.sh.
+STAGE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENT=/opt/gateflame/node-agent
 KIOSK=/opt/gateflame/kiosk
 STACK=/home/wabapi/node-agent/dns-stack
