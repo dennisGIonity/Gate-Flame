@@ -11,7 +11,9 @@
 set -eu
 unset NODE_ENV
 C=/e/Gateflame; cd $C
-NAME="$(grep VERSION_NAME android/version.properties | cut -d= -f2)"
+NAME="$(grep '^VERSION_NAME=' android/version.properties | cut -d= -f2 | tr -d '\r ')"
+[ -n "$NAME" ] || { echo "no VERSION_NAME"; exit 1; }
+find release -maxdepth 1 -name 'GateFlame-# *' -exec rm -rf {} + 2>/dev/null || true
 VER="$NAME+$(git rev-parse --short HEAD)"
 OUT=release/GateFlame-$NAME
 rm -rf "$OUT" "release/GateFlame-$NAME.zip"; mkdir -p "$OUT"/{node,mobile,fleet-console,docs}

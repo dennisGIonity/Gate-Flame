@@ -8,7 +8,7 @@ PI=wabapi@$PIIP
 O=(-o ConnectTimeout=6 -o HostKeyAlias=raspberrypi -o StrictHostKeyChecking=yes)
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOG=$ROOT/tools/stage-pi-release.last.txt
-VER="$(grep VERSION_NAME $ROOT/android/version.properties | cut -d= -f2)+$(git -C $ROOT rev-parse --short HEAD)"
+VER="$(grep '^VERSION_NAME=' $ROOT/android/version.properties | cut -d= -f2 | tr -d '\r ')+$(git -C $ROOT rev-parse --short HEAD)"
 ssh-add -l >/dev/null 2>&1 || { rm -f ~/.ssh/agent.sock; eval "$(ssh-agent -a ~/.ssh/agent.sock -s)" >/dev/null; ssh-add ~/.ssh/id_ed25519 || exit 1; }
 [ -f "$ROOT/dist-kiosk/index.html" ] || { echo "build first: bash tools/build-bundles.sh"; exit 1; }
 echo "staging $VER -> $PI (feed $FEED)"
