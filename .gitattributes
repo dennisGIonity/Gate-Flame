@@ -25,6 +25,9 @@
 *.woff2     binary
 *.ttf       binary
 *.mp4       binary
+*.docx      binary
+*.xlsx      binary
+*.pptx      binary
 
 # ── Scripts that must keep LF even on Windows ─────────
 *.sh        text eol=lf
