@@ -1,0 +1,33 @@
+== /e/Gateflame/VSCode
+   origin: (no origin)
+   commits on no remote-tracking ref: 0
+   dirty files: 0
+== /e/_ARCHIVE-2026-08-16/App-antigravity-workspace
+   origin: git@github.com:dennisGIonity/Dennis.git
+   archive/antigravity-workspace-2026-08-11 949eae4 upstream= 
+   main 09ec6d3 upstream=origin/main [ahead 2]
+   commits on no remote-tracking ref: 3
+   dirty files: 11
+== /e/_ARCHIVE-2026-08-16/Dennis-working-copy
+   origin: https://github.com/dennisGIonity/Dennis.git
+   archive/dennis-working-copy-2026-08-09 5cddc81 upstream= 
+   main 5cddc81 upstream=origin/main [ahead 3, behind 1]
+   commits on no remote-tracking ref: 3
+   dirty files: 5
+== /c/Users/DGMic/.copilot/repos/Dennis
+   origin: https://github.com/dennisGIonity/Dennis.git
+   main fba1fd8 upstream=origin/main 
+   commits on no remote-tracking ref: 0
+   dirty files: 0
+== /c/Users/DGMic/.copilot/repos/DennisGTest
+   origin: https://github.com/Wabakipi-Designs/DennisGTest.git
+   dennisgionity-android-live-wallpaper 1a027ee upstream= 
+   dennisgionity-psychic-meme 1a027ee upstream= 
+   main fee82e5 upstream=origin/main [behind 5]
+   commits on no remote-tracking ref: 1
+   dirty files: 1
+== /c/Users/DGMic/.gemini/history/antigravity-ide
+   origin: (no origin)
+   main 0eb1a16 upstream= 
+   commits on no remote-tracking ref: 1
+   dirty files: 4

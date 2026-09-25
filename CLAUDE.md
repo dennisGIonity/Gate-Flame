@@ -1,5 +1,12 @@
 # Gate^Flame — read this first
 
+> 🗂 **WHERE EVERYTHING LIVES: `docs/INVENTORY-REPOS-AND-FOLDERS-2026-09-25.md`.** One
+> repo (`dennisGIonity/Gate-Flame`), one working copy (`E:\Gateflame`). Verified
+> 2026-09-25: no commit on this machine is missing from GitHub. The "Gate^Flame Finishing
+> touches" Claude project is fully captured (docs + all 8 chats in
+> `docs/archive-finishing-touches/`) and is being retired — work continues in the
+> "Gate Flame official 6Gb Original + Ultimate + Zero/Pico/ESP32" project.
+
 > 📌 **CURRENT STATUS: `docs/STATUS-2026-09-24-where-we-are.md`** (supersedes the
 > reading of `docs/PIN-2026-09-21.md`). The household LAN did **not** renumber —
 > `192.168.124.x` is Dennis's new **isolated lab** (H3C Magic, `192.168.124.1`).
@@ -280,6 +287,7 @@ about. Advertising ourselves narrows the gap; it never closes it.
 | **`load-key.cmd` fails on a stale agent socket** | `unix_listener: cannot bind to path /c/Users/DGMic/.ssh/agent.sock: Address already in use` (also seen as `Operation not supported`). Reads like a broken script; it is a leftover socket file. Fix, from Git-bash: `rm -f ~/.ssh/agent.sock && eval "$(ssh-agent -a ~/.ssh/agent.sock -s)" && ssh-add ~/.ssh/id_ed25519`. |
 | `pathlib.Path` on appliance paths | Appliance paths are always POSIX. `Path` is platform-dependent and mangles them on Windows. Use `PurePosixPath`. |
 | Don't test in BlueStacks | `emulator-5554` is BlueStacks: NATs, no LAN, no mDNS, Android 9 x86_64. |
+| **Never run git in the Cowork Linux sandbox against `E:\Gateflame`** | Even a "read-only" `git status` refreshes the index: it creates `.git/index.lock`, then the mount refuses the unlink (`Operation not permitted`) and the lock **stays behind**, blocking every Windows git command with "Another git process seems to be running". Happened 2026-09-25; removed from PowerShell. Run all git through Git-bash on Windows (`& 'C:\Program Files\Git\bin\bash.exe' -lc ...`), via a script in `tools/` — inline quoting through PowerShell → bash also silently eats output. If a lock is ever found, confirm no git.exe is running, then delete it. |
 
 ## The live estate
 
@@ -294,7 +302,8 @@ about. Advertising ourselves narrows the gap; it never closes it.
 - **Fleet control plane**: `GATEFLAME_FEED_URL=http://192.168.0.3:8091/api/v1/nodes`
   as of 2026-08-31 — it **moved from `.6`**, and `DENNIS-OUTSTANDING-ACTIONS.md` still
   says `192.168.0.6:8080`. Confirmed by an install read-back on the box, not by a doc.
-- Canonical repo `E:\Gateflame`; mobile work in `C:\Users\DGMic\GateFlame-Repo`.
+- Canonical repo `E:\Gateflame` — **all** work, mobile included. `C:\Users\DGMic\GateFlame-Repo`
+  is a stale clone (every commit on GitHub, 2026-09-25) and must not be edited.
 
 ## The business model — decided, and it changes the architecture
 

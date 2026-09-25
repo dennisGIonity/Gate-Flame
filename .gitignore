@@ -87,3 +87,12 @@ fleet/venv/
 # grow with every regeneration; the four hand-curated .docx deliverables
 # already committed in docs/ are unaffected.
 docs/docx/
+
+# Run logs written by tools/*.sh|ps1 next to the script (<name>.last.txt etc.).
+# Evidence for the session that ran them, not source: they carry LAN addresses and
+# box state, and 46 had piled up untracked by 2026-09-25. A log worth keeping is
+# quoted into a docs/ report instead. The audit logs of 2026-09-25 are force-added
+# once, because the inventory cites them as its evidence.
+tools/*.last.txt
+tools/*.build.txt
+tools/*.run.txt

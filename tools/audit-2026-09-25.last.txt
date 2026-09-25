@@ -1,0 +1,81 @@
+=== 2026-09-25T09:37:05+02:00 ===
+--- GitHub refs (anonymous ls-remote) vs canonical local refs ---
+  same        refs/heads/archive/temp-build-scratch-2026-08-13 a7962f5
+  same        refs/heads/fix/mobile-dns-drops 9f07a9a
+  same        refs/heads/main 2bab789
+  same        refs/tags/checkpoint-2026-08-30-main-synced 0b1082d
+  same        refs/tags/checkpoint-2026-08-30-verified 9d29b8b
+  same        refs/tags/desktop-v1.0.2 c937154
+  same        refs/tags/v1.0.2 383956d
+  github-only refs/heads/chore/repo-hygiene 77f4819
+  github-only refs/heads/feat/kiosk-and-icons de01ace
+  github-only refs/heads/feat/kiosk-console de01ace
+  github-only refs/heads/fix/mobile-hookup c0c7563
+  github-only refs/heads/recovered/mobile-hookup c0c7563
+  github-only refs/heads/rescue/repo-c-fix/mobile-hookup c0c7563
+--- canonical: working tree, stashes, identity ---
+?? tools/audit-2026-09-25.sh
+  (untracked tools/*.txt logs: 46)
+  identity: DennisIonity <dennis@ionitynetwork.onmicrosoft.com>
+--- every clone on E: and C:\Users\DGMic (maxdepth 4) ---
+== /e/_ARCHIVE-2026-08-16/GateFlame-Repo-C-drive-retired
+   heads/chore/repo-hygiene 2f71d93 in-canonical  on-github:origin/HEAD->origin/main
+   heads/feat/kiosk-and-icons 2fd62e7 in-canonical  on-github:origin/HEAD->origin/main
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 5   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 1   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-07-27-cdeb7
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 1   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-07-28-020ce
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-07-28-a8004
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-03-4484d
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-03-c3f3f
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-03-dc9a4
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-05-02164
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-05-086a8
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-05-3cbf0
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-05-542e3
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-05-9d84d
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-05-a8013
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/antigravity/Gate^Flame-Network-Security-Node-2026-08-05-cddb2
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/GateFlame-Repo
+   heads/chore/repo-hygiene 919856a in-canonical  on-github:origin/HEAD->origin/main
+   heads/fix/mobile-hookup c0c7563 in-canonical  on-github:origin/fix/mobile-hookup
+   heads/main 031a5bc in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+== /c/Users/DGMic/gf-scratch
+   heads/deploybundle 2f71d93 in-canonical  on-github:origin/HEAD->origin/main
+   heads/main 70dda20 in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 141   refs not safely on github: 0
+== /c/Users/DGMic/TempGateFlameBuild
+   heads/archive/temp-build-scratch-2026-08-13 a7962f5 in-canonical  on-github:origin/archive/temp-build-scratch-2026-08-13
+   heads/main 97c6c4c in-canonical  on-github:origin/HEAD->origin/main
+   dirty files: 0   refs not safely on github: 0
+=== done ===

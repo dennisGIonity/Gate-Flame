@@ -1,0 +1,17 @@
+== /e/_ARCHIVE-2026-08-16/App-antigravity-workspace
+   949eae4 2026-08-11 feat: complete backend API integration, Pi-hole polling, an  -> on GitHub via: refs/heads/archive/antigravity-workspace-2026-08-11
+   09ec6d3 2026-08-11 feat: complete backend API integration, Pi-hole polling, an  -> on GitHub via: NOT FOUND
+== /e/_ARCHIVE-2026-08-16/Dennis-working-copy
+   5cddc81 2026-08-09 Implement GateFlame backend API, telemetry, network scanner  -> on GitHub via: refs/heads/archive/dennis-working-copy-2026-08-09
+   5cddc81 2026-08-09 Implement GateFlame backend API, telemetry, network scanner  -> on GitHub via: refs/heads/archive/dennis-working-copy-2026-08-09
+== App-antigravity-workspace: what does unpushed 09ec6d3 add over pushed 949eae4?
+   976 files differ; 0 of them outside the two bundled JDK folders (.jdk/, .jdk21/)
+== /e/Gateflame/VSCode (nested .git inside the canonical tree)
+fatal: Needed a single revision
+.git
+== ignore status of odd top-level dirs in canonical
+VSCode               ignored
+NVIDIA Corporation   NOT ignored (tracked files: 0)
+claude               ignored
+.idea                ignored
+desktop              NOT ignored (tracked files: 4)
