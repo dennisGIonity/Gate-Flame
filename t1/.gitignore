@@ -6,3 +6,6 @@ firmware/GF_T1_Node/secrets.h
 firmware/GF_T1_Node/pubkey.h
 firmware/.build/
 scripts/*.last.txt
+scripts/*.out.txt
+scripts/*.err.txt
+scripts/*.pid
