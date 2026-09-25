@@ -18,11 +18,13 @@ git add .gitignore CLAUDE.md \
   docs/archive-finishing-touches/chats \
   docs/archive/antigravity-untracked/BacteriaPopGame.tsx \
   tools/audit-2026-09-25.sh tools/audit-other-remotes.sh tools/audit-dennis-repo.sh \
-  tools/export-chats.py tools/commit-consolidation-2026-09-25.sh tools/PUSH-2026-09-25.cmd
+  tools/export-chats.py tools/commit-consolidation-2026-09-25.sh tools/PUSH-2026-09-25.cmd \
+  tools/verify-2026-09-25.sh
 git add -f tools/audit-2026-09-25.last.txt tools/audit-other-remotes.last.txt tools/audit-dennis-repo.last.txt
 if git diff --cached --quiet; then echo "nothing new to commit"; else
-  git commit -q -m "Consolidation 2026-09-25: repo+folder inventory, all 8 'Finishing touches' chats archived (secret-scrubbed), BacteriaPopGame preserved, audits prove every local commit is on GitHub; ignore tools run logs; CLAUDE.md: sandbox-git index.lock trap, GateFlame-Repo is stale" \
-    && git log -1 --format='committed %h %an <%ae> %s'
+  msg="Consolidation 2026-09-25: repo+folder inventory, all 8 'Finishing touches' chats archived (secret-scrubbed), BacteriaPopGame preserved, audits prove every local commit is on GitHub; ignore tools run logs; CLAUDE.md: sandbox-git index.lock trap, GateFlame-Repo is stale"
+  git log -1 --format=%s | grep -q '^Consolidation 2026-09-25' && msg="Consolidation 2026-09-25: read-only verify script for the consolidation commit"
+  git commit -q -m "$msg" && git log -1 --format='committed %h %an <%ae> %s'
 fi
 
 if git merge-base --is-ancestor main HEAD; then
