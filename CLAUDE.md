@@ -117,6 +117,12 @@ what the evidence shows, not what is convenient.
 
 ## The product, in one line each
 
+> 🧭 **TIERING (decided 2026-09-25): `docs/TIERING-PLAN.md`.** Models are T1–T4, each in a
+> Standard and a Premium edition. **Standard T3 = Radxa Cubie A7A 6 GB** (what is described
+> below as STANDARD). **Premium T3 = Standard T3 + features to safeguard crypto wallets on a
+> private server, 16 GB** — this *replaces* the "Bond villain" PREMIUM below; whether it is
+> in-path is undecided. T1 = ESP32/Pico + MCP, being scoped. T2/T4 to come.
+
 **STANDARD — civilian households.** A side-car. Household traffic never passes
 through it, so nothing it does can make the connection slower. It wins by being
 *faster* than not having it: warm cache <1 ms vs 20–40 ms to the ISP, and every
