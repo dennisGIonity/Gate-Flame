@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gate^Flame T1 — Fleet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="flame">▲</span> Gate^Flame <b>T1</b> <small>ESP32 fleet · Ionity server</small></div>
+  <div id="srv" class="pill">connecting…</div>
+</header>
+
+<main>
+  <section class="cards" id="cards"></section>
+
+  <section>
+    <h2>Filters <small>built here, signed, pulled by every T1 box</small></h2>
+    <div class="row">
+      <button id="build">Rebuild filters</button>
+      <span id="buildstate" class="muted"></span>
+    </div>
+    <table id="filters"><thead><tr><th>Level</th><th>What it blocks (from the node's own list)</th><th>Version</th>
+      <th>Domains</th><th>Size</th><th>False-positive rate</th><th>Sources</th></tr></thead><tbody></tbody></table>
+    <pre id="buildlog" class="log hidden"></pre>
+  </section>
+
+  <section>
+    <h2>Devices</h2>
+    <table id="devices"><thead><tr><th>Device</th><th>Health</th><th>Protection</th><th>Level</th><th>Filter</th>
+      <th>Queries</th><th>Blocked</th><th>Rate</th><th>Wi-Fi</th><th>Uptime</th><th>FW</th><th></th></tr></thead>
+      <tbody></tbody></table>
+    <p class="muted" id="nodev"></p>
+  </section>
+
+  <section id="detail" class="hidden">
+    <h2 id="dtitle"></h2>
+    <div class="row" id="dcmds">
+      <button data-c="pause" data-a="5">Pause 5 min</button>
+      <button data-c="pause" data-a="30">Pause 30 min</button>
+      <button data-c="resume">Resume</button>
+      <button data-c="update">Update filter now</button>
+      <button data-c="identify">Identify (blink)</button>
+      <select id="dlevel"><option>low</option><option>medium</option><option>high</option></select>
+      <button id="setlevel">Set level</button>
+      <button data-c="reboot" class="warn">Reboot</button>
+    </div>
+    <canvas id="chart" width="1100" height="180"></canvas>
+    <div class="two">
+      <div><h3>Details</h3><table id="dkv"></table></div>
+      <div><h3>Commands</h3><table id="dcmdlog"></table></div>
+    </div>
+  </section>
+
+  <section class="two">
+    <div>
+      <h2>Check a domain</h2>
+      <div class="row"><input id="cdom" placeholder="e.g. doubleclick.net">
+        <select id="clevel"><option>low</option><option>medium</option><option>high</option></select>
+        <button id="check">Check</button></div>
+      <p id="cres" class="verdict"></p>
+    </div>
+    <div>
+      <h2>Allow-list <small>fixes a false positive on every box</small></h2>
+      <div class="row"><input id="adom" placeholder="domain to allow"><button id="aadd">Allow</button></div>
+      <table id="allow"></table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Events</h2>
+    <table id="events"></table>
+  </section>
+</main>
+<footer>© 2018–2026 Antwerp Designs | Ionity (Pty) Ltd — TM2 · Policy 986 AED · Building Tomorrow, Today.</footer>
+<script src="app.js"></script>
+</body>
+</html>

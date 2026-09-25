@@ -121,7 +121,12 @@ what the evidence shows, not what is convenient.
 > Standard and a Premium edition. **Standard T3 = Radxa Cubie A7A 6 GB** (what is described
 > below as STANDARD). **Premium T3 = Standard T3 + features to safeguard crypto wallets on a
 > private server, 16 GB** — this *replaces* the "Bond villain" PREMIUM below; whether it is
-> in-path is undecided. T1 = ESP32/Pico + MCP, being scoped. T2/T4 to come.
+> in-path is undecided. **T1 = ESP32-S3 DNS filter, built in `t1/` (read `t1/README.md`)** —
+> server `tools\T1-SERVER.cmd` on **:8095**, flash `tools\T1-BUILD-FLASH.cmd`. It is NOT the
+> `E:\.ESP32-MCP` project (:8099) and must never be merged into it. T2/T4 to come.
+> ⚠ Windows **Smart App Control blocks unsigned compiled Python extensions** here ("An
+> Application Control policy has blocked this file" — zeroconf, 2026-09-25). Install the
+> pure-Python build (`SKIP_CYTHON=1 pip install --no-binary <pkg>`); `start-server.ps1` does.
 
 **STANDARD — civilian households.** A side-car. Household traffic never passes
 through it, so nothing it does can make the connection slower. It wins by being

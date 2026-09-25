@@ -1,0 +1,8 @@
+[t1] mDNS: _gft1._tcp -> 192.168.0.3:8095
+INFO:     127.0.0.1:56981 - "GET /api/t1/v1/manifest.txt?level=high HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56981 - "GET /api/t1/v1/filter/high/1790344749.bin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56981 - "POST /api/t1/v1/telemetry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56981 - "POST /api/t1/v1/telemetry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53231 - "GET /api/t1/v1/devices HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53231 - "DELETE /api/t1/v1/devices/sim-t1-1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53231 - "GET /api/t1/v1/devices HTTP/1.1" 200 OK

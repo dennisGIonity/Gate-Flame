@@ -1,0 +1,8 @@
+# Operational state of the T1 server: signing PRIVATE key, tokens, filters, database.
+server/data/
+server/.venv/
+# Generated per build / per server. secrets.h carries the Wi-Fi password.
+firmware/GF_T1_Node/secrets.h
+firmware/GF_T1_Node/pubkey.h
+firmware/.build/
+scripts/*.last.txt

@@ -18,7 +18,7 @@ Every model is a **tier (T1–T4)** and every tier comes in two editions, **Stan
 
 | Tier | Standard | Premium | Status |
 |---|---|---|---|
-| **T1** | ESP32 / Pico lightweight model (MCP-connected to the Ionity server) | — | **Being scoped now** (see §T1) |
+| **T1** | **ESP32-S3 N16R8 DNS filter** + Ionity server (MCP, dashboard) — build in `t1/` | — | **Lab build v0.1 (2026-09-25)**: server running, firmware compiles, not yet on hardware |
 | **T2** | — | — | To be defined |
 | **T3** | **Radxa Cubie A7A, 6 GB** — the current product: DNS filtering side-car (ADR-001) | **Standard T3 + enough extra features to safeguard crypto wallets stored on a private server. 16 GB version** | Standard: built. Premium: to be specified |
 | **T4** | — | — | To be defined |
@@ -55,6 +55,9 @@ Standard and Premium T2 + T1 and T4 models as we go."*
 ---
 
 # T1 — ESP32 / Pico + MCP (scoping, 2026-09-25)
+
+> ✅ **Approved by Dennis the same day and built:** `t1/README.md`. Separate folder, port
+> 8095, own mDNS service and `t1_*` MCP tools — `E:\.ESP32-MCP` is untouched.
 
 Engineering assessment, from the parts in `docs/ESP32-PARTS-INVENTORY-2026-09-24.md` and
 the `Esp32-MCP` repo. Numbers marked *estimate* must be measured on the lab bench before
