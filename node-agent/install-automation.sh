@@ -115,21 +115,64 @@ for job in anomaly selfcheck backup; do
 done
 
 echo "==> 4. run each job once, now"
-fail=0
-for job in selfcheck backup anomaly; do
-  if out=$(systemctl start "gateflame-job@${job}.service" 2>&1 && journalctl -u "gateflame-job@${job}.service" -n 1 -o cat --no-pager); then
-    echo "  $job: $out"
-    echo "$out" | grep -q '"ok": true' || { echo "  !! $job did not report ok"; fail=1; }
-  else
-    echo "  !! $job failed to start: $out"; fail=1
+# THE RESULT LINE IS THE JOB'S OWN JSON, NOT "THE LAST LINE OF THE UNIT'S JOURNAL".
+#
+# 1.0.3 read `journalctl -u <unit> -n 1`. For a oneshot, the last journal line of
+# the unit is systemd's own "Finished gateflame-job@..." / "Deactivated
+# successfully", never the job's output - so every job "did not report ok" and the
+# release printed nothing but "FAIL install-automation.sh". The job prints exactly
+# one JSON object; that line is selected by this run's invocation id, then by time,
+# then from .DUMP/logs/jobs.log - and whatever fails, the reason is printed.
+job_line() {  # job, invocation-id, start-epoch
+  local job="$1" inv="$2" since="$3" line=""
+  if [[ -n "$inv" ]]; then
+    line="$(journalctl "_SYSTEMD_INVOCATION_ID=$inv" -o cat --no-pager 2>/dev/null | grep -E '^\{' | tail -n 1)"
   fi
+  if [[ -z "$line" ]]; then
+    line="$(journalctl -u "gateflame-job@${job}.service" --since "@${since}" -o cat --no-pager 2>/dev/null | grep -E '^\{' | tail -n 1)"
+  fi
+  if [[ -z "$line" && -r "$DATA_ROOT/logs/jobs.log" ]]; then
+    line="$(tail -n 50 "$DATA_ROOT/logs/jobs.log" | grep -F "\"job\": \"${job}\"" | tail -n 1)"
+  fi
+  printf '%s' "$line"
+}
+
+fail=0
+FAILED=()
+for job in selfcheck backup anomaly; do
+  since=$(( $(date +%s) - 1 ))
+  unit="gateflame-job@${job}.service"
+  # `|| rc=$?`, not `; rc=$?`: under set -e a failing assignment would end the
+  # script right here - the exact silence this block exists to replace.
+  rc=0
+  err="$(systemctl start "$unit" 2>&1)" || rc=$?
+  inv="$(systemctl show -p InvocationID --value "$unit" 2>/dev/null || true)"
+  line="$(job_line "$job" "$inv" "$since")"
+  if [[ $rc -eq 0 && "$line" == *'"ok": true'* ]]; then
+    echo "  $job: OK  $line"
+    continue
+  fi
+  fail=1
+  if [[ $rc -ne 0 ]]; then
+    result="$(systemctl show -p Result --value "$unit" 2>/dev/null || true)"
+    status="$(systemctl show -p ExecMainStatus --value "$unit" 2>/dev/null || true)"
+    why="the unit failed (result=${result:-?}, exit status=${status:-?})${err:+: $err}"
+  elif [[ -z "$line" ]]; then
+    why="the job ran but its result line could not be found in the journal or $DATA_ROOT/logs/jobs.log"
+  else
+    why="the job reported a failure: $line"
+  fi
+  echo "  !! $job FAILED - $why"
+  # The job's own last words, so nobody has to go and look them up.
+  journalctl -u "$unit" --since "@${since}" -n 8 -o cat --no-pager 2>/dev/null | sed 's/^/  !!    | /' || true
+  FAILED+=("$job")
 done
 
 echo "==> timers"
-systemctl list-timers 'gateflame-*' --no-pager | sed 's/^/  /'
+systemctl list-timers 'gateflame-*' --no-pager | sed 's/^/  /' || true
 
 if [[ $fail -ne 0 ]]; then
-  echo "AUTOMATION INSTALLED WITH FAILURES - see above" >&2
+  echo "AUTOMATION INSTALLED WITH FAILURES: ${FAILED[*]} (reasons above, marked !!)" >&2
   exit 1
 fi
 echo "AUTOMATION INSTALLED AND EVERY JOB RAN OK"

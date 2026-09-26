@@ -1,0 +1,42 @@
+# Gate^Flame Fleet on a real server: the dashboard + Caddy (automatic HTTPS).
+#
+#   cp fleet.env.example fleet.env   # fill it in
+#   mkdir -p data && sudo chown 10001:10001 data
+#   cp /path/from/old/server/fleet.db data/      # optional: bring the fleet with you
+#   docker compose up -d --build
+#
+# The fleet container publishes NO port: only Caddy can reach it, which is why
+# it may trust Caddy's X-Forwarded-* headers (the docker bridge range below).
+services:
+  fleet:
+    build: .
+    image: gateflame-fleet:1.1.0
+    restart: unless-stopped
+    env_file: fleet.env
+    environment:
+      GATEFLAME_FLEET_DB: /data/fleet.db
+      GATEFLAME_FLEET_TRUSTED_PROXIES: "172.16.0.0/12,10.0.0.0/8"
+    volumes:
+      - ./data:/data
+    expose:
+      - "8091"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      fleet:
+        condition: service_healthy
+    env_file: fleet.env          # provides FLEET_DOMAIN (and FLEET_ACME_EMAIL)
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

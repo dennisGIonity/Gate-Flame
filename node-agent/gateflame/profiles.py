@@ -154,7 +154,8 @@ def describe(settings: dict) -> dict:
             }
             for pid, preset in PRESETS.items()
         ],
-        "storageWritable": datadir.status()["subdirs"]["profiles"]["writable"],
+        # One folder's answer, not a full status() walk of all seven.
+        "storageWritable": datadir.writable("profiles"),
     }
 
 
@@ -200,13 +201,13 @@ def validate_accessibility(patch: dict) -> dict:
         try:
             v = float(patch["textScale"])
         except (TypeError, ValueError):
-            raise ValueError("textScale must be a number")
+            raise ValueError("textScale must be a number") from None
         out["textScale"] = round(min(_TEXT_SCALE_MAX, max(_TEXT_SCALE_MIN, v)), 2)
     if "keepAwakeMinutes" in patch:
         try:
             m = int(patch["keepAwakeMinutes"])
-        except (TypeError, ValueError):
-            raise ValueError("keepAwakeMinutes must be an integer")
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("keepAwakeMinutes must be an integer") from None
         out["keepAwakeMinutes"] = min(_KEEP_AWAKE_MAX, max(0, m))
     return out
 

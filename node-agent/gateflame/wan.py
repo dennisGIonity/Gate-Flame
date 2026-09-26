@@ -388,17 +388,22 @@ class LocalMonthCalendar:
     inside a month are handled by the platform rather than by arithmetic here.
     """
 
+    # Naive datetimes ARE the design here (ruff DTZ flags them): a naive value
+    # is host-local civil time, and `.timestamp()` resolves each month boundary
+    # through the local rules at THAT date. An aware datetime built from
+    # `astimezone()` would carry today's fixed UTC offset to both ends of the
+    # month and get a DST month wrong.
     def key(self, ts: float) -> str:
-        dt = datetime.fromtimestamp(ts)
+        dt = datetime.fromtimestamp(ts)  # noqa: DTZ006 - local civil month, see above
         return f"{dt.year:04d}-{dt.month:02d}"
 
     def bounds(self, ts: float) -> tuple[float, float]:
-        dt = datetime.fromtimestamp(ts)
-        start = datetime(dt.year, dt.month, 1)
+        dt = datetime.fromtimestamp(ts)  # noqa: DTZ006 - local civil month, see above
+        start = datetime(dt.year, dt.month, 1)  # noqa: DTZ001
         if dt.month == 12:
-            end = datetime(dt.year + 1, 1, 1)
+            end = datetime(dt.year + 1, 1, 1)  # noqa: DTZ001
         else:
-            end = datetime(dt.year, dt.month + 1, 1)
+            end = datetime(dt.year, dt.month + 1, 1)  # noqa: DTZ001
         return start.timestamp(), end.timestamp()
 
 
@@ -415,12 +420,15 @@ class UtcMonthCalendar(LocalMonthCalendar):
         return f"{dt.year:04d}-{dt.month:02d}"
 
     def bounds(self, ts: float) -> tuple[float, float]:
-        import calendar as _cal
-
+        # Aware UTC datetimes; .timestamp() on them is exact, which is what the
+        # old naive-datetime + calendar.timegm() round trip was emulating.
         dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-        start = datetime(dt.year, dt.month, 1)
-        end = datetime(dt.year + 1, 1, 1) if dt.month == 12 else datetime(dt.year, dt.month + 1, 1)
-        return float(_cal.timegm(start.timetuple())), float(_cal.timegm(end.timetuple()))
+        start = datetime(dt.year, dt.month, 1, tzinfo=timezone.utc)
+        if dt.month == 12:
+            end = datetime(dt.year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            end = datetime(dt.year, dt.month + 1, 1, tzinfo=timezone.utc)
+        return start.timestamp(), end.timestamp()
 
 
 # ── configuration (config.py's pattern, read lazily so tests can drive it) ──

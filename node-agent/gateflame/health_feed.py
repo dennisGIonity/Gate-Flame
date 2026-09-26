@@ -227,7 +227,13 @@ class HealthFeedLoop:
         if not config.feed_enabled:
             logger.info("health feed disabled (GATEFLAME_FEED_ENABLED=false)")
             return
-        self._thread = threading.Thread(target=self._run, daemon=True)
+        if self._thread is not None and self._thread.is_alive():
+            return  # already running; a second start must not double the check-ins
+        # A loop that was stopped once must be startable again (the lifespan
+        # can run more than once in one process - every `with TestClient(app)`
+        # does). With the event left set, the new thread exited immediately.
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="gateflame-feed")
         self._thread.start()
 
     def stop(self) -> None:

@@ -129,7 +129,7 @@ def list_clients_with_gap(
     """
     gap: str | None = None
     try:
-        out = subprocess.run(["ip", "neigh"], capture_output=True, text=True, timeout=2)
+        out = subprocess.run(["ip", "neigh"], capture_output=True, text=True, timeout=2, check=False)
         if out.returncode == 0:
             table = out.stdout
         else:

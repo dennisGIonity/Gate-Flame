@@ -11,36 +11,46 @@ or via the systemd unit in install.sh on the Pi.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import secrets
+import threading
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import anomaly, blocklists, content_categories, datadir, filtering_state, profiles, threat_level, upstream, vpn, vpngate
+from . import (
+    anomaly,
+    blocklists,
+    content_categories,
+    datadir,
+    dns_history,
+    filtering_state,
+    health_feed,
+    pihole,
+    profiles,
+    services,
+    system_history,
+    telemetry,
+    threat_level,
+    threats,
+    upstream,
+    vpn,
+    vpngate,
+)
 from . import clients as clients_mod
-from . import pihole, services, telemetry, threats
 from .config import config
-from . import health_feed
+from .firewall import FirewallRefusal, FirewallUnavailable
 from .health_feed import HealthFeedLoop
-from .security import ScopeChecker, is_loopback, require_lan
+from .security import ScopeChecker, require_lan
 from .storage import Store
 
-app = FastAPI(title="Gate^Flame node-agent")
-
-# LAN clients only, but the LAN includes the phone's own browser/webview
-# talking cross-origin to the node — CORS must allow it. require_lan already
-# blocks anything not RFC1918/loopback/link-local regardless of Origin.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+logger = logging.getLogger("gateflame.main")
 
 store = Store(config.db_path)
 feed_loop = HealthFeedLoop(store)
@@ -50,7 +60,18 @@ read_scope = ScopeChecker(store, ("read", "control", "kiosk"))
 control_scope = ScopeChecker(store, ("control", "kiosk"))
 
 
-@app.on_event("startup")
+# ---------------------------------------------------------------------------
+# Lifespan: what starts with the process and what stops with it.
+#
+# Replaces the deprecated @app.on_event("startup"/"shutdown") pair with the
+# same steps in the same order. Runs once per process under uvicorn; under
+# tests it runs only for `with TestClient(app)`, and every piece of background
+# work in it is gated by config (feed_enabled, history_sampler_enabled,
+# vpngate_warm - tests/conftest.py turns the last two off) so a test never
+# inherits a stray thread or a real network fetch.
+# ---------------------------------------------------------------------------
+
+
 def _startup() -> None:
     # The data root first: everything below may want to persist something,
     # and a box that cannot must say so on /system/status rather than fail
@@ -64,7 +85,8 @@ def _startup() -> None:
     # by construction - see vpngate.ensure_fresh() for why that matters. Load
     # shedding makes reboots weekly here, so "first request after boot" is a
     # common case, not an edge one.
-    vpngate.ensure_fresh()
+    if config.vpngate_warm:
+        vpngate.ensure_fresh()
 
     # An "until_reboot" pause has to actually END at reboot, or the phrase is a
     # lie: the box would come back up still unprotected with no indication that
@@ -81,10 +103,45 @@ def _startup() -> None:
         # where load shedding makes a reboot a weekly event rather than a rare one.
         blocklists.reconcile_async(store)
 
+    # A timed pause must end on time even when no screen is open to notice.
+    pause_watch.start()
 
-@app.on_event("shutdown")
+    # Once-a-minute CPU / memory / temperature / disk history (.DUMP/history).
+    # An unwritable data root leaves it off and /history/system says why.
+    if config.history_sampler_enabled:
+        if system_history.start_sampler(config.history_sample_seconds) is None:
+            logger.warning("system history sampler not started: %s", system_history.get_store().gap)
+
+
 def _shutdown() -> None:
     feed_loop.stop()
+    pause_watch.stop()
+    system_history.stop_sampler()
+    # Hand this process's Pi-hole API seat back rather than leaving it parked
+    # for the session timeout (pihole.py: sessions are a scarce resource).
+    pihole.logout()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    _startup()
+    try:
+        yield
+    finally:
+        _shutdown()
+
+
+app = FastAPI(title="Gate^Flame node-agent", lifespan=lifespan)
+
+# LAN clients only, but the LAN includes the phone's own browser/webview
+# talking cross-origin to the node — CORS must allow it. require_lan already
+# blocks anything not RFC1918/loopback/link-local regardless of Origin.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/api/v1/system/status")
@@ -132,17 +189,15 @@ def pair_claim(body: dict, request: Request):
 
     wait = store.check_rate_limit(source_ip)
     if wait is not None:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=429, detail={"error": "rate_limited", "retryAfterSeconds": wait})
 
     code = str(body.get("code", ""))
-    device_name = str(body.get("deviceName", "Unnamed device"))
+    # Bounded like an owner-typed device name (storage.DEVICE_NAME_MAX): this
+    # string is shown on the kiosk's paired-devices list verbatim.
+    device_name = str(body.get("deviceName", "Unnamed device"))[:64] or "Unnamed device"
 
     result = store.claim_pairing_code(code)
     if not result.ok:
-        from fastapi import HTTPException
-
         if result.error == "code_expired":
             raise HTTPException(status_code=410, detail={"error": "code_expired"})
         remaining = store.record_failed_attempt(code)
@@ -263,7 +318,8 @@ def get_telemetry(_=Depends(read_scope)):
 
 @app.get("/api/v1/threats/recent")
 def get_threats(limit: int = 20, _=Depends(read_scope)):
-    return threats.recent(limit)
+    # Bounded like /flows/recent: the scan behind it is limit x 20 queries.
+    return threats.recent(max(1, min(limit, 200)))
 
 
 @app.get("/api/v1/clients")
@@ -346,10 +402,6 @@ def stop_service(module_id: str, _=Depends(kiosk_only)):
 
 @app.post("/api/v1/firewall/bounce")
 def firewall_bounce(body: dict, _=Depends(control_scope)):
-    from fastapi import HTTPException
-
-    from .firewall import FirewallRefusal, FirewallUnavailable
-
     try:
         result = services.firewall.bounce(body.get("address"), body.get("seconds", 900))
     except FirewallRefusal as exc:
@@ -367,10 +419,6 @@ def firewall_bounce(body: dict, _=Depends(control_scope)):
 
 @app.delete("/api/v1/firewall/bounce/{address}")
 def firewall_release(address: str, _=Depends(control_scope)):
-    from fastapi import HTTPException
-
-    from .firewall import FirewallRefusal, FirewallUnavailable
-
     try:
         result = services.firewall.release(address)
     except FirewallRefusal as exc:
@@ -388,8 +436,10 @@ def firewall_release(address: str, _=Depends(control_scope)):
 @app.get("/api/v1/firewall/bounced")
 def firewall_bounced(_=Depends(read_scope)):
     # Read straight from the kernel — elements expire there, so any cached
-    # copy starts lying the moment a timeout fires.
-    return {"bounced": services.firewall.bounced()}
+    # copy starts lying the moment a timeout fires. `gap` is set when the
+    # kernel could not be asked at all: an empty list alone would read as
+    # "nobody is bounced" on a box that cannot bounce anyone.
+    return services.firewall.bounced_report()
 
 
 # ---- WAN budget, posture, flows --------------------------------------------
@@ -442,13 +492,43 @@ def flows_recent(limit: int = 200, _=Depends(read_scope)):
     that Encrypted Client Hello flows are invisible here. That matters:
     without it, an empty list reads as "nothing is happening" when it may
     mean "everything is using ECH".
+
+    It also carries `capturing` and `gap`: this build has the parser and the
+    flow table but NO capture loop feeding it, so the list is empty because
+    nothing is looking - which is a different fact from "nothing seen".
     """
-    return services.flows.snapshot(limit=max(1, min(limit, 500)))
+    return {**services.flows.snapshot(limit=max(1, min(limit, 500))), **services.flows_capture_state()}
+
+
+# ---- History (1.1.0) ---------------------------------------------------------
+#
+# Two read-scope charts' worth of data, contract in docs/BUILD-1.1.0-PLAN.md and
+# docs/API-1.1.0-NODE.md. Neither ever 500s: a failure is `points: []` plus a
+# `gap` naming what could not be read.
+
+
+def _window_or_400(window: str, allowed) -> str:
+    if window not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_window", "allowed": list(allowed)},
+        )
+    return window
+
+
+@app.get("/api/v1/dns/history")
+def get_dns_history(window: str = dns_history.DEFAULT_WINDOW, _=Depends(read_scope)):
+    """Queries over time - total / blocked / cached / forwarded - from Pi-hole's own history."""
+    return dns_history.history(_window_or_400(window, dns_history.WINDOWS))
+
+
+@app.get("/api/v1/history/system")
+def get_system_history(window: str = system_history.DEFAULT_WINDOW, _=Depends(read_scope)):
+    """CPU, memory, temperature and disk over time, from the on-box 60 s sampler."""
+    return system_history.history(_window_or_400(window, system_history.WINDOWS))
 
 
 def _iso(epoch: float) -> str:
-    import time
-
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
 
 
@@ -582,16 +662,74 @@ class VpnDeviceBody(BaseModel):
     provider: str = "headscale"
 
 
+_pause_lock = threading.Lock()
+
+
+def end_expired_pause() -> bool:
+    """End a timed pause whose time is up - and PUT THE BLOCKLISTS BACK.
+
+    Returns True when a pause was ended.
+
+    THE BUG THIS FIXES. An expired pause used to be ended only inside the
+    /filtering payload, and only by flipping `enabled` back on in the database.
+    Nothing re-applied the lists the pause had removed. So when a 5-minute pause
+    ran out, the settings said "enabled" while Pi-hole still held the empty,
+    paused list set: /filtering then reported `degraded` ("Pi-hole has no
+    blocklist loaded") and the household stayed unfiltered until someone touched
+    a toggle or the box rebooted. And if no screen was open, not even that -
+    the pause simply never ended. filtering_state.py promises "the box resumes
+    on its own"; this is what makes that true: every caller (the payload, and
+    the PauseWatch thread below) goes through here, and here re-applies.
+    """
+    with _pause_lock:
+        settings = store.get_filter_settings()
+        if settings["enabled"] or not filtering_state.is_expired(settings["pause_resume_at"]):
+            return False
+        store.resume_filtering()
+    pihole.invalidate_cache()
+    blocklists.apply_async(store)
+    return True
+
+
+class PauseWatch:
+    """Ends timed pauses on time whether or not any screen is looking."""
+
+    def __init__(self, interval: float = 15.0):
+        self.interval = interval
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, name="gateflame-pause-watch", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        thread, self._thread = self._thread, None
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(2.0)
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.interval):
+            try:
+                end_expired_pause()
+            except Exception:  # noqa: BLE001 - a bad tick must not end the watch
+                logger.exception("pause watch tick failed")
+
+
+pause_watch = PauseWatch()
+
+
 def _filtering_state_payload() -> dict:
     """Everything a surface needs to render the filtering controls honestly."""
+    # An expired timed pause resumes itself the moment anyone looks, so there
+    # is no window in which the API reports "paused" for a pause that has
+    # already run out - and ending it re-applies the lists (see above).
+    end_expired_pause()
     settings = store.get_filter_settings()
-
-    # An expired timed pause resumes itself the moment anyone looks. Doing it
-    # here rather than on a timer means there is no window in which the API
-    # reports "paused" for a pause that has already run out.
-    if not settings["enabled"] and filtering_state.is_expired(settings["pause_resume_at"]):
-        store.resume_filtering()
-        settings = store.get_filter_settings()
 
     state = filtering_state.describe(
         enabled=settings["enabled"],
@@ -715,8 +853,14 @@ def put_threat_level(
             detail={"error": "invalid_level", "allowed": ["low", "medium", "high"]},
         )
     store.set_threat_level(body.level)
-    blocklists.apply_async(store)
+    _changed_filtering()
     return _filtering_state_payload()
+
+
+def _changed_filtering() -> None:
+    """Every filtering write: drop cached Pi-hole reads, then apply in the background."""
+    pihole.invalidate_cache()
+    blocklists.apply_async(store)
 
 
 @app.put("/api/v1/filtering/categories")
@@ -731,7 +875,7 @@ def put_categories(
                     "allowed": list(content_categories.CATEGORIES)},
         )
     store.set_categories(content_categories.sanitise(body.categories))
-    blocklists.apply_async(store)
+    _changed_filtering()
     return _filtering_state_payload()
 
 
@@ -747,15 +891,17 @@ def pause_filtering(
                     "allowed": filtering_state.DURATION_ORDER},
         )
     resume_at = filtering_state.resume_at(body.duration)
-    store.pause_filtering(body.duration, resume_at, body.reason)
-    blocklists.apply_async(store)
+    # The reason is free text echoed back on every surface; bound it.
+    reason = body.reason[:200] if body.reason else body.reason
+    store.pause_filtering(body.duration, resume_at, reason)
+    _changed_filtering()
     return _filtering_state_payload()
 
 
 @app.post("/api/v1/filtering/resume")
 def resume_filtering(request: Request, _=Depends(control_scope)):
     store.resume_filtering()
-    blocklists.apply_async(store)
+    _changed_filtering()
     return _filtering_state_payload()
 
 
@@ -795,13 +941,14 @@ def put_profile(body: ProfileBody, request: Request, auth=Depends(control_scope)
     device = (auth or {}).get("device") if isinstance(auth, dict) else None
     applied_by = device.get("name") if isinstance(device, dict) else ("kiosk" if isinstance(auth, dict) and "kiosk" in auth.get("granted_scopes", []) else None)
     profiles.record_applied(body.profile, applied_by)
-    blocklists.apply_async(store)
+    _changed_filtering()
     return profiles.describe(store.get_filter_settings())
 
 
 @app.get("/api/v1/profiles/accessibility")
 def get_accessibility(request: Request, _=Depends(read_scope)):
-    return {"prefs": profiles.get_accessibility(), "storageWritable": datadir.status()["subdirs"]["profiles"]["writable"]}
+    # One folder's writability, not a full status() walk - the kiosk polls this.
+    return {"prefs": profiles.get_accessibility(), "storageWritable": datadir.writable("profiles")}
 
 
 @app.put("/api/v1/profiles/accessibility")

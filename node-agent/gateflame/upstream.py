@@ -185,7 +185,7 @@ def _resolve_through_box(name: str, timeout: float = 4.0, server: str = "127.0.0
     try:
         sock.sendto(q, (server, 53))
         data, _ = sock.recvfrom(512)
-    except (socket.timeout, OSError):
+    except OSError:  # includes TimeoutError (socket.timeout is its alias)
         return False
     finally:
         sock.close()
@@ -241,6 +241,15 @@ def apply(mode_id: str, applied_by: str | None = None) -> dict:
     the UI has to render the failure, not a stack trace."""
     if not valid(mode_id):
         raise ValueError(f"unknown upstream mode {mode_id!r}")
+    try:
+        return _apply(mode_id, applied_by)
+    finally:
+        # Whatever happened, the next read of Pi-hole must be fresh: this agent
+        # may just have changed where every lookup goes.
+        pihole.invalidate_cache()
+
+
+def _apply(mode_id: str, applied_by: str | None) -> dict:
     mode = MODES[mode_id]
 
     with _lock:

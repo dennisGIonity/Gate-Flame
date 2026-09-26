@@ -12,7 +12,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import secrets
 import sqlite3
 import threading
@@ -140,8 +139,11 @@ CREATE TABLE IF NOT EXISTS agent_settings (
 
 
 def _hash_token(token: str) -> str:
-    # Tokens are bearer credentials; store only a salted hash, same principle
-    # as a password. A dump of the DB must not hand out live device tokens.
+    # Tokens are bearer credentials; store only a hash, same principle as a
+    # password. A dump of the DB must not hand out live device tokens. Unsalted
+    # SHA-256 is enough HERE (and only here) because the token is 32 random
+    # bytes from secrets.token_urlsafe - there is no dictionary to precompute.
+    # A human-chosen secret would need a salted, slow KDF instead.
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 

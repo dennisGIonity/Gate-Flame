@@ -31,7 +31,8 @@ sequencer is exercised in tests with no root, no docker and no network.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 from gateflame.netclaim import TIER_ORDER, Plan
 

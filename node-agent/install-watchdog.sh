@@ -49,7 +49,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-Environment=GATEFLAME_DNS_STACK=$HERE/dns-stack
+Environment=GATEFLAME_DNS_STACK=${GATEFLAME_DNS_STACK:-$HERE/dns-stack}
 ExecStart=$TARGET
 # The watchdog restarts containers, so it needs root. It touches nothing outside
 # the docker socket and /var/lib/gateflame.
@@ -86,7 +86,9 @@ else
 fi
 
 say "First run"
-"$TARGET" && ok "watchdog reports DNS healthy" || die "watchdog reports DNS is NOT healthy - fix that before going further"
+# Same stack the unit will use - the script's built-in default is the lab Pi's path.
+GATEFLAME_DNS_STACK="${GATEFLAME_DNS_STACK:-$HERE/dns-stack}" "$TARGET" \
+  && ok "watchdog reports DNS healthy" || die "watchdog reports DNS is NOT healthy - fix that before going further"
 
 cat <<EOF
 

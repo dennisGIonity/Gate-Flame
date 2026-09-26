@@ -53,7 +53,10 @@ note() { (( JSON )) || printf '           %s\n' "$*"; }
 
 # A DNS query with no dig/nslookup dependency - neither Raspberry Pi OS Lite nor
 # Armbian ship them, and a diagnostic that needs an absent binary reports a working
-# network as broken. Prints the first A record, "NXDOMAIN", or nothing on timeout.
+# network as broken. Prints the first A record, the RCODE name when the reply carries
+# no answer (NXDOMAIN / SERVFAIL / REFUSED, or NODATA for an empty NOERROR), or
+# nothing on timeout. It used to print "NXDOMAIN" for ANY empty reply, so a SERVFAIL
+# - a name Pi-hole FORWARDED because gravity did not hold it - read as "blocked".
 dns_query() {
   local server="$1" name="$2" timeout="${3:-5}"
   python3 - "$server" "$name" "$timeout" 2>/dev/null <<'PYEOF' || true
@@ -73,8 +76,11 @@ except Exception:
     print(''); sys.exit(0)
 finally:
     s.close()
+rcode = struct.unpack('>H', data[2:4])[0] & 0x000F
+if rcode != 0:
+    print({2: 'SERVFAIL', 3: 'NXDOMAIN', 5: 'REFUSED'}.get(rcode, 'RCODE%d' % rcode)); sys.exit(0)
 if struct.unpack('>H', data[6:8])[0] == 0:
-    print('NXDOMAIN'); sys.exit(0)
+    print('NODATA'); sys.exit(0)
 i = 12
 while data[i]:
     i += data[i] + 1
@@ -86,9 +92,38 @@ print('.'.join(str(b) for b in data[j:j+4]) if rdlen == 4 else 'OK')
 PYEOF
 }
 
-LAN_IP="${GATEFLAME_LAN_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}"
+# An answer that is a real resolution - an address, or "OK" for a non-A first record.
+resolved() {
+  case "$1" in
+    ''|NXDOMAIN|SERVFAIL|REFUSED|NODATA|RCODE*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+# Pi-hole's blocking replies: 0.0.0.0 (NULL mode), NXDOMAIN, or an empty NOERROR.
+is_block() { [[ "$1" == "0.0.0.0" || "$1" == "NXDOMAIN" || "$1" == "NODATA" ]]; }
+
+# `src` found by name - column 7 is only `src`'s value when the route has a `via`.
+LAN_IP="${GATEFLAME_LAN_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}')}"
 GATEWAY="$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')"
 STACK="${GATEFLAME_DNS_STACK:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dns-stack}"
+
+# The WAN probes (check 8) and the public half of check 9 do not depend on anything
+# earlier, and on a box with no uplink each one sits out its whole timeout. Run them
+# in the background from the start so their waiting overlaps checks 1-7 instead of
+# adding to them - the agent's /posture/netcheck gives this script 25 seconds.
+NC_TMP="$(mktemp -d 2>/dev/null || { d="/tmp/gf-netcheck.$$"; mkdir -p "$d" && echo "$d"; })"
+trap 'rm -rf "$NC_TMP"' EXIT
+Q_TARGETS=("1.1.1.1" "8.8.8.8" "9.9.9.9")
+for t in "${Q_TARGETS[@]}"; do
+  (
+    start_ns=$(date +%s%N)
+    ans="$(dns_query "$t" cloudflare.com 3)"
+    end_ns=$(date +%s%N)
+    printf '%s %s\n' "${ans:--}" $(( (end_ns - start_ns) / 1000000 )) > "$NC_TMP/q.$t"
+  ) &
+done
+CMP_DOMAIN="wikipedia.org"
+( dns_query 1.1.1.1 "$CMP_DOMAIN" 5 > "$NC_TMP/cmp.public" ) &
 
 (( JSON )) || cat <<BANNER
 ========================================================================================
@@ -164,20 +199,47 @@ done
 hd "3. Is it filtering, and is it resolving"
 
 BLOCKED="$(dns_query 127.0.0.1 doubleclick.net)"
-if [[ "$BLOCKED" == "0.0.0.0" || "$BLOCKED" == "NXDOMAIN" ]]; then
+if is_block "$BLOCKED"; then
   pass filtering "blocking works: doubleclick.net -> $BLOCKED"
 elif [[ -z "$BLOCKED" ]]; then
   fail filtering "no answer for doubleclick.net - resolver not responding"
+elif [[ "$BLOCKED" == "SERVFAIL" || "$BLOCKED" == "REFUSED" ]]; then
+  fail filtering "doubleclick.net came back $BLOCKED - NOT BLOCKED: Pi-hole forwarded it, so gravity does not hold it."
+  note "run: docker exec gateflame-pihole pihole -g"
 else
   fail filtering "doubleclick.net resolved to $BLOCKED - NOT BLOCKING. Gravity may be empty."
   note "run: docker exec gateflame-pihole pihole -g"
 fi
 
-CLEAN="$(dns_query 127.0.0.1 github.com 8)"
-if [[ -n "$CLEAN" && "$CLEAN" != "NXDOMAIN" ]]; then
-  pass recursion "clean lookup works: github.com -> $CLEAN"
+# Whether this box has any internet at all, from the background probes started at
+# the top. Needed HERE: a clean lookup that fails on a box with no uplink is not an
+# unbound fault, and saying it is sends someone to restart the wrong thing.
+wait
+Q_OK=0; Q_TOTAL=0; Q_SLOW=0
+for t in "${Q_TARGETS[@]}"; do
+  Q_TOTAL=$((Q_TOTAL+1))
+  { read -r ans ms < "$NC_TMP/q.$t"; } 2>/dev/null || { ans="-"; ms=0; }
+  # Any reply from a public resolver proves the path; the answer itself is not judged.
+  if [[ -n "$ans" && "$ans" != "-" ]]; then
+    Q_OK=$((Q_OK+1))
+    (( ms > 800 )) && Q_SLOW=$((Q_SLOW+1))
+  fi
+done
+
+if (( Q_OK == 0 )); then
+  CLEAN="$(dns_query 127.0.0.1 github.com 3)"
 else
-  fail recursion "clean lookups fail while blocked ones work - unbound is down or unreachable"
+  CLEAN="$(dns_query 127.0.0.1 github.com 8)"
+fi
+if resolved "$CLEAN"; then
+  pass recursion "clean lookup works: github.com -> $CLEAN"
+elif (( Q_OK == 0 )); then
+  # No uplink: expected, and not the box's fault. A WARN, not a FAIL, so a customer
+  # surface does not tell anyone to restart the lookup helper (Ionibot's PLAIN copy).
+  warn recursion "clean lookups cannot resolve (github.com -> ${CLEAN:-no answer}): this box has NO internet uplink (see check 8)"
+  note "Blocked names are still answered from the blocklist; everything else waits for the uplink."
+else
+  fail recursion "clean lookups fail (github.com -> ${CLEAN:-no answer}) while the internet IS reachable - unbound is down or unreachable"
   note "Pi-hole answers blocked domains from its own list without any upstream, so"
   note "this exact half-failure looks like a network fault and is not one."
   note "check: docker inspect -f '{{.State.Status}}' gateflame-unbound"
@@ -190,17 +252,26 @@ if [[ -z "$GATEWAY" ]]; then
   warn router "no default gateway found - cannot test the router"
 else
   R_BLOCKED="$(dns_query "$GATEWAY" doubleclick.net)"
-  if [[ "$R_BLOCKED" == "0.0.0.0" || "$R_BLOCKED" == "NXDOMAIN" ]]; then
+  if is_block "$R_BLOCKED"; then
     pass router "the router forwards to this box (doubleclick.net -> $R_BLOCKED via $GATEWAY)"
-  elif [[ -z "$R_BLOCKED" ]]; then
-    warn router "$GATEWAY did not answer DNS - it may not run a resolver at all"
+  elif [[ -z "$R_BLOCKED" || "$R_BLOCKED" == "REFUSED" ]]; then
+    warn router "$GATEWAY did not answer DNS (${R_BLOCKED:-no reply}) - it may not run a resolver at all"
+  elif [[ "$R_BLOCKED" == "SERVFAIL" ]]; then
+    # Not proof either way: the router answered, but not with a blocked result and
+    # not with an address - typical of a router whose own uplink is down.
+    warn router "$GATEWAY answered doubleclick.net with SERVFAIL - cannot tell whether it forwards to this box"
   else
     fail router "THE ROUTER IS NOT USING THIS BOX. $GATEWAY resolves doubleclick.net -> $R_BLOCKED"
-    note "Any device that takes DNS from DHCP is being handed the router, and the"
-    note "router is answering from its own upstream. Filtering does not apply to"
-    note "them at all, whatever the router's web UI claims was saved."
-    note "FIX: router DHCP settings > DNS server = $LAN_IP, and NOTHING as secondary."
-    note "Then re-run this check. Devices need a DHCP lease renewal to pick it up."
+    note "Devices take DNS from the router, and the router is answering from its own"
+    note "upstream. Filtering does not apply to them at all, whatever the router's"
+    note "web UI claims was saved."
+    # ADR-001: the ROUTER's upstream is changed, never the DNS it hands to devices.
+    # This note used to say "router DHCP settings > DNS server" - the wrong field,
+    # the one ADR-001 says to leave alone because it turns load shedding into a
+    # whole-house outage.
+    note "FIX: router Internet / WAN / Upstream DNS = $LAN_IP, and NOTHING as secondary."
+    note "LEAVE the DHCP / LAN DNS the router hands to devices alone (ADR-001)."
+    note "Then re-run this check - no device needs a new lease."
   fi
 fi
 
@@ -274,21 +345,8 @@ hd "8. Connectivity quality"
 # Bucketing idea from surveying AntwerpDesignsIonity/NetworkzeroMonitor
 # (2026-08-30): a plain "up/down" check misses the state that actually
 # frustrates a household - the WAN answering, but slowly or with loss. Same
-# dns_query() used everywhere else in this script, no new dependency.
-
-Q_TARGETS=("1.1.1.1" "8.8.8.8" "9.9.9.9")
-Q_OK=0; Q_TOTAL=0; Q_SLOW=0
-for t in "${Q_TARGETS[@]}"; do
-  Q_TOTAL=$((Q_TOTAL+1))
-  start_ns=$(date +%s%N)
-  ans="$(dns_query "$t" cloudflare.com 3)"
-  end_ns=$(date +%s%N)
-  ms=$(( (end_ns - start_ns) / 1000000 ))
-  if [[ -n "$ans" ]]; then
-    Q_OK=$((Q_OK+1))
-    (( ms > 800 )) && Q_SLOW=$((Q_SLOW+1))
-  fi
-done
+# dns_query() used everywhere else in this script, no new dependency. The probes
+# themselves ran in the background from the top; Q_OK/Q_SLOW were read in check 3.
 
 if (( Q_OK == Q_TOTAL && Q_SLOW == 0 )); then
   pass quality "Excellent - $Q_OK/$Q_TOTAL upstream resolvers answered, all under 800ms"
@@ -312,11 +370,14 @@ hd "9. Cross-server DNS agreement"
 # being wrong, not a sophisticated hijack, and a mismatch is a lead to
 # follow, not proof of anything on its own.
 
-CMP_DOMAIN="wikipedia.org"
-CMP_LOCAL="$(dns_query 127.0.0.1 "$CMP_DOMAIN" 5)"
-CMP_PUBLIC="$(dns_query 1.1.1.1 "$CMP_DOMAIN" 5)"
+if (( Q_OK == 0 )); then
+  CMP_LOCAL="$(dns_query 127.0.0.1 "$CMP_DOMAIN" 2)"
+else
+  CMP_LOCAL="$(dns_query 127.0.0.1 "$CMP_DOMAIN" 5)"
+fi
+CMP_PUBLIC="$(cat "$NC_TMP/cmp.public" 2>/dev/null)"
 
-if [[ -z "$CMP_LOCAL" || -z "$CMP_PUBLIC" ]]; then
+if ! resolved "$CMP_LOCAL" || ! resolved "$CMP_PUBLIC"; then
   warn crosscheck "could not compare - this box: '${CMP_LOCAL:-no answer}', 1.1.1.1: '${CMP_PUBLIC:-no answer}'"
 elif [[ "$CMP_LOCAL" == "$CMP_PUBLIC" ]]; then
   pass crosscheck "$CMP_DOMAIN agrees with 1.1.1.1 ($CMP_LOCAL)"

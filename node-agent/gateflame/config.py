@@ -15,7 +15,12 @@ class Config:
     data_root: str = os.environ.get("GATEFLAME_DATA_ROOT", "/opt/gateflame/.DUMP")
     listen_host: str = os.environ.get("GATEFLAME_HOST", "0.0.0.0")
     listen_port: int = int(os.environ.get("GATEFLAME_PORT", "8080"))
-    agent_version: str = os.environ.get("GATEFLAME_VERSION", "0.1.0")
+    # What /system/status reports as agentVersion. The installers write the exact
+    # release (e.g. "1.1.0+ab12cd3") into a systemd drop-in (20-version.conf); this
+    # default is only what an agent started WITHOUT that drop-in says. It read
+    # "0.1.0" for every release through 1.0.3, so the fleet could not tell boxes
+    # apart by build - keep it equal to the release this package ships in.
+    agent_version: str = os.environ.get("GATEFLAME_VERSION", "1.1.0")
     feed_url: str = os.environ.get("GATEFLAME_FEED_URL", "https://feeds.ionity.today/api/v1/nodes")
     feed_token: str | None = os.environ.get("GATEFLAME_FEED_TOKEN")
     feed_enabled: bool = os.environ.get("GATEFLAME_FEED_ENABLED", "false").lower() == "true"
@@ -42,6 +47,12 @@ class Config:
     # never sets one loses nothing. Set by the owner at the box, never over the
     # network: nothing here reads it from a paired-device request.
     console_pin: str | None = os.environ.get("GATEFLAME_CONSOLE_PIN")
+    # Background work the lifespan starts. Both default ON on a box; tests/conftest.py
+    # turns them off so a `with TestClient(app)` never leaks a sampler thread or a
+    # real fetch to vpngate.net - the same gating feed_enabled already gives the feed.
+    history_sampler_enabled: bool = os.environ.get("GATEFLAME_HISTORY_SAMPLER", "true").lower() == "true"
+    history_sample_seconds: int = int(os.environ.get("GATEFLAME_HISTORY_SAMPLE_SECONDS", "60"))
+    vpngate_warm: bool = os.environ.get("GATEFLAME_VPNGATE_WARM", "true").lower() == "true"
 
 
 config = Config()

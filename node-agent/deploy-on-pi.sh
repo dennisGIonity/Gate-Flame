@@ -45,11 +45,15 @@ echo "  os:      $(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || echo 
 echo "  python:  $(python3 -V 2>&1)"
 echo "  arch:    $(dpkg --print-architecture 2>/dev/null || uname -m)"
 
-case "$MODEL" in
+# Supported boards: the lab Raspberry Pi 5 and the Standard T3 Radxa Cubie A7A
+# (Allwinner A733). validate-on-pi.sh uses the same list.
+COMPAT="$(tr '\0' ' ' < /proc/device-tree/compatible 2>/dev/null || true)"
+case "$MODEL $COMPAT" in
   *Raspberry*) : ;;
-  *) warn "This does not report as Raspberry Pi hardware. Deployment will still" \
-          "proceed, but validate-on-pi.sh will fail its first check by design —" \
-          "a PASS on thermal or throttle readings off real hardware proves nothing." ;;
+  *Radxa*|*Cubie*|*radxa,*|*allwinner,sun60i*) echo "  board:   supported (Standard T3 / Radxa)" ;;
+  *) warn "This does not report as a supported board (Raspberry Pi 5 or Radxa Cubie A7A)." \
+          "Deployment will still proceed, but validate-on-pi.sh will fail its first check" \
+          "by design - a PASS on thermal readings off real hardware proves nothing." ;;
 esac
 
 # python3-venv is the single most common missing piece on a fresh image, and its
@@ -96,10 +100,15 @@ apt-get install -y -qq \
   iproute2 nftables curl ca-certificates avahi-daemon avahi-utils \
   || die "Prerequisite install failed. Check network and apt sources, then re-run."
 
-# vcgencmd lives in raspi-utils or libraspberrypi-bin depending on OS release.
-# Not fatal if absent — validate-on-pi.sh reports it honestly either way.
-apt-get install -y -qq raspi-utils 2>/dev/null || apt-get install -y -qq libraspberrypi-bin 2>/dev/null || true
-command -v vcgencmd >/dev/null 2>&1 || warn "vcgencmd not available — throttle flags will report as a named gap."
+# vcgencmd lives in raspi-utils or libraspberrypi-bin depending on OS release. It is
+# Raspberry Pi firmware only: on the Cubie A7A (or any non-Pi board) neither package
+# exists, and the agent reports throttleFlags null with a named throttleGap.
+case "$MODEL" in
+  *Raspberry*)
+    apt-get install -y -qq raspi-utils 2>/dev/null || apt-get install -y -qq libraspberrypi-bin 2>/dev/null || true
+    command -v vcgencmd >/dev/null 2>&1 || warn "vcgencmd not available — throttle flags will report as a named gap." ;;
+  *) echo "  vcgencmd: not applicable on this board (Raspberry Pi firmware only)" ;;
+esac
 
 # ── 2. the agent itself ──────────────────────────────────────────────────────
 say "2/4  Installing node-agent"
@@ -162,7 +171,10 @@ install -m 0755 /dev/stdin /usr/local/bin/gateflame-mdns-alias <<'WRAP'
 # Re-resolved on every start, so a DHCP lease change is fixed by a restart.
 set -euo pipefail
 for _ in $(seq 1 30); do
-  ip4="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')"
+  # The route's `src`, by name (its column moves when the route has no `via`); on a
+  # segment with no default route at all, the first global address.
+  ip4="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+  [ -n "${ip4:-}" ] || ip4="$(ip -4 -o addr show scope global 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}')"
   [ -n "${ip4:-}" ] && break
   sleep 2   # network-online.target can fire before DHCP has actually finished
 done
@@ -194,7 +206,8 @@ systemctl enable --now avahi-daemon
 systemctl daemon-reload
 systemctl enable --now gateflame-mdns-alias
 sleep 2
-LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')"
+LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+[ -n "$LAN_IP" ] || LAN_IP="$(ip -4 -o addr show scope global 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}')"
 if systemctl is-active --quiet gateflame-mdns-alias; then
   echo "gateflame.local -> ${LAN_IP:-<resolving>}"
 else

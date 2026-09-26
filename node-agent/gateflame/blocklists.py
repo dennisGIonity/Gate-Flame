@@ -31,12 +31,11 @@ from __future__ import annotations
 import os
 import threading
 import time
+from urllib.parse import quote
 
-import httpx
-
-from . import content_categories, threat_level
+from . import content_categories, pihole, threat_level
 from .config import config
-from .pihole import _base, _get, _session, summary
+from .pihole import _get, summary
 
 _TIMEOUT = 30.0
 
@@ -132,78 +131,187 @@ def desired_lists(settings: dict) -> list[str]:
 
 
 def _post(path: str, payload: dict, timeout: float | None = None) -> dict | None:
-    base = _base()
-    if not base:
+    """Authenticated POST. A dict on any 2xx (empty when the body is not JSON), None otherwise.
+
+    Goes through pihole.request(), so it shares the one session and gets the
+    same single silent re-auth on 401 as every read. The old copy here had no
+    401 handling at all: a session Pi-hole had dropped made every list write
+    read as "Pi-hole rejected <url>".
+    """
+    r = pihole.request("POST", path, json=payload,
+                       timeout=_TIMEOUT if timeout is None else timeout, expect="any")
+    if not r.ok:
         return None
-    sid = _session(base)
-    if not sid:
-        return None
-    try:
-        r = httpx.post(
-            f"{base}{path}",
-            # X-FTL-SID, not "sid" - see pihole.py's module docstring
-            # (RE-CHECKED 2026-09-14): a bare "sid" header is not one of
-            # Pi-hole v6's four documented ways to send the session id.
-            headers={"X-FTL-SID": sid},
-            json=payload,
-            timeout=_TIMEOUT if timeout is None else timeout,
-        )
-        if r.status_code not in (200, 201):
-            return None
-        return r.json()
-    except (httpx.HTTPError, ValueError):
-        return None
+    return r.data if isinstance(r.data, dict) else {}
 
 
 def _delete(path: str) -> bool:
-    base = _base()
-    if not base:
-        return False
-    sid = _session(base)
-    if not sid:
-        return False
-    try:
-        r = httpx.delete(f"{base}{path}", headers={"X-FTL-SID": sid}, timeout=_TIMEOUT)
-        return r.status_code in (200, 204)
-    except httpx.HTTPError:
-        return False
+    return pihole.request("DELETE", path, timeout=_TIMEOUT, expect="none").ok
 
 
-def _gravity_finished(domains_before: int) -> bool:
-    """Did the rebuild complete, whatever the HTTP connection did?
+def _list_path(url: str) -> str:
+    """`/api/lists/{list}` with the address percent-encoded, as Pi-hole's own web
+    UI sends it (encodeURIComponent). FTL decodes the path before matching and
+    documents that a list address arrives with its slashes decoded (FTL
+    src/api/api.c, row_rank()). Sent raw, `https://…` puts `//`, `:` and any
+    `?` of the address itself into the request line, where they are read as
+    path and query syntax rather than as part of one item."""
+    return f"/api/lists/{quote(url, safe='')}?type=block"
 
-    Called only after the gravity POST failed or timed out. The connection
-    dropping says nothing about Pi-hole: on a slow box, or a very large list
-    set, the rebuild routinely outlives any sane HTTP timeout and completes
-    normally afterwards. Declaring failure at that moment is how a working
-    box gets reported broken.
 
-    "Finished" means Pi-hole is answering again AND the gravity domain count
-    has moved. A count that is merely non-zero is not enough - the PREVIOUS
-    build was also non-zero, and mistaking it for the new one is how a failed
-    apply gets reported as success.
+# Outcomes of the gravity POST. They need different handling, so they are not
+# collapsed into one None the way every other write is.
+GRAVITY_COMPLETED = "completed"   # HTTP 200 and the streamed output ran to its end
+GRAVITY_REFUSED = "refused"       # Pi-hole answered, and not with a 200
+GRAVITY_DROPPED = "dropped"       # timeout or connection lost - says nothing about Pi-hole
 
-    Returns False if the box never comes back or the count never changes,
+
+def _gravity_post(timeout: float) -> str:
+    """Run `pihole -g` through the API and report how the HTTP side ended.
+
+    THE BODY IS PLAIN TEXT, NOT JSON. FTL streams the gravity script's output
+    with chunked encoding as text/plain (FTL v6.7.1 specs/action.yaml;
+    src/api/action.c run_and_stream_command()). The status line is sent BEFORE
+    the script runs, so it is 200 even when gravity then fails - a completed
+    200 proves the run ended, not that it succeeded. `_gravity_marker()` is the
+    authority on success.
+
+    The previous implementation parsed this body as JSON. It never was JSON, so
+    every gravity rebuild the agent ever triggered came back None - "failed" -
+    and fell through to the domain-count backstop. That is why a re-apply of
+    the SAME lists (count unchanged) always ended in `degraded` (PIN-2026-09-21
+    §4 #3): the backstop could not tell "finished, same size" from "never ran".
+
+    `Connection: close` because FTL writes a second JSON response onto the
+    socket after the chunked body ends; nothing may reuse that connection.
+    """
+    r = pihole.request("POST", "/api/action/gravity", json={}, timeout=timeout,
+                       expect="any", headers={"Connection": "close"})
+    if r.ok:
+        return GRAVITY_COMPLETED
+    if r.failure in (pihole.FAIL_TIMEOUT, pihole.FAIL_UNREACHABLE):
+        return GRAVITY_DROPPED
+    return GRAVITY_REFUSED
+
+
+def _gravity_marker() -> tuple[int | None, int | None] | None:
+    """(gravity last_update stamp, domain count) read FRESH from Pi-hole, or None.
+
+    `last_update` is FTL's copy of the gravity database's own `updated`
+    property. gravity.sh writes that property on every run that builds and
+    swaps in a new database, and FTL's database thread re-reads it once a
+    second, logging "Gravity database has been updated, reloading now" when it
+    moves (src/database/gravity-db.c, gravity_updated()). So it advancing means
+    exactly what apply() needs to know: a NEW gravity exists AND FTL has loaded
+    it - regardless of whether the domain count changed.
+    """
+    pihole.invalidate_cache()   # a cached read here would compare a value with itself
+    stats = summary()
+    if stats is None:
+        return None
+    return stats.get("gravityLastUpdate"), stats.get("domainsOnGravity")
+
+
+def _stamp_verdict(before: tuple[int | None, int | None] | None,
+                   now: tuple[int | None, int | None],
+                   since: float | None) -> bool | None:
+    """What the gravity timestamp says about a rebuild started at `since`.
+
+    True   the stamp proves a build newer than the one before the POST
+    False  the stamp is known and proves NO new build yet
+    None   this FTL reports no stamp (0 / absent = unknown), so it says nothing
+
+    When the stamp from just before the POST is known, the stamp must have
+    moved past it - nothing else counts, so a clock that steps mid-rebuild
+    cannot fake a result. Only when that earlier stamp could not be read does
+    the POST's own start time stand in for it: gravity.sh stamps the database
+    at the END of a build, with the same kernel clock this agent reads, so a
+    stamp no older than the request is a build made after we asked.
+    """
+    stamp_now = now[0]
+    if not stamp_now:
+        return None
+    stamp_before = before[0] if before else None
+    if stamp_before:
+        return stamp_now > stamp_before
+    if since is not None:
+        return stamp_now >= int(since) - 1
+    return None
+
+
+def _count_moved(before: tuple[int | None, int | None] | None,
+                 now: tuple[int | None, int | None]) -> bool:
+    """The old heuristic, for an FTL without a stamp. Keeps its caution: a count
+    that is merely non-zero is not proof - the PREVIOUS build was non-zero too."""
+    count_before = (before[1] if before else None) or 0
+    count_now = now[1] or 0
+    return bool(count_now) and count_now != count_before
+
+
+def _gravity_finished(before: tuple[int | None, int | None] | None,
+                      window: float | None = None,
+                      *,
+                      since: float | None = None,
+                      interval: float | None = None,
+                      trust_completed: bool = False) -> bool:
+    """Did a rebuild complete, whatever the HTTP connection did?
+
+    Polls Pi-hole (checking first, then waiting) until the rebuild is proven
+    or `window` (default: the full verify window) runs out.
+
+    `trust_completed` is for a POST whose streamed output ran to its end: when
+    this FTL offers no stamp at all, that completed run is the only evidence
+    there is, and it is accepted - apply()'s final "gravity is not empty" read
+    still stands guard behind it. When a stamp IS available it must move; a
+    completed run is not taken on its word.
+
+    After a DROPPED connection nothing is trusted: the stamp must move, or, on
+    an FTL without one, the domain count must change. A connection that dropped
+    says nothing about Pi-hole - on a slow box or a very large list set the
+    rebuild routinely outlives any sane HTTP timeout and completes afterwards.
+
+    Returns False if the box never comes back or never shows a new build,
     which is a real failure and should be recorded as one.
     """
-    deadline = time.monotonic() + _GRAVITY_VERIFY_SECONDS
-    while time.monotonic() < deadline:
-        time.sleep(_GRAVITY_VERIFY_INTERVAL)
-        stats = summary()
-        if stats is None:
-            continue  # still busy or still restarting; not yet an answer
-        now = stats.get("domainsOnGravity") or 0
-        if now and now != domains_before:
-            return True
-    return False
+    deadline = time.monotonic() + (_GRAVITY_VERIFY_SECONDS if window is None else window)
+    step = _GRAVITY_VERIFY_INTERVAL if interval is None else interval
+    while True:
+        marker = _gravity_marker()
+        if marker is not None:  # None: still busy or restarting, not yet an answer
+            verdict = _stamp_verdict(before, marker, since)
+            if verdict is True:
+                return True
+            if verdict is None and (trust_completed or _count_moved(before, marker)):
+                return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(step)
+
+
+# After a COMPLETED gravity POST, FTL notices the new database within about a
+# second (its DB thread checks once a second). This is how long to wait for
+# that before calling a completed run a failed one, and how often to look.
+_GRAVITY_CONFIRM_SECONDS = float(os.environ.get("GATEFLAME_GRAVITY_CONFIRM_SECONDS", "30"))
+_GRAVITY_CONFIRM_INTERVAL = 1.0
 
 
 def current_lists() -> list[str] | None:
-    """Blocklist URLs Pi-hole currently has, or None if it cannot be reached."""
+    """BLOCK-list URLs Pi-hole currently has, or None if it cannot be reached.
+
+    `/api/lists` returns allow-lists too (each entry carries `type`). Counting
+    those as ours made apply() try to delete an owner's allow-list with
+    `?type=block` - a 404 - and then report the whole apply as failed, forever,
+    because reconcile() found the "extra" list on every boot. Entries with no
+    `type` predate the field and are treated as block lists, as they were.
+    """
     data = _get("/api/lists")
     if data is None:
         return None
-    return [entry.get("address", "") for entry in data.get("lists", []) if entry.get("address")]
+    return [
+        entry.get("address", "")
+        for entry in data.get("lists", [])
+        if entry.get("address") and (entry.get("type") or "block") == "block"
+    ]
 
 
 def apply(settings: dict) -> bool:
@@ -213,7 +321,18 @@ def apply(settings: dict) -> bool:
     failure here means the box is still filtering by the PREVIOUS settings,
     which is a safe place to fail: protection does not drop, it just does not
     change.
+
+    Every exit drops the cached Pi-hole reads: whatever happened in here, the
+    next /filtering or /telemetry poll must ask Pi-hole afresh rather than show
+    a pre-apply snapshot for another few seconds.
     """
+    try:
+        return _apply(settings)
+    finally:
+        pihole.invalidate_cache()
+
+
+def _apply(settings: dict) -> bool:
     global _last_error
 
     wanted = set(desired_lists(settings))
@@ -239,7 +358,7 @@ def apply(settings: dict) -> bool:
     # in the product reading green.
     failed: list[str] = []
     for url in have - wanted:
-        if not _delete(f"/api/lists/{url}?type=block"):
+        if not _delete(_list_path(url)):
             failed.append(f"could not remove {url}")
     for url in wanted - have:
         # `type` GOES IN THE QUERY STRING, NOT THE BODY. Sending it in the body
@@ -284,22 +403,41 @@ def apply(settings: dict) -> bool:
     # dial was reported broken for hours while working.
     #
     # A dropped connection tells us nothing about what Pi-hole did. Only
-    # Pi-hole can say that, so ask it.
-    before = summary() or {}
-    domains_before = before.get("domainsOnGravity") or 0
+    # Pi-hole can say that, so ask it - and ask the right question. "Did the
+    # domain count change" cannot tell a same-lists rebuild from no rebuild at
+    # all; "did the gravity database's own timestamp move" can.
+    before = _gravity_marker()
+    started = time.time()
 
-    if _post("/api/action/gravity", {}, timeout=_GRAVITY_TIMEOUT) is None:
-        if not _gravity_finished(domains_before):
+    outcome = _gravity_post(_GRAVITY_TIMEOUT)
+    if outcome == GRAVITY_REFUSED:
+        _last_error = "Pi-hole refused the gravity rebuild request"
+        return False
+    if outcome == GRAVITY_COMPLETED:
+        finished = _gravity_finished(
+            before, _GRAVITY_CONFIRM_SECONDS, since=started,
+            interval=_GRAVITY_CONFIRM_INTERVAL, trust_completed=True,
+        )
+    else:
+        finished = _gravity_finished(before, since=started)
+    if not finished:
+        if outcome == GRAVITY_COMPLETED:
+            _last_error = (
+                "Pi-hole ran the gravity rebuild but never loaded a new gravity "
+                "database - the rebuild itself failed"
+            )
+        else:
             _last_error = (
                 "gravity rebuild did not finish - Pi-hole stopped responding and "
-                "the domain count did not change"
+                "reported no new gravity database"
             )
-            return False
+        return False
 
     # And read back ONE more time, because a gravity rebuild that runs cleanly
     # over a list it could not download leaves zero domains and reports success -
     # which is the exact shape of the original fault, one layer further in.
     if wanted:
+        pihole.invalidate_cache()
         after = summary()
         if after is not None and not after.get("domainsOnGravity"):
             _last_error = (
@@ -342,6 +480,7 @@ def reconcile(store) -> bool:
     # registered and gravity still empty, which is precisely the state this box
     # was found in.
     if wanted:
+        pihole.invalidate_cache()
         stats = summary()
         if stats is not None and not stats.get("domainsOnGravity"):
             return apply(settings)
@@ -350,50 +489,75 @@ def reconcile(store) -> bool:
     return True
 
 
-def reconcile_async(store) -> None:
-    """Run reconcile() on a thread. Safe to call at startup."""
-    global _applying
+# Set when a change arrives while a rebuild is already running. The running
+# worker then does ONE more apply with the settings as they are by then, read
+# from the store the most recent caller handed in.
+_rerun = False
+_latest_store = None
 
-    if not config.pihole_api_url:
-        return
+
+def _start_worker(first, store, name: str) -> bool:
+    """Run `first()` on a thread, then keep applying while changes keep arriving.
+
+    Returns False when a worker is already running - in which case that worker
+    has been told to apply once more when it finishes, so the change is not lost.
+
+    WHY NOT JUST DROP THE SECOND REQUEST. That is what this used to do, on the
+    reasoning that "the last write already reflects every toggle". It does not:
+    the running apply read the settings when it STARTED. Pause (lists removed,
+    minutes of gravity) and then resume half-way through, and the resume was
+    discarded - the box finished with no lists while the settings said enabled,
+    reported `degraded`, and nothing ever re-applied until the next toggle or
+    reboot. Coalescing keeps the property that mattered (never two gravity runs
+    at once) and guarantees the final state is the owner's LATEST choice.
+    """
+    global _applying, _rerun, _latest_store
 
     with _lock:
+        _latest_store = store
         if _applying:
-            return
+            _rerun = True
+            return False
         _applying = True
+        _rerun = False
 
     def _run() -> None:
-        global _applying
+        global _applying, _rerun
+        released = False
         try:
-            reconcile(store)
+            first()
+            while True:
+                with _lock:
+                    if not _rerun:
+                        _applying = False
+                        released = True
+                        return
+                    _rerun = False
+                    latest = _latest_store
+                apply(latest.get_filter_settings())
         finally:
-            _applying = False
+            if not released:
+                with _lock:
+                    _applying = False
 
-    threading.Thread(target=_run, daemon=True, name="gateflame-reconcile").start()
+    threading.Thread(target=_run, daemon=True, name=name).start()
+    return True
+
+
+def reconcile_async(store) -> None:
+    """Run reconcile() on a thread. Safe to call at startup."""
+    if not config.pihole_api_url:
+        return
+    _start_worker(lambda: reconcile(store), store, "gateflame-reconcile")
 
 
 def apply_async(store) -> None:
     """Kick off apply() on a thread, reading settings from the store.
 
-    Silently does nothing if a rebuild is already running. Queueing them would
-    only mean the customer waits longer for the same end state, since the last
-    write already reflects every toggle they pressed.
+    If a rebuild is already running, this one is not queued behind it and not
+    dropped either: the running worker applies once more when it finishes,
+    with whatever the settings are by then (see _start_worker).
     """
-    global _applying
-
     if not config.pihole_api_url:
         return
-
-    with _lock:
-        if _applying:
-            return
-        _applying = True
-
-    def _run() -> None:
-        global _applying
-        try:
-            apply(store.get_filter_settings())
-        finally:
-            _applying = False
-
-    threading.Thread(target=_run, daemon=True, name="gateflame-blocklists").start()
+    _start_worker(lambda: apply(store.get_filter_settings()), store, "gateflame-blocklists")

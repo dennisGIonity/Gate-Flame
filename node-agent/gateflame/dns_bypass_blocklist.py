@@ -1,4 +1,12 @@
-"""Known public DNS-over-HTTPS / DNS-over-TLS endpoints, blocked at every level.
+"""Known public DNS-over-HTTPS / DNS-over-TLS endpoints - a list, NOT YET APPLIED.
+
+STATUS (checked 2026-09-26): nothing imports this module. blocklists.py does
+not wire it into Pi-hole, so none of these hostnames is blocked on any box,
+at any level. The text below describes the intent; it is not in force.
+Wiring it in is a PRODUCT decision, not a code fix, and it is left for Dennis:
+blocking `dns.google` / `one.one.one.one` also breaks an Android handset whose
+owner set Private DNS to one of them (strict mode fails closed: no DNS at all
+on that phone), which is a support call the side-car design exists to avoid.
 
 WHY THIS EXISTS
 
@@ -65,8 +73,8 @@ def desired_lines() -> list[str]:
 
     Returned as plain hostnames, not a hosted list URL, because this list is
     short, curated here, and reviewed by us - not fetched from a third party
-    like the threat-level and content-category lists are. `blocklists.py`
-    wires this in via Pi-hole's domain-list API rather than the adlist API
-    those use.
+    like the threat-level and content-category lists are. If it is ever wired
+    in, it belongs in Pi-hole's domain-list API (/api/domains/deny/exact), not
+    the adlist API the other lists use. As of 2026-09-26 nothing calls this.
     """
     return list(BYPASS_DOMAINS)

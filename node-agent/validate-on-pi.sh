@@ -131,15 +131,24 @@ if [ -z "$PI_MODEL" ] && [ -r /proc/cpuinfo ]; then
 fi
 
 IS_PI=0
+IS_SUPPORTED=0
+DT_COMPAT=""
+[ -r /proc/device-tree/compatible ] && DT_COMPAT=$(tr '\0' ' ' < /proc/device-tree/compatible 2>/dev/null || true)
 case "$PI_MODEL" in
-  *"Raspberry Pi"*) IS_PI=1 ;;
+  *"Raspberry Pi"*) IS_PI=1; IS_SUPPORTED=1 ;;
+esac
+# Standard T3 is a Radxa Cubie A7A (Allwinner A733). Recognised by its device-tree
+# model or compatible string; it has a real thermal zone and a real neighbour table,
+# and no vcgencmd (that is Raspberry Pi firmware), which section 3 reports as N/A.
+case "$PI_MODEL $DT_COMPAT" in
+  *Radxa*|*Cubie*|*radxa,*|*allwinner,sun60i*) IS_SUPPORTED=1 ;;
 esac
 
-if [ "$IS_PI" -eq 1 ]; then
-  record PASS yes "Raspberry Pi hardware" "$PI_MODEL"
+if [ "$IS_SUPPORTED" -eq 1 ]; then
+  record PASS yes "supported hardware (Pi 5 / Cubie A7A)" "$PI_MODEL"
 else
-  record FAIL yes "Raspberry Pi hardware" "${PI_MODEL:-no model string (/proc/device-tree/model absent)}"
-  printf '\n%s\n' "${C_RED}${C_BOLD}!! THIS DOES NOT LOOK LIKE A RASPBERRY PI !!${C_RESET}" >&2
+  record FAIL yes "supported hardware (Pi 5 / Cubie A7A)" "${PI_MODEL:-no model string (/proc/device-tree/model absent)}"
+  printf '\n%s\n' "${C_RED}${C_BOLD}!! THIS DOES NOT LOOK LIKE A SUPPORTED BOARD !!${C_RESET}" >&2
   cat >&2 <<'EOF'
    Everything below still runs, but it proves nothing about the product.
    The whole point of this script is to distinguish real device readings from
@@ -147,10 +156,10 @@ else
    checks would be measuring some other machine's hardware, and an N/A tells
    you nothing about whether the Pi paths work.
 
-   Run this again on the actual appliance: flash Raspberry Pi OS, run
-   `sudo bash node-agent/install.sh`, then re-run this script there.
+   Run this again on the actual appliance (Raspberry Pi 5 or Radxa Cubie A7A),
+   after `sudo bash install-all.sh`, then re-run this script there.
 EOF
-  note "Not a Raspberry Pi: the run is informational only. Re-run on real hardware before trusting any telemetry field."
+  note "Not a supported board: the run is informational only. Re-run on real hardware before trusting any telemetry field."
 fi
 
 OS_PRETTY=""
@@ -187,14 +196,24 @@ fi
 heading "2. Thermal zone (telemetry.read_thermal_c)"
 
 THERM_ZONE=""; THERM_RAW=""; THERM_C=""
-for zf in /sys/class/thermal/thermal_zone*/temp; do
-  [ -r "$zf" ] || continue
-  raw=$(cat "$zf" 2>/dev/null || true)
-  case "$raw" in
-    ''|*[!0-9-]*) continue ;;
-  esac
-  THERM_ZONE="$zf"; THERM_RAW="$raw"
-  break
+# Same choice telemetry.read_thermal_c() makes: a zone whose `type` names the CPU/SoC
+# first (on Allwinner boards zone 0 may be the GPU or DDR sensor), then the first
+# readable zone. Validating a different zone from the one the agent reads would
+# prove nothing about the number on the screen.
+for hint in cpu soc x86_pkg_temp package acpitz ""; do
+  for zf in /sys/class/thermal/thermal_zone*/temp; do
+    [ -r "$zf" ] || continue
+    if [ -n "$hint" ]; then
+      ztype=$(tr 'A-Z' 'a-z' < "${zf%/temp}/type" 2>/dev/null || true)
+      case "$ztype" in *"$hint"*) : ;; *) continue ;; esac
+    fi
+    raw=$(cat "$zf" 2>/dev/null || true)
+    case "$raw" in
+      ''|*[!0-9-]*) continue ;;
+    esac
+    THERM_ZONE="$zf"; THERM_RAW="$raw"
+    break 2
+  done
 done
 
 if [ -z "$THERM_RAW" ]; then

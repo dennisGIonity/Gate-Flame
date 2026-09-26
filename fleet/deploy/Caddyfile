@@ -1,0 +1,15 @@
+# Gate^Flame Fleet — Caddy front door for docker-compose.yml.
+# FLEET_DOMAIN comes from fleet.env (e.g. feeds.ionity.today). Point its DNS
+# A/AAAA record at this server BEFORE first start so the certificate issues.
+{
+	email {$FLEET_ACME_EMAIL}
+}
+
+{$FLEET_DOMAIN} {
+	encode zstd gzip
+	# Caddy already sends X-Forwarded-For / -Proto / -Host. The dashboard is at
+	# the root of the domain, so no X-Forwarded-Prefix is needed. To serve it
+	# under a path instead, use:  handle_path /gateflame/* { reverse_proxy fleet:8091 {
+	#   header_up X-Forwarded-Prefix /gateflame } }
+	reverse_proxy fleet:8091
+}

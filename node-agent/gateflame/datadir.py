@@ -42,10 +42,21 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 import time
 from pathlib import PurePosixPath
 
 DEFAULT_ROOT = "/opt/gateflame/.DUMP"
+
+# How long a write probe's answer is reused. status() is behind the
+# UNAUTHENTICATED /system/status, which the kiosk polls every 10 s and phones
+# poll during discovery; every call used to create and delete eight probe files
+# on the SD card - about 70,000 metadata writes a day for a yes/no that changes
+# almost never. Short enough that a card remounted read-only (the real failure
+# this reports) shows up within one kiosk refresh cycle.
+_PROBE_TTL = 15.0
+_probe_lock = threading.Lock()
+_probe_cache: dict[str, tuple[float, bool]] = {}
 
 SUBDIRS: tuple[str, ...] = (
     "storage",
@@ -74,9 +85,9 @@ def path(subdir: str, *parts: str) -> str:
     return str(PurePosixPath(root(), subdir, *parts))
 
 
-def _writable(p: str) -> bool:
+def _probe(p: str) -> bool:
     """A real write, not os.access(): ProtectSystem=strict lies to access()."""
-    probe = os.path.join(p, f".probe-{os.getpid()}-{int(time.time() * 1000)}")
+    probe = os.path.join(p, f".probe-{os.getpid()}-{threading.get_ident()}-{int(time.time() * 1000)}")
     try:
         with open(probe, "w", encoding="utf-8") as fh:
             fh.write("ok")
@@ -86,12 +97,40 @@ def _writable(p: str) -> bool:
         return False
 
 
+def _writable(p: str) -> bool:
+    """_probe(), answered from a short cache (see _PROBE_TTL)."""
+    now = time.monotonic()
+    with _probe_lock:
+        hit = _probe_cache.get(p)
+        if hit is not None and now - hit[0] < _PROBE_TTL:
+            return hit[1]
+    ok = _probe(p)
+    with _probe_lock:
+        _probe_cache[p] = (time.monotonic(), ok)
+    return ok
+
+
+def forget_probes() -> None:
+    """Drop cached write-probe answers, so the next status() looks again."""
+    with _probe_lock:
+        _probe_cache.clear()
+
+
+def writable(subdir: str) -> bool:
+    """Whether one data subfolder exists and accepts writes. Cheap; never raises."""
+    p = os.path.join(root(), subdir) if subdir in SUBDIRS else None
+    if p is None:
+        raise ValueError(f"unknown data subdir {subdir!r}; expected one of {SUBDIRS}")
+    return os.path.isdir(p) and _writable(p)
+
+
 def ensure() -> dict:
     """Create the root and every subfolder that is missing. Never raises.
 
     Returns the same shape as status(), so a caller can log it once at
     startup and a route can return it on demand.
     """
+    forget_probes()
     r = root()
     try:
         os.makedirs(r, mode=_DIR_MODE, exist_ok=True)

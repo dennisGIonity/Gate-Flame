@@ -98,8 +98,17 @@ def main(argv: list[str] | None = None) -> int:
         result["seconds"] = round(time.time() - started, 2)
     except Exception as exc:  # noqa: BLE001 - a job must report, not crash the timer silently
         result = {"job": argv[0], "at": started, "ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    finally:
+        # Each job is its own process with its own Pi-hole session. Give the
+        # seat back: anomaly runs every 5 minutes and selfcheck every 15, and
+        # abandoned sessions live 30 minutes - enough, with a browser or two
+        # on the admin page, to exhaust Pi-hole's 16 seats and lock the agent
+        # out (see pihole.py).
+        pihole.logout()
     _log(result)
-    print(json.dumps(result, sort_keys=True))
+    # Flushed explicitly: install-automation.sh reads this line back from the
+    # journal the moment the unit finishes.
+    print(json.dumps(result, sort_keys=True), flush=True)
     return 0 if result["ok"] else 1
 
 

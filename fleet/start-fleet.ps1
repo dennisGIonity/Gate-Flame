@@ -72,4 +72,9 @@ Write-Host "  Keep this window open - closing it stops the dashboard, and the" -
 Write-Host "  nodes then log 'timed out', which looks like a firewall problem." -ForegroundColor DarkGray
 Write-Host ""
 
-python -m uvicorn app:app --host 0.0.0.0 --port $port
+# Prefer the project venv (tools\START-IONITY-SERVER.ps1 creates it); fall back
+# to whatever `python` is on PATH. --no-proxy-headers: the app reads
+# X-Forwarded-* itself, from trusted proxies only (see app.py, PATH PREFIX).
+$py = Join-Path $dir ".venv\Scripts\python.exe"
+if (-not (Test-Path $py)) { $py = "python" }
+& $py -m uvicorn app:app --host 0.0.0.0 --port $port --no-proxy-headers --no-server-header

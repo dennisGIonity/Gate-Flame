@@ -4,9 +4,12 @@
 # reboot. Started by hand from start-fleet.ps1. If the workstation restarts or
 # the terminal closes, every box keeps posting into nothing."
 #
-# This registers fleet\start-fleet.ps1 as a Windows Scheduled Task: hidden (no
-# terminal to accidentally close), triggered at boot AND at logon, and
-# restarted automatically up to 999 times if the process ever exits. It does
+# 2026-09-26 (build 1.1.0): the task now runs tools\START-IONITY-SERVER.ps1
+# -Hidden -Watch, which starts BOTH the fleet dashboard (:8091) and the Ionity
+# Local Drive (its /gateflame/ bridge on :443/:8080), and restarts either one
+# within 30 s if it exits. Triggered at boot AND at logon; the task itself is
+# restarted up to 999 times if the watcher ever exits. Re-running this script
+# replaces the older task (same name) that started only fleet\start-fleet.ps1. It does
 # not touch fleet.env.ps1 or the address problem (BUG-07, see the note this
 # script prints at the end) - it only stops "someone closed a window" from
 # being the failure mode.
@@ -22,7 +25,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..").Path
 $fleetDir = Join-Path $repoRoot "fleet"
-$script   = Join-Path $fleetDir "start-fleet.ps1"
+$script   = Join-Path $PSScriptRoot "START-IONITY-SERVER.ps1"
 $envFile  = Join-Path $fleetDir "fleet.env.ps1"
 
 if (-not (Test-Path $script)) {
@@ -40,7 +43,7 @@ if (-not (Test-Path $envFile)) {
 $taskName = "GateFlameFleetDashboard"
 
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `
-    -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`"" `
+    -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`" -Hidden -Watch" `
     -WorkingDirectory $fleetDir
 
 # Two triggers on purpose: AtStartup brings it back with nobody signed in yet
@@ -62,12 +65,12 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger1, $
 
 Write-Host ""
 Write-Host "  Registered scheduled task '$taskName'." -ForegroundColor Cyan
-Write-Host "  Runs fleet\start-fleet.ps1 hidden, at boot and at logon; restarts it up to 999" -ForegroundColor Cyan
-Write-Host "  times (1-minute backoff) if the process ever exits." -ForegroundColor Cyan
+Write-Host "  Runs tools\START-IONITY-SERVER.ps1 -Hidden -Watch at boot and at logon: the fleet" -ForegroundColor Cyan
+Write-Host "  dashboard + Ionity Local Drive, each restarted within 30 s if it exits." -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  NOT proven yet - only staged. This closes BUG-06 once, and only once, you:" -ForegroundColor Yellow
 Write-Host "    1. Reboot this machine." -ForegroundColor Yellow
-Write-Host "    2. Wait ~30s, then from another LAN device:  curl http://<this-IP>:8091/healthz" -ForegroundColor Yellow
+Write-Host "    2. Wait ~30s, then from another LAN device:  curl http://<this-IP>:8091/healthz  and  http://<this-IP>:8080/gateflame/healthz" -ForegroundColor Yellow
 Write-Host "    3. See it answer with nobody having opened a terminal." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  BUG-07 (the address keeps moving - .7 -> .6 -> .3) is NOT fixed by this script." -ForegroundColor Yellow

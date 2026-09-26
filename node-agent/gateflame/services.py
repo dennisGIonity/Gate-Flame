@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import shutil
 import threading
-import time
 
 from . import dpi as dpi_mod
 from . import firewall as firewall_mod
@@ -43,6 +42,24 @@ netcheck = netcheck_mod.NetcheckRunner()
 
 def _has(binary: str) -> bool:
     return shutil.which(binary) is not None
+
+
+# The DPI module has a parser (dpi.parse_frame) and a bounded flow table, and
+# NOTHING THAT FEEDS THE TABLE: there is no AF_PACKET capture loop in this
+# build. Its old registry check was the CAP_NET_RAW test alone, so a box that
+# had the capability and a /start call reported `running` while observing
+# nothing, and a box without it was told to go and grant a capability for a
+# feature that does not exist. "Never `running` while silently doing nothing"
+# is this registry's house rule (see firewall.py), so it now says what is true.
+DPI_CAPTURE_GAP = (
+    "not implemented: the packet capture loop that feeds this module is not built "
+    "in this release - the parser exists, nothing captures (premium, in-path only)"
+)
+
+
+def flows_capture_state() -> dict:
+    """Extra fields for /flows/recent so an empty list cannot read as 'nothing seen'."""
+    return {"capturing": False, "gap": DPI_CAPTURE_GAP}
 
 
 MODULE_DEFS = {
@@ -81,10 +98,10 @@ MODULE_DEFS = {
     },
     "module_dpi_flow": {
         "label": "Deep Packet Inspection (headers only)",
-        # Implemented 2026-08-14. Reports the real CAP_NET_RAW state; without
-        # it, `degraded` plus the remedy, and zero observed flows — never a
-        # fabricated one.
-        "check": lambda: dpi_mod.capability(),
+        # The parser was implemented 2026-08-14; the capture loop never was.
+        # Reported as not_implemented until it is - see DPI_CAPTURE_GAP. When a
+        # capture loop lands, this goes back to `dpi_mod.capability()`.
+        "check": lambda: (False, DPI_CAPTURE_GAP),
     },
     "module_wan_audit": {
         "label": "WAN Quality & Budget",

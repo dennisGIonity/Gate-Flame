@@ -1,25 +1,36 @@
+# Gate^Flame Fleet Dashboard — systemd unit for a plain Linux server.
+#   sudo useradd --system --home /opt/gateflame-fleet --shell /usr/sbin/nologin gateflame-fleet
+#   sudo install -d -o root -g gateflame-fleet -m 0750 /etc/gateflame-fleet
+#   sudo install -o root -g gateflame-fleet -m 0640 fleet.env /etc/gateflame-fleet/fleet.env
+#   sudo cp deploy/gateflame-fleet.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now gateflame-fleet
+# Secrets live in the EnvironmentFile, never inline in this unit.
 [Unit]
 Description=Gate^Flame Fleet Dashboard
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=gateflame-fleet
+Group=gateflame-fleet
 WorkingDirectory=/opt/gateflame-fleet
-Environment=GATEFLAME_FLEET_DB=/opt/gateflame-fleet/fleet.db
-# --- set these two before starting, they have no default and the app refuses to boot without them ---
-Environment=GATEFLAME_FLEET_TOKEN=CHANGE_ME_SAME_VALUE_AS_NODE_AGENTS_GATEFLAME_FEED_TOKEN
-Environment=GATEFLAME_FLEET_ADMIN_USER=admin
-Environment=GATEFLAME_FLEET_ADMIN_PASSWORD=CHANGE_ME
-ExecStart=/opt/gateflame-fleet/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8090
+EnvironmentFile=/etc/gateflame-fleet/fleet.env
+Environment=GATEFLAME_FLEET_DB=/opt/gateflame-fleet/data/fleet.db
+# Caddy on the same host connects from loopback — the default trusted proxy.
+ExecStart=/opt/gateflame-fleet/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8091 --no-proxy-headers --no-server-header
 Restart=on-failure
 RestartSec=3
 
-# Basic hardening — this process only needs its own directory and the network.
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/opt/gateflame-fleet
+ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/gateflame-fleet/data
 
 [Install]
 WantedBy=multi-user.target

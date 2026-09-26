@@ -1,10 +1,8 @@
-# Caddy gets you free automatic HTTPS with zero certificate hassle — point
-# this at whatever domain you land on (feeds.ionity.today or otherwise) once
-# DNS is pointed at the server's IP. Caddy handles the cert renewal itself.
-#
-# Install: https://caddyserver.com/docs/install
-# Run:     sudo caddy run --config /etc/caddy/Caddyfile
-
+# Gate^Flame Fleet — Caddy on a plain server (no docker), fleet run by
+# deploy/gateflame-fleet.service on 127.0.0.1:8091.
+#   sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile   # edit the domain
+#   sudo systemctl reload caddy
 feeds.ionity.today {
-    reverse_proxy 127.0.0.1:8090
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8091
 }

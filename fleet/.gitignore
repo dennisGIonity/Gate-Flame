@@ -1,0 +1,11 @@
+# Runtime state and secrets — never committed.
+.venv/
+venv/
+data/
+fleet.db
+fleet.db-wal
+fleet.db-shm
+fleet.env
+fleet.env.ps1
+__pycache__/
+*.log

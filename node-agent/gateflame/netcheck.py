@@ -27,6 +27,7 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 # The script lives beside the package on the Pi (/home/wabapi/node-agent/), not
@@ -51,6 +52,14 @@ class NetcheckRunner:
         self._script = script_path or os.environ.get("GATEFLAME_NETCHECK_SH", DEFAULT_SCRIPT)
         self._runner = runner or self._run_subprocess
         self._bash = bash
+        # Single-flight. The kiosk, the phone and IoniBot can all ask at once,
+        # and each run is a dozen DNS probes plus a docker exec. Callers that
+        # arrive while a run is in progress get THAT run's result - which is
+        # as fresh as their own would have been - instead of starting another.
+        # Nothing is kept once the run ends: see the class docstring on why a
+        # cached network check is a network check that can be wrong.
+        self._flight_lock = threading.Lock()
+        self._inflight: tuple[threading.Event, list] | None = None
 
     # ---------------------------------------------------------------- helpers
 
@@ -66,7 +75,7 @@ class NetcheckRunner:
             try:
                 probe = subprocess.run(
                     [candidate, "-c", "echo GATEFLAME_BASH_OK"],
-                    capture_output=True, text=True, timeout=5,
+                    capture_output=True, text=True, timeout=5, check=False,
                 )
             except (OSError, subprocess.SubprocessError):
                 continue
@@ -113,7 +122,36 @@ class NetcheckRunner:
         nothing except that something went wrong, and Ionibot would render the
         same 'could not read' either way — so we spend the response body on
         saying WHICH thing went wrong instead.
+
+        Concurrent calls share one run (see __init__).
         """
+        with self._flight_lock:
+            flight = self._inflight
+            leader = flight is None
+            if leader:
+                flight = self._inflight = (threading.Event(), [])
+        done, box = flight
+        if not leader:
+            # Bounded wait: the leader itself is bounded by TIMEOUT_SECONDS.
+            if done.wait(TIMEOUT_SECONDS + 10) and box:
+                return box[0]
+            return self._gap(
+                "another network check was already running and did not finish in time",
+                "run `bash gateflame-netcheck.sh` on the box to see which check is hanging",
+            )
+        try:
+            result = self._run_once()
+        except Exception as exc:  # noqa: BLE001 - never raises, by contract
+            result = self._gap(f"the network check failed to run: {type(exc).__name__}",
+                               "check the agent's journal for the traceback")
+        finally:
+            with self._flight_lock:
+                self._inflight = None
+        box.append(result)
+        done.set()
+        return result
+
+    def _run_once(self) -> dict:
         if not Path(self._script).is_file():
             return self._gap(
                 f"the network check script is not installed at {self._script}",

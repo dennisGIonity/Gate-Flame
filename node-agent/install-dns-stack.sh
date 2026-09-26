@@ -26,10 +26,15 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STACK="$HERE/dns-stack"
+# install-all.sh points this at /opt/gateflame/dns-stack so the stack (Pi-hole's
+# data and .env) does not live in a release folder that may be in /tmp.
+STACK="${GATEFLAME_DNS_STACK:-$HERE/dns-stack}"
 DROPIN_DIR="/etc/systemd/system/gateflame-node-agent.service.d"
 RESOLV_BACKUP="/var/backups/gateflame-resolv.conf.orig"
-LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')"
+# `src` field, not a fixed column: the column moves when the route has no `via`.
+# Falls back to the first global address on a segment with no default route.
+LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+[[ -n "$LAN_IP" ]] || LAN_IP="$(ip -4 -o addr show scope global 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}')"
 USE_LOCALLY=0
 
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
@@ -191,9 +196,16 @@ except Exception:
     print(''); sys.exit(0)
 finally:
     s.close()
+# The RCODE decides what an empty answer means. This used to print "NXDOMAIN" for
+# ANY reply without answers - so a SERVFAIL (Pi-hole forwarded the name and the
+# forward failed) read as "blocked", and "blocking works" was printed for a box
+# whose gravity did not hold the domain at all.
+rcode = struct.unpack('>H', data[2:4])[0] & 0x000F
 ancount = struct.unpack('>H', data[6:8])[0]
+if rcode != 0:
+    print({2: 'SERVFAIL', 3: 'NXDOMAIN', 5: 'REFUSED'}.get(rcode, 'RCODE%d' % rcode)); sys.exit(0)
 if not ancount:
-    print('NXDOMAIN'); sys.exit(0)
+    print('NODATA'); sys.exit(0)
 i = 12
 while data[i]:
     i += data[i] + 1
@@ -202,6 +214,22 @@ j = i + 2 + 2 + 2 + 4
 rdlen = struct.unpack('>H', data[j:j+2])[0]
 j += 2
 print('.'.join(str(b) for b in data[j:j+4]) if rdlen == 4 else 'OK')
+PYEOF
+}
+
+# Does this box have a path to the internet at all? A TCP connect to public anycast
+# resolvers, which does not depend on DNS - the thing being installed. Used only to
+# tell "clean lookups fail because there is no uplink" from "the stack is broken".
+wan_up() {
+  python3 - <<'PYEOF' 2>/dev/null
+import socket, sys
+for host in ("1.1.1.1", "9.9.9.9", "8.8.8.8"):
+    try:
+        socket.create_connection((host, 443), timeout=2).close()
+        sys.exit(0)
+    except OSError:
+        pass
+sys.exit(1)
 PYEOF
 }
 
@@ -381,29 +409,54 @@ if [[ "$UNBOUND_STATE" != "running" ]]; then
 fi
 ok "unbound container running"
 
+resolved_ok() {  # an address (or "OK" for a non-A first record) - not an error RCODE
+  [[ -n "$1" && "$1" != "NXDOMAIN" && "$1" != "SERVFAIL" && "$1" != "REFUSED" \
+     && "$1" != "NODATA" && "$1" != RCODE* ]]
+}
+
+HAVE_WAN=0
+wan_up && HAVE_WAN=1
+
 RESOLVED=""
-# Unbound is a RECURSIVE resolver with a cold cache on first start: it walks from the
-# root servers down for every name, and the first few queries can exceed a 5s timeout
-# while it primes root hints. A single-shot check here would report a broken stack
-# that is merely warming up.
-for _ in $(seq 1 12); do
-  RESOLVED="$(dns_query 127.0.0.1 github.com)"
-  [[ -n "$RESOLVED" && "$RESOLVED" != "NXDOMAIN" ]] && break
-  sleep 5
-done
-if [[ -n "$RESOLVED" && "$RESOLVED" != "NXDOMAIN" ]]; then
-  ok "clean lookup works: github.com -> $RESOLVED"
+if (( HAVE_WAN )); then
+  # Unbound is a RECURSIVE resolver with a cold cache on first start: it walks from the
+  # root servers down for every name, and the first few queries can exceed a 5s timeout
+  # while it primes root hints. A single-shot check here would report a broken stack
+  # that is merely warming up.
+  for _ in $(seq 1 12); do
+    RESOLVED="$(dns_query 127.0.0.1 github.com)"
+    resolved_ok "$RESOLVED" && break
+    sleep 5
+  done
+  if resolved_ok "$RESOLVED"; then
+    ok "clean lookup works: github.com -> $RESOLVED"
+  else
+    warn "unbound direct check:"
+    UP="$(dns_query 172.28.0.10 github.com)"
+    echo "      172.28.0.10:53 -> ${UP:-no answer}"
+    docker logs gateflame-unbound --tail 8 2>&1 | sed 's/^/      /'
+    die "Pi-hole cannot resolve a clean domain after 60s (last answer: ${RESOLVED:-none}) although this box CAN reach the internet. If the direct unbound query above WORKED, then FTLCONF_dns_upstreams is pointing at the wrong port."
+  fi
 else
-  warn "unbound direct check:"
-  UP="$(dns_query 172.28.0.10 github.com)"
-  echo "      172.28.0.10:53 -> ${UP:-no answer}"
-  docker logs gateflame-unbound --tail 8 2>&1 | sed 's/^/      /'
-  die "Pi-hole cannot resolve a clean domain after 60s. If the direct unbound query above WORKED, then FTLCONF_dns_upstreams is pointing at the wrong port."
+  # No uplink (an isolated lab router, or the ISP is down). Recursion cannot be
+  # proven, and that is not the stack's fault - say so instead of dying with a
+  # message that sends someone to debug unbound.
+  warn "this box has NO internet uplink (no public resolver answered a TCP connect)."
+  warn "clean lookups cannot resolve until it has one - the stack itself is up."
+  warn "re-check later with: bash gateflame-netcheck.sh"
 fi
 
 BLOCKED="$(dns_query 127.0.0.1 doubleclick.net)"
-if [[ "$BLOCKED" == "0.0.0.0" || "$BLOCKED" == "NXDOMAIN" || -z "$BLOCKED" ]]; then
-  ok "blocking works: doubleclick.net -> ${BLOCKED:-no answer}"
+if [[ "$BLOCKED" == "0.0.0.0" || "$BLOCKED" == "NXDOMAIN" || "$BLOCKED" == "NODATA" ]]; then
+  ok "blocking works: doubleclick.net -> $BLOCKED"
+elif [[ -z "$BLOCKED" ]]; then
+  # Silence is not a block. It used to be reported as "blocking works".
+  warn "doubleclick.net got NO answer - the resolver did not reply in 5s"
+  warn "check again shortly: docker compose -f $STACK/docker-compose.yml logs pihole"
+elif [[ "$BLOCKED" == "SERVFAIL" || "$BLOCKED" == "REFUSED" ]]; then
+  warn "doubleclick.net came back $BLOCKED - Pi-hole forwarded it instead of blocking it."
+  warn "gravity does not hold it yet (still building, or no lists downloaded):"
+  warn "  docker exec gateflame-pihole pihole -g"
 else
   warn "doubleclick.net resolved to $BLOCKED - gravity may still be building"
   warn "check again shortly, or run: docker exec gateflame-pihole pihole -g"
@@ -411,10 +464,12 @@ fi
 
 # DNSSEC through unbound. If this fails the recursive path is not working and the box
 # is quietly just forwarding.
-if [[ -n "$(dns_query 127.0.0.1 dnssec.works)" ]]; then
-  ok "recursive resolution via unbound works"
-else
-  warn "dnssec.works lookup failed - check: docker compose logs unbound"
+if (( HAVE_WAN )); then
+  if resolved_ok "$(dns_query 127.0.0.1 dnssec.works)"; then
+    ok "recursive resolution via unbound works"
+  else
+    warn "dnssec.works lookup failed - check: docker compose logs unbound"
+  fi
 fi
 
 # ------------------------------------------------------- 5. tell the agent

@@ -1,0 +1,10 @@
+.venv
+venv
+data
+fleet.db*
+fleet.env
+fleet.env.ps1
+__pycache__
+*.log
+test_*.py
+deploy

@@ -378,6 +378,9 @@ class Firewall:
             self.ensure_installed()
         except FirewallUnavailable:
             return []
+        return self._read_sets()
+
+    def _read_sets(self) -> list[dict]:
         out: list[dict] = []
         for set_name in (SET_V4, SET_V6):
             result = self._runner.run(
@@ -387,6 +390,26 @@ class Firewall:
                 continue
             out.extend(_parse_set_json(result.stdout))
         return out
+
+    def bounced_report(self) -> dict:
+        """What the /firewall/bounced route returns: the live set AND whether it could be read.
+
+        `bounced()` returns [] both when nothing is bounced and when nftables
+        cannot be driven at all - "cannot look" and "looked, nothing there" in
+        one shape. This says which. It also never INSTALLS the table: a GET
+        must not add a ruleset to the kernel. No table means no bounce exists,
+        which is simply an empty list.
+        """
+        try:
+            usable, gap = self.capability()
+        except Exception as exc:  # noqa: BLE001 - a status route must not throw
+            usable, gap = False, f"nftables is not usable: {exc}"
+        if not usable:
+            return {"bounced": [], "gap": gap or "nftables unavailable"}
+        try:
+            return {"bounced": self._read_sets(), "gap": None}
+        except Exception as exc:  # noqa: BLE001
+            return {"bounced": [], "gap": f"could not read the bounce sets: {exc}"}
 
 
 def _parse_set_json(text: str) -> list[dict]:

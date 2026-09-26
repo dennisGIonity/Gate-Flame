@@ -11,10 +11,18 @@
 set -eu
 unset NODE_ENV
 C=/e/Gateflame; cd $C
-NAME="$(grep '^VERSION_NAME=' android/version.properties | cut -d= -f2 | tr -d '\r ')"
-[ -n "$NAME" ] || { echo "no VERSION_NAME"; exit 1; }
+# The release version, from the ONE line that assigns it, validated as semver. An
+# unanchored grep once matched the file's comment line too ("# VERSION_NAME  human-
+# facing semver ...") and `cut -d= -f2` returns a line with no '=' whole - which is
+# how that comment ended up in a release folder name and in the 1.0.2 install banner.
+NAME="$(awk -F= '/^VERSION_NAME=/{v=$2; gsub(/[\r \t]/, "", v); print v; exit}' android/version.properties)"
+echo "$NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "VERSION_NAME in android/version.properties is not a version: '$NAME'"; exit 1; }
 find release -maxdepth 1 -name 'GateFlame-# *' -exec rm -rf {} + 2>/dev/null || true
-VER="$NAME+$(git rev-parse --short HEAD)"
+# <semver>+<short sha> when git can say; the bare semver when it cannot (a source
+# drop without .git). install.sh / upgrade.sh accept both and write it into the
+# agent's 20-version.conf drop-in, so /system/status reports exactly this string.
+SHA="$(git rev-parse --short HEAD 2>/dev/null || true)"
+VER="$NAME${SHA:++$SHA}"
 OUT=release/GateFlame-$NAME
 rm -rf "$OUT" "release/GateFlame-$NAME.zip"; mkdir -p "$OUT"/{node,mobile,fleet-console,docs}
 [ -f dist-kiosk/index.html ] || { echo "run tools/build-bundles.sh first"; exit 1; }

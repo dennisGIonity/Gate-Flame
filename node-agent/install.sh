@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Installs node-agent as a systemd service on Raspberry Pi OS / Armbian.
+# Installs node-agent as a systemd service on any Debian-family arm64 board:
+# Raspberry Pi OS (lab Pi 5), Radxa OS / Debian (Standard T3, Cubie A7A), Armbian.
 # Run as root: sudo bash install.sh
 set -euo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/opt/gateflame/node-agent"
 DATA_DIR="/var/lib/gateflame"
 # The persistent data root (.DUMP) - see gateflame/datadir.py. Created here so
@@ -35,8 +37,15 @@ done
 # Upgrades and re-runs are the normal case, not the exception, so the package
 # directory is removed before it is written.
 rm -rf "$INSTALL_DIR/gateflame"
-cp -r ./gateflame "$INSTALL_DIR"/
-cp ./requirements.txt "$INSTALL_DIR"/
+cp -r "$HERE/gateflame" "$INSTALL_DIR"/
+cp "$HERE/requirements.txt" "$INSTALL_DIR"/
+# /api/v1/posture/netcheck runs this script from beside the package
+# (netcheck.DEFAULT_SCRIPT). Only upgrades (install-pi-release.sh) ever put it
+# there, so every FRESH install answered that route with "the network check
+# script is not installed" and IoniBot could only ever say "unknown".
+if [[ -f "$HERE/gateflame-netcheck.sh" ]]; then
+  install -m 0755 "$HERE/gateflame-netcheck.sh" "$INSTALL_DIR/gateflame-netcheck.sh"
+fi
 # Stale bytecode survives a source replacement and is loaded in preference to
 # a .py whose mtime it still matches. Clear it with the source.
 find "$INSTALL_DIR" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
@@ -60,7 +69,10 @@ Group=gateflame
 # root:video. Without this the agent runs vcgencmd successfully as a binary and
 # gets a permission error back, so throttle flags read null on a machine that
 # can perfectly well report them — a silent, plausible-looking wrong answer.
-# The group does not exist on non-Pi hosts; systemd tolerates that.
+# `video` is a standard Debian group (base-passwd, gid 44), so it exists on Radxa
+# OS and Armbian too, where it is simply unused. Do NOT add a board-specific group
+# here: systemd refuses to start a unit whose SupplementaryGroups= does not exist
+# (216/GROUP) - it does not skip it.
 SupplementaryGroups=video
 Environment=GATEFLAME_DB_PATH=/var/lib/gateflame/state.db
 Environment=GATEFLAME_DATA_ROOT=/opt/gateflame/.DUMP
@@ -89,6 +101,22 @@ PrivateTmp=true
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# The version /system/status reports, from the release's VERSION file, as its own
+# drop-in (tools/install-pi-release.sh writes the same file on upgrades). Only a
+# line that IS a version is used: the 1.0.2 banner carried a whole comment
+# paragraph from android/version.properties because nothing checked.
+DROPIN_DIR="/etc/systemd/system/gateflame-node-agent.service.d"
+install -d "$DROPIN_DIR"
+RELEASE_VERSION="$(tr -d '\r' < "$HERE/VERSION" 2>/dev/null | grep -Em1 '^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$' || true)"
+if [[ -n "$RELEASE_VERSION" ]]; then
+  printf '[Service]\nEnvironment=GATEFLAME_VERSION=%s\n' "$RELEASE_VERSION" > "$DROPIN_DIR/20-version.conf"
+  chmod 0644 "$DROPIN_DIR/20-version.conf"
+  echo "agent version: $RELEASE_VERSION"
+else
+  rm -f "$DROPIN_DIR/20-version.conf"
+  echo "no valid VERSION file next to install.sh - the agent reports its built-in default version"
+fi
 
 systemctl daemon-reload
 systemctl enable --now gateflame-node-agent

@@ -57,7 +57,17 @@ STATE_DIR="/var/lib/gateflame"
 # address", and the test for the detection-failure path relies on an empty value
 # surviving. With `:-` an empty override was silently replaced by route detection, so
 # that path was only ever exercised on machines with no `ip` binary (Windows).
-LAN_IP="${GATEFLAME_LAN_IP-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}"
+#
+# The address is the route's `src` field, found by name. It used to be column 7,
+# which is `src`'s value only when the route has a `via` hop; on a directly
+# connected route the columns shift and column 7 is the uid or nothing. No
+# fallback beyond the route on purpose: this value is written INTO .env below, and
+# guessing "the first address on some interface" when the route is briefly gone
+# (router reboot) could rebind the resolver to the wrong interface.
+current_lan_ip() {
+  ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}'
+}
+LAN_IP="${GATEFLAME_LAN_IP-$(current_lan_ip)}"
 FAIL_COUNT_FILE="$STATE_DIR/dns-watchdog-fails"
 BYPASS_FLAG="$STATE_DIR/bypass"
 
@@ -165,7 +175,7 @@ dns_answers() {
 # actually holds right now. If they differ, .env is rewritten to match and the
 # change is logged loudly - a renumber is news an operator wants, not a blip.
 # Rewrite only; the caller decides when to recreate, so this cannot thrash.
-current_lan_ip() { ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}'; }
+# (current_lan_ip() is defined at the top, where LAN_IP is first computed.)
 
 sync_lan_ip_env() {
   local envfile="$STACK/.env" recorded="" live="${LAN_IP:-}"
@@ -386,7 +396,9 @@ if (( fails >= BYPASS_AFTER_FAILS )); then
     exit 0
   fi
   log "ALERT: bypass failed too. Manual recovery required."
-  log "Set the router's DHCP DNS back to automatic, then investigate the box."
+  # ADR-001: the router forwards to this box as its UPSTREAM; the DHCP-handed DNS
+  # was never changed. Naming the DHCP field here sent people to the wrong setting.
+  log "Set the router's Internet/WAN (upstream) DNS back to automatic, then investigate the box."
   exit 1
 fi
 

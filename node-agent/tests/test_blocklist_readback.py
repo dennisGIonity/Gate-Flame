@@ -55,6 +55,7 @@ class Recorder:
         self.stats = LOADED if stats is None else stats
         self.posted: list[str] = []
         self.paths: list[str] = []
+        self.deleted: list[str] = []
         self.gravity_runs = 0
         self._written = False
 
@@ -63,14 +64,10 @@ class Recorder:
             return list(self.lists_after_write)
         return list(self.lists)
 
-    # `timeout` accepted and ignored: the gravity rebuild is posted with its own
-    # much larger timeout (see blocklists._GRAVITY_TIMEOUT). These tests do not
-    # care how long the real call would wait, only what was sent - but a double
-    # that cannot accept the argument fails every caller for the wrong reason.
+    # `timeout` accepted and ignored: these tests do not care how long the real
+    # call would wait, only what was sent - but a double that cannot accept the
+    # argument fails every caller for the wrong reason.
     def post(self, path, payload, timeout=None):
-        if path == "/api/action/gravity":
-            self.gravity_runs += 1
-            return {} if self.gravity_ok else None
         self.paths.append(path)
         # Pi-hole v6 answers 400 unless `type` is in the QUERY STRING. Modelled
         # here rather than assumed, so the fixture fails the same way the real
@@ -85,7 +82,16 @@ class Recorder:
         return {"ok": True}
 
     def delete(self, path):
+        self.deleted.append(path)
         return self.accept_delete
+
+    # The gravity rebuild has its own seam (blocklists._gravity_post): Pi-hole
+    # streams it as text/plain, not JSON, so it no longer goes through _post.
+    # A completed run on a Pi-hole whose summary carries no gravity timestamp
+    # is accepted, exactly as a completed POST always was in this fixture.
+    def gravity(self, timeout):
+        self.gravity_runs += 1
+        return blocklists.GRAVITY_COMPLETED if self.gravity_ok else blocklists.GRAVITY_REFUSED
 
     def summary(self):
         return self.stats
@@ -96,12 +102,7 @@ def pihole(monkeypatch):
     rec = Recorder()
 
     def install(r):
-        monkeypatch.setattr(blocklists, "current_lists", r.current_lists)
-        monkeypatch.setattr(blocklists, "_post", r.post)
-        monkeypatch.setattr(blocklists, "_delete", r.delete)
-        monkeypatch.setattr(blocklists, "summary", r.summary)
-        monkeypatch.setattr(blocklists, "_last_error", None, raising=False)
-        return r
+        return _install(monkeypatch, r)
 
     rec.install = install  # type: ignore[attr-defined]
     return install(rec)
@@ -111,6 +112,7 @@ def _install(monkeypatch, rec):
     monkeypatch.setattr(blocklists, "current_lists", rec.current_lists)
     monkeypatch.setattr(blocklists, "_post", rec.post)
     monkeypatch.setattr(blocklists, "_delete", rec.delete)
+    monkeypatch.setattr(blocklists, "_gravity_post", rec.gravity)
     monkeypatch.setattr(blocklists, "summary", rec.summary)
     monkeypatch.setattr(blocklists, "_last_error", None, raising=False)
     return rec

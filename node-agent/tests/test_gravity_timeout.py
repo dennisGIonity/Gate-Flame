@@ -73,16 +73,15 @@ def _wire(monkeypatch, *, gravity_raises: bool, summaries: list):
 
     calls = {"gravity": 0}
 
-    def fake_post(path, payload, timeout=None):
-        if path.startswith("/api/action/gravity"):
-            calls["gravity"] += 1
-            calls["timeout"] = timeout
-            if gravity_raises:
-                return None
-            return {"ok": True}
-        return {"ok": True}
+    # The gravity POST has its own seam now (it streams text/plain, not JSON).
+    # "Raises" here means what the 2026-09-06 box saw: the HTTP side gave up.
+    def fake_gravity(timeout):
+        calls["gravity"] += 1
+        calls["timeout"] = timeout
+        return blocklists.GRAVITY_DROPPED if gravity_raises else blocklists.GRAVITY_COMPLETED
 
-    monkeypatch.setattr(blocklists, "_post", fake_post)
+    monkeypatch.setattr(blocklists, "_post", lambda path, payload, timeout=None: {"ok": True})
+    monkeypatch.setattr(blocklists, "_gravity_post", fake_gravity)
     monkeypatch.setattr(blocklists, "_delete", lambda path: True)
 
     seq = list(summaries)
