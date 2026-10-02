@@ -18,6 +18,10 @@ heavy lifting done on the Ionity server (running on this PC for now). It is a se
 build from `E:\.ESP32-MCP`, which is **not touched**: T1 has its own port (**8095**), its
 own mDNS service (`_gft1._tcp`), its own MCP tool names (`t1_*`) and its own firmware.
 
+> 📐 **Next build steps: `docs/T1-BLUEPRINT.md`** — build patterns (one image + NVS provisioning,
+> per-device tokens, verified flasher, signed OTA) taken from ESP32-MCP as *ideas only*. That is a
+> different client's project; no code or data comes across.
+
 ```
  household devices ──DHCP DNS──▶ ROUTER ──upstream DNS──▶ T1 (ESP32-S3) ──▶ 9.9.9.9 / 149.112.112.112
                                    ▲  falls back on its own                  │
