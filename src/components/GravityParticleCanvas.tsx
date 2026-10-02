@@ -11,6 +11,7 @@
 import React, { useEffect, useRef } from 'react';
 
 import { useConnection } from '../hooks/useConnection';
+import { useReducedMotion } from './kiosk/charts';
 
 interface GravityParticleCanvasProps {
   isPaused?: boolean;
@@ -34,6 +35,30 @@ interface GravityParticleCanvasProps {
   dataSource?: 'live' | 'offline' | 'connecting' | 'error';
 }
 
+interface Particle {
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  radius: number;
+  color: string;
+  speed: number;
+  type: 'threat' | 'clean';
+  label: string;
+  alpha: number;
+}
+
+/** What the simulation reads each frame. Held in a ref so a new reading moves
+ *  the picture instead of restarting it - see the note on the effect below. */
+interface LiveInputs {
+  isPaused: boolean;
+  blockPercentage: number | null;
+  threatFeed: string[];
+  cleanFeed: string[];
+}
+
+const MAX_PARTICLES = 30;
+
 export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React.memo(({
   isPaused = false,
   threatFeed,
@@ -42,25 +67,48 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
   dataSource: dataSourceOverride,
 }) => {
   const connection = useConnection();
-  const dataSource = dataSourceOverride ?? connection.dataSource;
+  // Kept for callers that pass it; the picture no longer differs by source,
+  // because the invented-label pools that once keyed off it are gone.
+  void (dataSourceOverride ?? connection.dataSource);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const parentRef = useRef<HTMLElement | null>(null);
   const [isVisible, setIsVisible] = React.useState(true);
+  const reduced = useReducedMotion();
 
-  
+  /*
+   * The simulation used to be rebuilt on every prop change. HomeScreen passes
+   * `threatFeed={[]}` - a fresh array each render - and `blockPercentage`
+   * changes with every 4 s poll, so all thirty particles respawned at random
+   * positions every few seconds: a visible stutter on the one screen a
+   * customer opens most. The live values now travel through a ref that the
+   * running loop reads each frame, and the effect depends only on whether
+   * the canvas is on screen and whether motion is allowed.
+   */
+  const live = useRef<LiveInputs>({
+    isPaused,
+    blockPercentage,
+    threatFeed: threatFeed ?? [],
+    cleanFeed: cleanFeed ?? [],
+  });
+  live.current = {
+    isPaused,
+    blockPercentage,
+    threatFeed: threatFeed ?? [],
+    cleanFeed: cleanFeed ?? [],
+  };
+
   useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         setIsVisible(entry.isIntersecting);
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
     if (canvasRef.current) {
       observer.observe(canvasRef.current);
     }
     return () => observer.disconnect();
   }, []);
-
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -69,89 +117,73 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
     if (!ctx) return;
     const parent = canvas.parentElement;
     if (!parent) return;
-    parentRef.current = parent;
+    if (!isVisible) return;
 
-    let animationFrameId: number;
-    let width = (canvas.width = parent.clientWidth || 600);
-    let height = (canvas.height = parent.clientHeight || 200);
+    // Device-pixel aware: at 2-3x on a phone a 1x canvas renders its labels
+    // and rings blurry. Capped at 2 so a tablet does not pay for pixels nobody
+    // can see.
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    let width = 0;
+    let height = 0;
+    const fit = (w: number, h: number) => {
+      width = Math.max(1, w);
+      height = Math.max(1, h);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    fit(parent.clientWidth || 600, parent.clientHeight || 200);
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      window.requestAnimationFrame(() => {
-        for (const entry of entries) {
-          if (entry.contentRect) {
-            width = canvas.width = entry.contentRect.width;
-            height = canvas.height = entry.contentRect.height;
-          }
-        }
-      });
-    });
-    resizeObserver.observe(parent);
+    let animationFrameId = 0;
+    let isCancelled = false;
 
-    
-
-    // Particle definitions
-    interface Particle {
-      x: number;
-      y: number;
-      targetX: number;
-      targetY: number;
-      radius: number;
-      color: string;
-      speed: number;
-      type: 'threat' | 'clean';
-      label: string;
-      alpha: number;
-    }
-
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver((entries) => {
+            for (const entry of entries) {
+              if (entry.contentRect) fit(entry.contentRect.width, entry.contentRect.height);
+            }
+            if (reduced) drawFrame();
+          })
+        : null;
+    resizeObserver?.observe(parent);
 
     // Labels are only ever drawn from REAL data.
     //
     // This canvas used to invent them: a 70% "threat" rate with names picked
-    // at random from the lists above - Ransomware, Phishing, Malware - drawn
-    // streaming into the core. On the first hardware deployment the node's
-    // threat log was EMPTY and Pi-hole was not installed, and the kiosk still
-    // showed a steady flow of blocked malware. That is not a placeholder, it
-    // is a fabricated security event on a security product's own display.
+    // at random from a list - Ransomware, Phishing, Malware - drawn streaming
+    // into the core. On the first hardware deployment the node's threat log
+    // was EMPTY and Pi-hole was not installed, and the kiosk still showed a
+    // steady flow of blocked malware. That is not a placeholder, it is a
+    // fabricated security event on a security product's own display.
     //
     // The motion stays: it is decoration and reads as decoration. The words do
     // not, because a domain name on a threat dashboard is a claim. With no
     // real feed the particles fly unlabelled.
-    const liveThreats = threatFeed ?? [];
-    const liveClean = cleanFeed ?? [];
-    const hasRealFeed = liveThreats.length > 0 || liveClean.length > 0;
-
-    // 2026-09-10: the invented label pools that used to feed the offline
-    // (then "demo") state are gone. With no real feed the particles fly
-    // unlabelled in every connection state, live or not.
     const pickLabel = (isThreat: boolean): string => {
-      if (!hasRealFeed) return '';
-      const pool = isThreat ? liveThreats : liveClean;
+      const pool = isThreat ? live.current.threatFeed : live.current.cleanFeed;
       if (pool.length === 0) return '';
       return pool[Math.floor(Math.random() * pool.length)];
     };
 
-    const particles: Particle[] = [];
-    const maxParticles = 30;
-
     const createParticle = (): Particle => {
       // Ratio comes from the real block rate when we have one. Falling back to
       // a fixed 70% "threat" mix made an idle network look besieged.
-      const threatRatio =
-        typeof blockPercentage === 'number' && blockPercentage >= 0 && blockPercentage <= 100
-          ? blockPercentage / 100
-          : 0.5; // no rate known: an even, meaningless mix, and no labels anyway
+      const bp = live.current.blockPercentage;
+      const threatRatio = typeof bp === 'number' && bp >= 0 && bp <= 100 ? bp / 100 : 0.5;
       const isThreat = Math.random() < threatRatio;
       const type = isThreat ? 'threat' : 'clean';
       const label = pickLabel(isThreat);
-
-      const color = isThreat 
-        ? (Math.random() > 0.5 ? '#E11D48' : '#F59E0B') // Rose or Amber
+      const color = isThreat
+        ? Math.random() > 0.5
+          ? '#E11D48'
+          : '#F59E0B' // Rose or Amber
         : '#0EA5E9'; // Sky blue for clean DNS
 
       return {
         x: Math.random() * (width * 0.3),
         y: Math.random() * height,
-        targetX: width * 0.5, // Gravity core center
+        targetX: width * 0.5, // Gravity core centre
         targetY: height * 0.5,
         radius: Math.random() * 2.5 + 1.5,
         color,
@@ -162,23 +194,19 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
       };
     };
 
-    // Pre-populate particles
-    for (let i = 0; i < maxParticles; i++) {
+    const particles: Particle[] = [];
+    for (let i = 0; i < MAX_PARTICLES; i++) {
       particles.push(createParticle());
     }
 
-    // Core Gravity Ring rotation angle
     let ringAngle = 0;
 
-    if (!isVisible) return;
-
-    let isCancelled = false;
-    const render = (time: number) => {
-      if (isCancelled) return;
-      
+    /** One frame. `advance` false draws the scene without moving anything. */
+    const drawFrame = (advance = false) => {
+      const paused = live.current.isPaused;
       ctx.clearRect(0, 0, width, height);
 
-      // Draw Grid Background lines
+      // Grid
       ctx.strokeStyle = 'rgba(14, 165, 233, 0.05)';
       ctx.lineWidth = 1;
       const gridSize = 25;
@@ -198,81 +226,74 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
       const coreX = width * 0.5;
       const coreY = height * 0.5;
 
-      // Draw Central "Gravity Sinkhole Engine" Core
-      ringAngle += 0.02;
+      if (advance) ringAngle += 0.02;
 
       ctx.save();
       ctx.translate(coreX, coreY);
 
-      // Outer Pulsing Shield Ring
+      // Outer pulsing shield ring
       ctx.beginPath();
       ctx.arc(0, 0, 36 + Math.sin(ringAngle * 2) * 3, 0, Math.PI * 2);
-      ctx.strokeStyle = isPaused ? 'rgba(225, 29, 72, 0.4)' : 'rgba(14, 165, 233, 0.4)';
+      ctx.strokeStyle = paused ? 'rgba(225, 29, 72, 0.4)' : 'rgba(14, 165, 233, 0.4)';
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 6]);
       ctx.stroke();
 
-      // Inner Rotating Core
+      // Inner rotating core
       ctx.rotate(ringAngle);
       ctx.beginPath();
       ctx.arc(0, 0, 22, 0, Math.PI * 2);
-      ctx.fillStyle = isPaused ? 'rgba(225, 29, 72, 0.15)' : 'rgba(14, 165, 233, 0.15)';
+      ctx.fillStyle = paused ? 'rgba(225, 29, 72, 0.15)' : 'rgba(14, 165, 233, 0.15)';
       ctx.fill();
-      ctx.strokeStyle = isPaused ? '#E11D48' : '#0EA5E9';
+      ctx.strokeStyle = paused ? '#E11D48' : '#0EA5E9';
       ctx.lineWidth = 2;
       ctx.setLineDash([]);
       ctx.stroke();
 
-      // Core Symbol
-      ctx.fillStyle = isPaused ? '#E11D48' : '#0EA5E9';
+      // Core symbol
+      ctx.fillStyle = paused ? '#E11D48' : '#0EA5E9';
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(isPaused ? 'PAUSED' : 'GRAVITY', 0, 0);
+      ctx.fillText(paused ? 'PAUSED' : 'GRAVITY', 0, 0);
 
       ctx.restore();
 
-      // Render & Update Particles
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-
-        // Move particle towards center
         const dx = p.targetX - p.x;
         const dy = p.targetY - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist > 30) {
-          p.x += (dx / dist) * p.speed;
-          p.y += (dy / dist) * p.speed;
-        } else {
-          // Reaching the Gravity Core:
-          if (p.type === 'threat' && !isPaused) {
-            // Draw neutralization spark
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
-            ctx.fill();
-          } else if (p.type === 'clean') {
-            // Clean DNS query passes through to the right side
-            p.x += p.speed * 2;
-          }
-
-          // Reset particle if absorbed or passed out of bounds
-          if (dist <= 30 || p.x > width) {
-            particles[i] = createParticle();
-            continue;
+        if (advance) {
+          if (dist > 30) {
+            p.x += (dx / dist) * p.speed;
+            p.y += (dy / dist) * p.speed;
+          } else {
+            if (p.type === 'threat' && !paused) {
+              // Neutralisation spark
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+              ctx.fill();
+            } else if (p.type === 'clean') {
+              // A clean lookup passes through to the right side
+              p.x += p.speed * 2;
+            }
+            if (dist <= 30 || p.x > width) {
+              particles[i] = createParticle();
+              continue;
+            }
           }
         }
 
-        // Draw particle dot
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.alpha;
         ctx.fill();
 
-        // Connect threat particle line to core if close
-        if (dist < 120 && p.type === 'threat' && !isPaused) {
+        if (dist < 120 && p.type === 'threat' && !paused) {
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
           ctx.lineTo(coreX, coreY);
@@ -281,8 +302,7 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
           ctx.stroke();
         }
 
-        // Draw label for larger particles
-        if (p.radius > 2.5 && dist > 50) {
+        if (p.label && p.radius > 2.5 && dist > 50) {
           ctx.fillStyle = p.color;
           ctx.font = '9px monospace';
           ctx.globalAlpha = 0.7;
@@ -291,23 +311,31 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
 
         ctx.globalAlpha = 1.0;
       }
-
-      animationFrameId = requestAnimationFrame(render);
     };
 
-    animationFrameId = requestAnimationFrame(render);
+    if (reduced) {
+      // Someone who asked for less movement gets the finished picture: the
+      // grid, the core and the field, standing still. Never a blank panel.
+      drawFrame(false);
+    } else {
+      const render = () => {
+        if (isCancelled) return;
+        drawFrame(true);
+        animationFrameId = requestAnimationFrame(render);
+      };
+      animationFrameId = requestAnimationFrame(render);
+    }
 
     return () => {
       isCancelled = true;
       cancelAnimationFrame(animationFrameId);
-      resizeObserver.disconnect();
-      
+      resizeObserver?.disconnect();
     };
-  }, [isPaused, isVisible, threatFeed, cleanFeed, blockPercentage, dataSource]);
+  }, [isVisible, reduced]);
 
   return (
     <div className="relative w-full h-full bg-slate-950 rounded-[24px] border border-slate-800 overflow-hidden shadow-sm font-sans">
-      <canvas ref={canvasRef} className="w-full h-full block" />
+      <canvas ref={canvasRef} className="w-full h-full block" aria-hidden="true" />
       <div className="absolute top-3 left-3 flex items-center gap-2 bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] text-sky-500 font-bold tracking-wider uppercase">
         <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping"></span>
         <span>GRAVITY™ EDGE AI THREAT INTERCEPTOR</span>

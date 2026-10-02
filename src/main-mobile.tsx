@@ -20,10 +20,16 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import MobileApp from './mobile/MobileApp';
 import { WithSplash } from './components/brand/Splash';
+import { PHONE_TEXT_SCALE, applyCachedAccessibility } from './hooks/useAccessibility';
 
 // One palette, always. The app is designed dark; `dark:` variants inherited
 // from the old build would otherwise render a light-mode phone half-styled.
 document.documentElement.classList.add('dark');
+
+// This phone's saved text size / contrast / motion preference, applied before
+// the first screen paints. Until 2026-10-02 these only took effect once the
+// owner opened the Settings card that holds them - see applyCachedAccessibility.
+applyCachedAccessibility(PHONE_TEXT_SCALE);
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {

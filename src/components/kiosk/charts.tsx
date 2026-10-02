@@ -48,19 +48,50 @@ export const CH = {
   muted: '#475569',
 } as const;
 
-/** One shared media query rather than one per component. */
+/** The class useAccessibility puts on <html> when the OWNER asks for less motion. */
+const REDUCE_MOTION_CLASS = 'reduce-motion';
+
+const osPrefersReducedMotion = (): boolean =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
+
+const appPrefersReducedMotion = (): boolean =>
+  typeof document !== 'undefined' && document.documentElement.classList.contains(REDUCE_MOTION_CLASS);
+
+/**
+ * One shared answer to "should this move?", from BOTH places the answer can
+ * come from: the OS setting, and the owner's own "Reduce motion" switch in
+ * the app (useAccessibility → `html.reduce-motion`).
+ *
+ * Until 2026-10-02 only the OS setting was read here. The in-app switch stopped
+ * every CSS animation (index.css kills them under `html.reduce-motion`) and
+ * nothing else: the two canvases kept drifting, the ring kept sweeping and the
+ * headline figures kept counting up, because all of those take their cue from
+ * this hook. A person who had just asked the app for stillness watched it
+ * carry on moving. The class is observed, so flipping the switch takes effect
+ * without a reload, same as the OS setting does.
+ */
 export function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(() =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false,
-  );
+  const [reduced, setReduced] = useState(() => osPrefersReducedMotion() || appPrefersReducedMotion());
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = () => setReduced(mq.matches);
-    mq.addEventListener?.('change', onChange);
-    return () => mq.removeEventListener?.('change', onChange);
+    if (typeof window === 'undefined') return;
+    const recompute = () => setReduced(osPrefersReducedMotion() || appPrefersReducedMotion());
+
+    const mq = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    mq?.addEventListener?.('change', recompute);
+
+    let observer: MutationObserver | null = null;
+    if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(recompute);
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    recompute();
+    return () => {
+      mq?.removeEventListener?.('change', recompute);
+      observer?.disconnect();
+    };
   }, []);
   return reduced;
 }
@@ -672,18 +703,31 @@ export function LiveBackdrop({
       ctx.globalAlpha = 1;
     };
 
-    const step = () => {
+    /*
+     * Capped at ~30 fps. The nodes drift a fraction of a pixel per frame, so
+     * a 60 Hz redraw and a 30 Hz one are indistinguishable by eye — but the
+     * link pass is O(n²) over up to 46 nodes, drawn behind every screen for
+     * as long as the app is open. On a handset that is the single biggest
+     * ongoing drain this app has, and halving it costs nothing visible. The
+     * motion is scaled by the real frame gap so the drift speed is unchanged.
+     */
+    const FRAME_MS = 1000 / 30;
+    let last = 0;
+    const step = (now: number) => {
+      raf = requestAnimationFrame(step);
+      if (now - last < FRAME_MS) return;
+      const dt = last === 0 ? 1 : Math.min(3, (now - last) / (1000 / 60));
+      last = now;
       const p = power.current;
       for (const n of nodes) {
-        n.x += n.vx * (0.5 + p);
-        n.y += n.vy * (0.5 + p);
+        n.x += n.vx * (0.5 + p) * dt;
+        n.y += n.vy * (0.5 + p) * dt;
         if (n.x < -10) n.x = w + 10;
         if (n.x > w + 10) n.x = -10;
         if (n.y < -10) n.y = h + 10;
         if (n.y > h + 10) n.y = -10;
       }
       draw();
-      raf = requestAnimationFrame(step);
     };
 
     seed();

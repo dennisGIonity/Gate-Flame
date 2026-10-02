@@ -47,6 +47,26 @@ const readCache = (): AccessibilityPrefs => {
   return A11Y_DEFAULTS;
 };
 
+/** The phone's clamp for text size. One place, so boot and Settings agree. */
+export const PHONE_TEXT_SCALE = { scaleMin: 0.9, scaleMax: 1.4 } as const;
+
+/**
+ * Apply whatever this device last saved, before React has rendered a screen.
+ *
+ * On the phone the hook below is mounted by ONE component - the Accessibility
+ * card at the bottom of Settings - so until 2026-10-02 a saved text size, high
+ * contrast or reduce-motion preference did nothing on launch. It took effect
+ * only once the owner scrolled to the card that had set it, and reverted on
+ * the next launch until they did so again. Settings that have to be re-found
+ * every time are not settings. The entry point calls this once; the hook then
+ * keeps the document in step as the prefs change.
+ */
+export function applyCachedAccessibility(opts?: { scaleMin?: number; scaleMax?: number }): AccessibilityPrefs {
+  const prefs = readCache();
+  applyAccessibility(prefs, opts?.scaleMin, opts?.scaleMax);
+  return prefs;
+}
+
 const writeCache = (p: AccessibilityPrefs): void => {
   try {
     window.localStorage.setItem(A11Y_CACHE_KEY, JSON.stringify(p));

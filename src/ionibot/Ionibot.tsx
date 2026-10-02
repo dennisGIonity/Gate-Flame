@@ -407,7 +407,7 @@ const IonibotStyles: React.FC = () => (
  * backtick here terminates the string and the build fails with a parse error
  * fifteen lines further down. Use plain quotes in these comments.
  */
-.ib-fab{position:fixed;right:16px;bottom:calc(var(--ib-fab-bottom, 92px) + env(safe-area-inset-bottom));
+.ib-fab{position:fixed;right:calc(16px + var(--gf-safe-right, 0px));bottom:calc(var(--ib-fab-bottom, 92px) + var(--gf-safe-bottom, env(safe-area-inset-bottom, 0px)));
   display:flex;align-items:center;gap:8px;padding:12px 16px;border:0;border-radius:28px;
   background:${C.flame};color:#fff;font:600 15px/1 system-ui,-apple-system,sans-serif;
   box-shadow:0 6px 20px rgba(0,0,0,.28);z-index:9998}
@@ -417,7 +417,7 @@ const IonibotStyles: React.FC = () => (
 .ib-scrim{position:fixed;inset:0;background:${C.scrim};z-index:9998}
 .ib-sheet{position:fixed;left:0;right:0;bottom:0;z-index:9999;display:flex;flex-direction:column;
   max-height:88vh;background:${C.card};border-radius:18px 18px 0 0;
-  padding-bottom:env(safe-area-inset-bottom);
+  padding-bottom:var(--gf-safe-bottom, env(safe-area-inset-bottom, 0px));
   font:400 16px/1.5 system-ui,-apple-system,sans-serif;color:${C.ink};outline:none}
 .ib-head{display:flex;align-items:center;justify-content:space-between;
   padding:10px 8px;border-bottom:1px solid ${C.line}}

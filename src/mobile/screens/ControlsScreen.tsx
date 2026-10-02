@@ -23,7 +23,7 @@ import { Check, Loader2 } from 'lucide-react';
 
 import type { FilteringState, PauseDurationId, ThreatLevelId } from '../../types/filtering';
 import { kioskApi, num, usePolled, type Polled } from '../../components/kiosk/kioskClient';
-import { useAccessibility } from '../../hooks/useAccessibility';
+import { PHONE_TEXT_SCALE, useAccessibility } from '../../hooks/useAccessibility';
 import type { ProfileId, ProfilesResponse } from '../../types/guard';
 import { CH, Meter } from '../../components/kiosk/charts';
 import { Card, Chip, Gap, Screen, ScreenTitle, Warning } from '../mobileUi';
@@ -338,7 +338,7 @@ function ProfileCard({ busy, onApply }: { busy: string | null; onApply: (id: Pro
  * handset is theirs, the wall panel's settings are the household's.
  */
 function AccessibilityCard() {
-  const { prefs, update } = useAccessibility(undefined, { scaleMin: 0.9, scaleMax: 1.4 });
+  const { prefs, update } = useAccessibility(undefined, PHONE_TEXT_SCALE);
   const rows = [
     ['reducedMotion', 'Reduce motion', 'Static splash and transitions.'],
     ['highContrast', 'High contrast', 'Stronger borders and text.'],

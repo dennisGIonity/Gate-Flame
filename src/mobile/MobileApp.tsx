@@ -161,12 +161,10 @@ export function MobileApp() {
         <LiveBackdrop intensity={0.28} tone={CH.blue} className="opacity-50" />
         <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(0,111,211,0.16)_0%,transparent_55%)]" />
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-          <AppPairingScreen
-            onPaired={() => {
-              void gateflameApi.connect();
-              setPaired(true);
-            }}
-          />
+          {/* No connect() here: flipping `paired` runs the effect above, which
+              connects. Calling it here as well started two twelve-way discovery
+              races and let whichever finished last set the address. */}
+          <AppPairingScreen onPaired={() => setPaired(true)} />
         </div>
         {/* Available DURING pairing, which is when people are most stuck. */}
         {ionibot}
@@ -198,7 +196,7 @@ export function MobileApp() {
       {tab === 'game' && (
         <div
           className="relative z-10 flex-1 overflow-y-auto px-4 pt-3 no-scrollbar"
-          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 7rem)' }}
+          style={{ paddingBottom: 'calc(var(--gf-safe-bottom) + 7rem)' }}
         >
           <div className="mx-auto w-full max-w-md sm:max-w-xl">
             <Suspense fallback={<p className="p-6 text-center text-sm text-[#64748B]">Loading…</p>}>
@@ -221,8 +219,13 @@ export function MobileApp() {
           The bar itself is centred and capped so it becomes a floating pill
           on a tablet rather than a stretched ribbon.                     */}
       <nav
-        className="absolute inset-x-0 z-40 px-3"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+        aria-label="Sections"
+        className="absolute inset-x-0 z-40"
+        style={{
+          bottom: 'calc(var(--gf-safe-bottom) + 0.75rem)',
+          paddingLeft: 'calc(var(--gf-safe-left) + 0.75rem)',
+          paddingRight: 'calc(var(--gf-safe-right) + 0.75rem)',
+        }}
       >
         <div className="mx-auto grid w-full max-w-md grid-cols-8 items-center gap-0.5 rounded-2xl border border-[#1E293B] bg-[#111A28]/95 px-1.5 py-1.5 backdrop-blur-xl sm:max-w-lg sm:gap-1 sm:px-2 sm:py-2">
           {TABS.map((t) => {

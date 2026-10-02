@@ -160,8 +160,13 @@ export function ActivityScreen({ telemetry }: { telemetry: Polled<TelemetrySumma
           is the only motion on this screen that touches a headline number —
           and it renders the dash instantly when the reading is missing. */}
       <Card>
+        {/* This figure is Pi-hole's `queries.blocked` from /api/stats/summary,
+            which FTL keeps for the LAST 24 HOURS (pihole.py:448). It does not
+            reset when the box restarts, so the caption that stood here -
+            "since your box last started" - described a number nobody
+            measured. The label now says what the number is. */}
         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#64748B]">
-          Refused since your box last started
+          Refused in the last 24 hours
         </p>
         <p className="mt-1 font-mono text-4xl font-semibold leading-none tracking-tight text-slate-100 sm:text-5xl">
           <AnimatedNumber value={t?.queriesBlockedToday ?? null} format={(v) => num(v)} />

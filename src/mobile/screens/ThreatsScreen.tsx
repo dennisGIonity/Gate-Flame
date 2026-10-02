@@ -65,8 +65,13 @@ export function ThreatsScreen({ active }: { active: boolean }) {
   }, [entries]);
 
   // Only when BOTH figures are real. A rate computed from a missing scanned
-  // count would be a confident percentage derived from an unknown.
-  const rate = data && data.scanned ? ((data.blockedInWindow ?? 0) / data.scanned) * 100 : null;
+  // count would be a confident percentage derived from an unknown - and so
+  // would one computed from a missing BLOCKED count, which the `?? 0` here
+  // used to turn into a confident "0%" ring. Either side absent: the dash.
+  const rate =
+    data && data.scanned && data.blockedInWindow != null
+      ? (data.blockedInWindow / data.scanned) * 100
+      : null;
 
   return (
     <Screen>

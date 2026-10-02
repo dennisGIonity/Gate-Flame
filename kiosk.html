@@ -21,17 +21,19 @@
       unstyled text on every boot - and would quietly send a request off the LAN
       from a product whose promise is that almost nothing leaves it.
 
-      The proper fix is to self-host the three families under public/fonts and
-      declare @font-face locally (END-GAME PLAN Phase 4.11). Until then the
-      stack below degrades to the Pi OS system faces, which are perfectly
-      legible at two metres.
+      DONE 2026-10-02 (END-GAME PLAN Phase 4.11): the three families now ship
+      with the bundle as @font-face in src/index.css, latin subset, from the
+      @fontsource-variable packages. Every surface - this one, the phone and
+      the web console - renders the brand type with no request leaving the LAN.
+      The stack below still names the system faces, for the first frame before
+      the stylesheet has applied.
     -->
     <style>
       /* Painted before React mounts so the panel never flashes white in a dark
          hallway. Matches COLORS.bg in src/components/kiosk/kioskUi.tsx. */
       html, body { margin: 0; background: #080D16; color: #E2E8F0; }
       body {
-        font-family: "Plus Jakarta Sans", "DejaVu Sans", system-ui, -apple-system, sans-serif;
+        font-family: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", "DejaVu Sans", system-ui, -apple-system, sans-serif;
         /* The console is a fixed 1920x1080 panel with no pointer most of the
            time. Nothing here should ever rubber-band or show a scrollbar
            chrome that a finger cannot use. */

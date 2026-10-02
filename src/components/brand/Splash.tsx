@@ -93,7 +93,7 @@ export function Splash({ onDone, surface = 'app' }: { onDone: () => void; surfac
 
 const SPLASH_CSS = `
 .gf-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-  font-family:${BRAND_COLOR ? "'Inter','Segoe UI',system-ui,-apple-system,sans-serif" : 'sans-serif'};
+  font-family:${BRAND_COLOR ? "'Outfit Variable','Outfit','Inter','Segoe UI',system-ui,-apple-system,sans-serif" : 'sans-serif'};
   opacity:1;transition:opacity ${FADE_MS}ms ease}
 .gf-splash--leaving{opacity:0;pointer-events:none}
 .gf-splash__mark{filter:drop-shadow(0 0 28px rgba(0,212,184,.35));animation:gf-pop .7s cubic-bezier(.2,.9,.3,1.2) both}
@@ -103,7 +103,7 @@ const SPLASH_CSS = `
 .gf-splash__word span{display:inline-block;opacity:0;transform:translateY(10px);animation:gf-rise .45s ease-out forwards}
 .gf-splash__tag{opacity:0;font-size:clamp(12px,1.4vw,16px);letter-spacing:.24em;text-transform:uppercase;color:${BRAND_COLOR.textMuted};
   animation:gf-fade .5s 1.05s ease-out forwards}
-.gf-splash__foot{position:absolute;bottom:22px;opacity:0;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:${BRAND_COLOR.textMuted};
+.gf-splash__foot{position:absolute;bottom:calc(22px + var(--gf-safe-bottom, 0px));opacity:0;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:${BRAND_COLOR.textMuted};
   animation:gf-fade .5s 1.2s ease-out forwards}
 .gf-splash--static *,.gf-splash--static .gf-splash__mark svg path{animation:none!important;opacity:1!important;transform:none!important;stroke-dashoffset:0!important}
 .gf-splash--static{transition:none}

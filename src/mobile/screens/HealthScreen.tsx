@@ -77,7 +77,13 @@ export function HealthScreen({
         right={
           telemetry.error?.unreachable ? (
             <Chip tone="fault">offline</Chip>
-          ) : t?.piholeReachable ? (
+          ) : !t ? (
+            /* No reading yet, or the node refused: neither is "silent". The
+               chip used to say "silent" here, which is a verdict on the
+               filter service made before the box had answered a single
+               question. The warning cards below say what is actually known. */
+            null
+          ) : t.piholeReachable ? (
             <Chip tone="good">answering</Chip>
           ) : (
             <Chip tone="warn">silent</Chip>
@@ -91,6 +97,17 @@ export function HealthScreen({
           tone="fault"
           title="Your box is not filtering"
           detail={f.lastError ?? 'On and answering, but blocking nothing.'}
+        />
+      )}
+
+      {/* The box answered and REFUSED - a different fact from "cannot reach
+          it", needing a different action, so it never shares the sentence
+          below. Same wording the Settings screen already uses for this case. */}
+      {telemetry.error && !telemetry.error.unreachable && (
+        <Warning
+          tone="fault"
+          title="Your box answered, but with an error"
+          detail={telemetry.error.message}
         />
       )}
 
@@ -263,10 +280,13 @@ export function HealthScreen({
             hint="domains refused"
             tone={t?.domainsOnGravity === 0 ? 'fault' : 'default'}
           />
+          {/* `t` null is "not asked yet / not answered", not "silent". Rendering
+              a fault word for a missing reading is the same substitution as
+              printing a 0 for a null, in a word instead of a digit. */}
           <Metric
             label="Filter service"
-            value={t?.piholeReachable ? 'Answering' : 'Silent'}
-            tone={t?.piholeReachable ? 'good' : 'fault'}
+            value={!t ? DASH : t.piholeReachable ? 'Answering' : 'Silent'}
+            tone={!t ? 'default' : t.piholeReachable ? 'good' : 'fault'}
           />
           {/* Non-zero throttle flags on a Pi are almost always the power
               supply, and that is a fault the customer can actually fix. It

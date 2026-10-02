@@ -20,7 +20,7 @@
  * Nothing here fetches. It only wires.
  */
 
-import { getToken } from '../services/apiClient';
+import { getToken, rejectToken } from '../services/apiClient';
 import { getConnection, subscribeConnection } from '../services/gateflameApi';
 import { configureNodeTransport } from '../components/kiosk/kioskClient';
 
@@ -47,6 +47,12 @@ export function syncNodeTransport(): void {
     // Read per request, never captured. A revoked token must stop being sent
     // the moment apiClient drops it, not at the next reconnect.
     authToken: getToken,
+    // A 401 to a request that carried the token is the node telling us the
+    // handset was revoked. Same clear-and-notify as apiClient's own path, so
+    // MobileApp's onTokenRejected listener returns the app to pairing however
+    // the news arrives. Without this the phone's polls - which all run through
+    // this client - just reported an error forever.
+    onUnauthorized: rejectToken,
   });
 }
 

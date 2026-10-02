@@ -75,6 +75,25 @@ interface NodeTransport {
   baseUrl: string;
   /** Bearer token for a paired device, or null while unpaired. */
   authToken: () => string | null;
+  /**
+   * Called when the node answers 401 to a request that CARRIED a token — the
+   * handset was revoked at the kiosk, or the node was factory reset.
+   *
+   * Why this exists: the phone's revocation handling lived only in
+   * `services/apiClient.ts`, which the old shell used for every read. When the
+   * phone was rebuilt over this client (2026-08-24) every poll started coming
+   * through `nodeRequest` instead, and a 401 here was just another error in
+   * `usePolled`. So a revoked phone kept its dead token, polled every 4 s and
+   * showed "Cannot see your box" forever — the exact failure the apiClient
+   * comment says was fixed, back again on the path that actually carries the
+   * traffic. The host wires this to the same clear-and-notify the other path
+   * uses, so revocation has one meaning again.
+   *
+   * Only fires when a token was sent: a 401 to an anonymous request is the node
+   * refusing a stranger, not telling us our credential is dead. The console
+   * never sets a transport, so this can never fire on the box itself.
+   */
+  onUnauthorized?: () => void;
 }
 
 let transport: NodeTransport | null = null;
@@ -370,6 +389,17 @@ export async function nodeRequest<T>(
     });
 
     if (!res.ok) {
+      // The node rejected the token we sent. Tell the host BEFORE throwing, so
+      // by the time `usePolled` publishes this error the app has already been
+      // told to go back to pairing. See NodeTransport.onUnauthorized.
+      if (res.status === 401 && token && transport?.onUnauthorized) {
+        try {
+          transport.onUnauthorized();
+        } catch {
+          /* a broken host hook must not break the request path */
+        }
+      }
+
       let detail = `${res.status}`;
       try {
         const parsed = await res.json();
@@ -520,13 +550,30 @@ export interface Polled<T> {
  * `enabled` is false for panels the operator is not looking at: eight tabs
  * polling everything at 4s would be forty requests a minute at a Pi that has
  * better things to do.
+ *
+ * Two things this hook deliberately does, both found in the 2026-10-02 pass:
+ *
+ * 1. The in-flight guard is scoped to ONE polling cycle, not shared across
+ *    them. It used to be a ref shared by every cycle, and `refresh()` (or a
+ *    tab coming back) tears the old cycle down and starts a new one in the
+ *    same React commit — before the aborted request's `finally` has run. So
+ *    the new cycle's first tick saw "in flight", returned, and the person who
+ *    tapped a control got nothing until the next interval. On the Settings
+ *    screen that read as "the toggle did nothing", which is exactly the
+ *    double-tap the `applying` flag exists to prevent.
+ *
+ * 2. It parks while the page is hidden and ticks the moment it is visible
+ *    again. A phone in a pocket was still polling the Pi at the interval
+ *    (Chromium only throttles, it does not stop), and a phone brought back
+ *    after an hour showed hour-old figures until the next tick — stale
+ *    numbers presented as live, for up to one interval. Visible-again now
+ *    means fetch-now. The console is never hidden, so it is unaffected.
  */
 export function usePolled<T>(path: string, intervalMs: number, enabled = true): Polled<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<NodeError | null>(null);
   const [lastSeen, setLastSeen] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
-  const inFlight = useRef(false);
   const [nonce, setNonce] = useState(0);
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
@@ -534,11 +581,14 @@ export function usePolled<T>(path: string, intervalMs: number, enabled = true): 
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
+    let inFlight = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
     const controller = new AbortController();
+    const hasDocument = typeof document !== 'undefined';
 
     const tick = async () => {
-      if (inFlight.current) return;
-      inFlight.current = true;
+      if (inFlight || cancelled) return;
+      inFlight = true;
       try {
         const result = await nodeRequest<T>(path, { signal: controller.signal });
         if (cancelled) return;
@@ -552,17 +602,34 @@ export function usePolled<T>(path: string, intervalMs: number, enabled = true): 
         // never do is keep presenting stale numbers as if they were live.
         setError(err instanceof NodeError ? err : new NodeError('unknown failure', null, true));
       } finally {
-        inFlight.current = false;
+        inFlight = false;
         if (!cancelled) setLoading(false);
       }
     };
 
-    void tick();
-    const id = setInterval(tick, intervalMs);
+    const start = () => {
+      if (timer !== null) return;
+      void tick();
+      timer = setInterval(() => void tick(), intervalMs);
+    };
+    const stop = () => {
+      if (timer === null) return;
+      clearInterval(timer);
+      timer = null;
+    };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+
+    if (!hasDocument || !document.hidden) start();
+    if (hasDocument) document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       cancelled = true;
       controller.abort();
-      clearInterval(id);
+      stop();
+      if (hasDocument) document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [path, intervalMs, enabled, nonce]);
 

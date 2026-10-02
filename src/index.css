@@ -1,11 +1,49 @@
 @import "tailwindcss";
 
+/* ── Fonts: shipped with the app, not fetched from Google ───────────────
+   Until 2026-10-02 all three entry points loaded Outfit, Plus Jakarta Sans
+   and JetBrains Mono from fonts.googleapis.com at startup. On the phone that
+   meant: a request to Google on every launch from a product whose data-safety
+   answer is "almost nothing leaves the LAN"; a render that depended on the
+   household having internet (load shedding, or a lab with no uplink, and the
+   app fell back to system fonts); and a 1-3 s type swap on a slow link. The
+   kiosk on the Pi had the same dependency and the lab Pi has no WAN at all.
+
+   Variable fonts, latin subset only (U+0000-00FF covers English and
+   Afrikaans), one file per family, ~100 kB in total, bundled by Vite and so
+   present inside the APK and the kiosk tarball. SIL Open Font License 1.1
+   (see THIRD_PARTY_NOTICES.md). The `url()`s are relative to this file. */
+@font-face {
+  font-family: "Outfit Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../node_modules/@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans Variable";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("../node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-display: "Outfit", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-display: "Outfit Variable", "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
 
   /* Ionity Global design tokens v1.1.0 — src/assets/brand/ionity-tokens.json.
      Exposed as Tailwind colours: bg-brand-purple, text-brand-teal, etc.
@@ -68,6 +106,28 @@
   body[data-filter-level="high"] {
     --glass-border-color: rgba(14, 165, 233, 0.6) !important;
     --glass-glow: 0 0 16px 2px rgba(14, 165, 233, 0.25) !important;
+  }
+}
+
+/* ── Safe areas (phone) ──────────────────────────────────────────────────
+   Android 15+ draws an app targeting SDK 35+ edge-to-edge: under the status
+   bar and the gesture bar. The page must pad itself out of them, and there
+   are two sources for how much:
+     --safe-area-inset-*   injected on <html> by Capacitor's SystemBars plugin
+                           (works on every Android WebView, incl. those before
+                           Chromium 140 where env() is still broken);
+     env(safe-area-inset-*) the browser's own value, which needs
+                           `viewport-fit=cover` in the meta viewport (mobile.html
+                           has it) and a modern WebView; also the kiosk's path.
+   One variable per edge, read everywhere, so the fallback order is written
+   down once. Resolves to 0px where neither source has anything to say - a
+   desktop browser, or an older WebView that Capacitor has already padded. */
+@layer base {
+  :root {
+    --gf-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --gf-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+    --gf-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --gf-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   }
 }
 

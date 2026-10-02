@@ -118,6 +118,18 @@ const notifyTokenRejected = (): void => {
 };
 
 /**
+ * The node has rejected the token this device holds: drop it, then tell the
+ * app. One function, because there are now TWO transports that can learn this
+ * — `apiRequest` below, and the console client the phone's screens poll
+ * through (`kioskClient.nodeRequest`, via `mobile/nodeSession.ts`). Both must
+ * mean exactly the same thing by "revoked", so both call this.
+ */
+export const rejectToken = (): void => {
+  clearToken();
+  notifyTokenRejected();
+};
+
+/**
  * Refuse cleartext to anything that is not the customer's own LAN.
  *
  * This lives here rather than in android/app/src/main/res/xml/
@@ -211,7 +223,11 @@ export async function apiRequest<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   // Caller-supplied cancellation (component unmount) must also abort the fetch.
+  // A signal that is ALREADY aborted never fires its event again, so check it
+  // up front — otherwise a request issued after its owner unmounted would run
+  // to completion with nothing listening.
   const onExternalAbort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
   signal?.addEventListener('abort', onExternalAbort);
 
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -253,8 +269,7 @@ export async function apiRequest<T>(
       // Only when we actually sent one: a 401 from pair/claim means "wrong
       // code", not "your token is dead".
       if (response.status === 401 && tokenWasSent) {
-        clearToken();
-        notifyTokenRejected();
+        rejectToken();
       }
 
       // FastAPI raises {"detail": "..."} (or a list of validation errors); our own

@@ -150,7 +150,23 @@ export function HomeScreen({
   const t = telemetry.data;
   const f = filtering.data;
   const reachable = !telemetry.error?.unreachable;
-  const status = statusOf(f, reachable);
+
+  /*
+   * Three things that are NOT "cannot see your box", and used to render as it:
+   *
+   *   waiting   nothing has answered yet and nothing has failed - the first
+   *             second of every launch. Saying "Cannot see your box" here was a
+   *             verdict reached before the question was asked, and on a Pi busy
+   *             with a gravity rebuild it sat on screen for several seconds.
+   *   refused   the box answered /filtering with an error. It is reachable; the
+   *             Wi-Fi hint would send the customer to check the wrong thing.
+   *   stale     /filtering is failing NOW but the hook still holds the last
+   *             good payload. Drawing a green verdict from that is presenting an
+   *             old reading as live, which this app must never do.
+   */
+  const waiting = !f && !filtering.error && !telemetry.error;
+  const refused = Boolean(filtering.error && !filtering.error.unreachable);
+  const status: Status = waiting || filtering.error ? 'unknown' : statusOf(f, reachable);
   const look = LOOK[status];
   const Icon = look.icon;
 
@@ -185,12 +201,21 @@ export function HomeScreen({
             />
             <Icon className={`h-12 w-12 sm:h-14 sm:w-14 ${look.text}`} strokeWidth={1.5} />
           </div>
-          <h1
-            className={`mt-3 text-2xl font-semibold tracking-tight sm:text-3xl ${look.text}`}
-          >
-            {look.title}
-          </h1>
-          {look.sub && <p className="mt-1.5 text-sm text-slate-400">{look.sub}</p>}
+          {waiting ? (
+            /* A shimmer, not a sentence: the honest placeholder, same as every
+               figure on this screen while its first reading is in flight. */
+            <div className="mt-4 flex flex-col items-center gap-2" aria-label="Asking your box">
+              <Skeleton className="h-7 w-56" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          ) : (
+            <>
+              <h1 className={`mt-3 text-2xl font-semibold tracking-tight sm:text-3xl ${look.text}`}>
+                {look.title}
+              </h1>
+              {look.sub && <p className="mt-1.5 text-sm text-slate-400">{look.sub}</p>}
+            </>
+          )}
 
           {status === 'protected' && (
             <p className="mt-4 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#64748B]">
@@ -240,7 +265,18 @@ export function HomeScreen({
           detail={f?.lastError ?? 'The box is reachable but blocking nothing. Open Help.'}
         />
       )}
-      {status === 'unknown' && (
+      {/* "Cannot reach it" and "reached it, it refused" never share a sentence:
+          they read the same to a customer and need opposite actions. The
+          refusal shows the node's own words, in the sentence Settings already
+          uses for the same case. Nothing is said while still waiting. */}
+      {status === 'unknown' && refused && (
+        <Warning
+          tone="fault"
+          title="Your box answered, but with an error"
+          detail={filtering.error?.message}
+        />
+      )}
+      {status === 'unknown' && !refused && !waiting && (
         <Warning
           title="Not reachable from this phone"
           detail="Are you on home Wi-Fi rather than mobile data?"
