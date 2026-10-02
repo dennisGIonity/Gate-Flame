@@ -49,8 +49,10 @@
 
     <!-- The node advertises itself over mDNS as gateflame.local so the app can
          find it on any subnet without the customer typing an IP. mDNS is
-         multicast; without this the lock is held only for unicast and
-         discovery silently fails on some OEM Wi-Fi stacks. -->
+         multicast, and many Wi-Fi drivers drop multicast frames unless an app
+         holds a multicast lock. MainActivity acquires one while the app is in
+         the foreground (since 2026-10-02 - before that this permission was
+         declared and nothing used it). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!-- Deliberately NOT requested:

@@ -86,6 +86,33 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
     captureInput: true,
   },
+  plugins: {
+    /**
+     * Android 15+ draws an app targeting SDK 35+ edge-to-edge, and Capacitor
+     * 8's built-in SystemBars plugin is what decides how the page copes:
+     *
+     *   - mobile.html carries `viewport-fit=cover`, so on a WebView ≥ 140 the
+     *     system insets reach the page and it pads itself (--gf-safe-* in
+     *     index.css). On an older WebView Capacitor pads the WebView instead.
+     *   - `style: 'DARK'` = light icons in both bars, because the app is dark
+     *     whatever the handset's own theme is (main-mobile.tsx forces it).
+     *     The default followed the OS theme, which on a light-mode phone put
+     *     dark icons over this app's near-black header.
+     *   - insetsHandling stays at its default, 'css' — that is what injects
+     *     the --safe-area-inset-* variables the CSS reads first.
+     *
+     * Found 2026-10-02: the one real handset this app has been run on (an
+     * S10e, Android 12) is not drawn edge-to-edge, so none of this had ever
+     * been exercised. A customer on Android 15/16 would have been the test.
+     *
+     * ⚠ Do not take @capacitor/* to 8.5.2: it injects non-zero insets when
+     * the WebView is NOT edge-to-edge (ionic-team/capacitor#8623). 8.5.1 is
+     * installed. Re-check the issue before any upgrade.
+     */
+    SystemBars: {
+      style: 'DARK',
+    },
+  },
 };
 
 export default config;

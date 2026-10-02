@@ -1,7 +1,7 @@
 {
   "name": "gateflame",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Gate^Flame network security appliance — phone app, on-device console, and node agent.",
   "repository": {
     "type": "git",
@@ -21,8 +21,9 @@
     "build:all": "npm run build:html-mobile && npm run build:html-kiosk && npm run build:apk",
     "build:html-mobile": "vite build --config vite.standalone.config.ts && node scripts/verify-bundle.mjs dist/assets && node scripts/assemble-dist.mjs mobile",
     "build:html-kiosk": "vite build --config vite.standalone.config.ts && node scripts/verify-bundle.mjs dist/assets && node scripts/assemble-dist.mjs kiosk",
-    "build:apk": "npm run version:bump && npm run build:html-mobile && npx cap sync android && cd android && chmod +x gradlew && ./gradlew assembleRelease && cd .. && mkdir -p release && cp android/app/build/outputs/apk/release/app-release.apk release/GateFlame-Mobile.apk && npm run apk:fingerprint",
-    "build:apk-debug": "npm run build:html-mobile && npx cap sync android && cd android && chmod +x gradlew && ./gradlew assembleDebug && cd .. && mkdir -p release && cp android/app/build/outputs/apk/debug/app-debug.apk release/GateFlame-Mobile-debug.apk",
+    "build:apk": "npm run version:bump && npm run build:html-mobile && npx cap sync android && node scripts/android-build.mjs assembleRelease && npm run apk:fingerprint",
+    "build:apk-debug": "npm run build:html-mobile && npx cap sync android && node scripts/android-build.mjs assembleDebug",
+    "build:aab": "npm run version:bump && npm run build:html-mobile && npx cap sync android && node scripts/android-build.mjs bundleRelease",
     "apk:fingerprint": "node scripts/apk-fingerprint.mjs",
     "version:bump": "node scripts/bump-version.mjs",
     "version:release": "node scripts/bump-version.mjs --name",

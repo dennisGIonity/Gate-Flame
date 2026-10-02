@@ -454,6 +454,19 @@ const IonibotStyles: React.FC = () => (
   .ib-btn{background:#1d242d;border-color:#28303a;color:#eef2f7}
   .ib-input{background:#1d242d;border-color:#28303a;color:#eef2f7}
 }
+/* The same dark rules when the HOST forces dark (Gate^Flame puts .dark on <html>
+ * and has one palette regardless of the handset's theme). Without this, on a
+ * light-mode phone the help sheet opened WHITE over a near-black app - the one
+ * surface that did not look like the rest of the product. A host that does not
+ * set the class is unaffected, so the folder stays droppable elsewhere. */
+html.dark .ib-sheet{background:#151a21;color:#eef2f7}
+html.dark .ib-head,html.dark .ib-actions,html.dark .ib-nc{border-color:#28303a}
+html.dark .ib-btn{background:#1d242d;border-color:#28303a;color:#eef2f7}
+html.dark .ib-btn-primary{background:${C.flame};border-color:${C.flame};color:#fff}
+html.dark .ib-btn-danger{background:#1d242d;border-color:${C.bad};color:#ff7b86}
+html.dark .ib-input{background:#1d242d;border-color:#28303a;color:#eef2f7}
+html.dark .ib-banner{background:#3a2a12;color:#fbbf24;border-color:#28303a}
+html.dark .ib-problem{background:#3b1d22;color:#ff7b86}
 @media (prefers-reduced-motion: no-preference){
   .ib-sheet{animation:ib-up .22s ease-out}
   @keyframes ib-up{from{transform:translateY(14px);opacity:.6}to{transform:none;opacity:1}}

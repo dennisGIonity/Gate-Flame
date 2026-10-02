@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gate^Flame mobile companion — the one colour the native layer needs.
+
+  The window background shows wherever the WebView does not reach: behind the
+  system bars when Capacitor pads the WebView (an Android 15+ handset with a
+  WebView older than Chromium 140), and for the instant between the splash
+  fading and the first web frame. Capacitor's SystemBars plugin also paints the
+  decor view with android:windowBackground. Left at the theme default it was
+  white on a light-mode phone — a white strip above and below a dark app.
+  Matches COLORS.bg in src/components/kiosk/kioskUi.tsx and the pre-paint rule
+  in mobile.html.
+-->
+<resources>
+    <color name="gf_window_background">#FF080D16</color>
+</resources>

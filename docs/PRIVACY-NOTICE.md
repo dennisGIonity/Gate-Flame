@@ -303,6 +303,16 @@ the node on the local network; public hosts are refused by the client itself, an
 there are no analytics, advertising or crash-reporting SDKs and no
 `google-services.json`. On a strict reading, the app "collects no data".
 
+> **Correction, 2026-10-02 (mobile audit pass 1).** Until that date the statement
+> above was not quite true: `mobile.html` loaded its three typefaces from
+> `fonts.googleapis.com` / `fonts.gstatic.com` on every launch, which sends the
+> handset's IP address and user agent to Google before the customer has paired
+> anything. That is a third-party transfer the table in A.3 denies. The fonts now
+> ship inside the app (`src/index.css`, `@fontsource-variable`, SIL OFL 1.1) and the
+> links are gone from all three entry points, so the row *"Data shared with third
+> parties? No"* is accurate from build 1.0.3 onward — and not before. Re-verify
+> with a packet capture on the release build before filing the form.
+
 **The device identifiers still leave — but from the box, not the phone.** The
 Gate^Flame node posts them directly.
 
