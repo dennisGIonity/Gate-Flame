@@ -11,6 +11,23 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vitest/config';
 
+/*
+ * BUG-02, the half that `test.env` below does not reach.
+ *
+ * `test.env.NODE_ENV = 'test'` fixes what the TEST PROCESS sees (react-dom's
+ * act()). But what `node:fs` and `node:path` resolve to inside a jsdom suite is
+ * decided by Vite's transform from the SHELL's NODE_ENV, before any test runs.
+ * With NODE_ENV=production in the shell - true on wabakipi, see CLAUDE.md's
+ * machine traps - the two suites that read the source tree
+ * (importCycles.test.ts, noFabricatedCredentials.test.ts) failed with
+ * "readdirSync is not a function" / "join is not a function" while the other 247
+ * passed. FUNCTION-STATUS-AND-BUGS.md asked for exactly this run
+ * ("confirm with NODE_ENV=production npm run test:run"); run 2026-10-03, it
+ * failed. This file is evaluated before Vite starts, so setting it here is early
+ * enough. CI's step-level env: remains correct and is now redundant locally.
+ */
+process.env.NODE_ENV = 'test';
+
 export default defineConfig({
   plugins: [react()],
   resolve: {

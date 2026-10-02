@@ -124,6 +124,11 @@ what the evidence shows, not what is convenient.
 > in-path is undecided. **T1 = ESP32-S3 DNS filter, built in `t1/` (read `t1/README.md`)** —
 > server `tools\T1-SERVER.cmd` on **:8095**, flash `tools\T1-BUILD-FLASH.cmd`. It is NOT the
 > `E:\.ESP32-MCP` project (:8099) and must never be merged into it. T2/T4 to come.
+> 🔎 **A-TO-Z AUDIT, IN PASSES (started 2026-10-02, Dennis's call: whole repo, one surface
+> per session).** Pass 1 = the mobile app → `docs/AUDIT-PASS-1-MOBILE-2026-10-02.md`
+> (BUG-20…29 in `FUNCTION-STATUS-AND-BUGS.md`). Rule for every pass: screen copy is
+> locked, claims are not added, every fix carries a test, Android changes are read back
+> from the built artifact. Next: node-agent, then kiosk, fleet, desktop, t1.
 > ⚠ Windows **Smart App Control blocks unsigned compiled Python extensions** here ("An
 > Application Control policy has blocked this file" — zeroconf, 2026-09-25). Install the
 > pure-Python build (`SKIP_CYTHON=1 pip install --no-binary <pkg>`); `start-server.ps1` does.
@@ -196,8 +201,11 @@ about. Advertising ourselves narrows the gap; it never closes it.
   is **no top-domains endpoint** — the console derives it from the entries it already
   has, so it can never disagree with the list printed below it.
 - **`protectionStatus` has FIVE values, and a UI that knows three is the bug.**
-  `active | paused | bypass | degraded`, plus `applying` while a change is in flight,
-  and `lastError` carrying the reason. Verified on the live box 2026-09-06, which
+  `active | paused | bypass | degraded | unconfigured` (main.py:746-813, types/filtering.ts),
+  with `applying: boolean` alongside while a change is in flight, and `lastError`
+  carrying the reason. (This line used to list `applying` as the fifth *value* — the
+  open question from the 2026-09-21 pin. Settled 2026-10-02 by reading main.py: the
+  code was right, this sentence was wrong.) Verified on the live box 2026-09-06, which
   returned `degraded` twice — `"Pi-hole unreachable"` and `"gravity rebuild failed"`.
   A switch that handles three renders the fifth as *nothing at all*, which is the
   failure this whole section exists to prevent.
@@ -238,11 +246,13 @@ about. Advertising ourselves narrows the gap; it never closes it.
   chain `cap sync` correctly — the gap was that neither had been re-run since the source
   fix. Fixed by running `build:apk-debug`, reinstalling, and confirming on-device: Home,
   Activity, Blocked, Network, Health, Settings, Shield (including the rename button) and
-  the startup splash all render real data now. **On this machine, `build:apk`/
-  `build:apk-debug` must be run from Git-bash, not PowerShell or cmd** — the script chains
-  POSIX `chmod +x gradlew && ./gradlew ...`, which `cmd.exe` (npm's default script shell on
-  Windows) cannot parse, even though the earlier `vite build`/`cap sync` steps in the same
-  chain run fine under either shell. The general lesson: a config value is only real once
+  the startup splash all render real data now. ~~On this machine, `build:apk`/
+  `build:apk-debug` must be run from Git-bash~~ — **no longer true since 2026-10-03**: the
+  Gradle step is `scripts/android-build.mjs`, which runs `gradlew.bat`/`./gradlew` itself,
+  so `build:apk`, `build:apk-debug` and the new `build:aab` work from PowerShell, cmd or
+  bash. (The old chain of POSIX `chmod +x gradlew && ./gradlew ...` went to `cmd.exe`
+  whatever shell npm was started from, and "run it from Git-bash" turned out to depend on
+  an npm `script-shell` setting this machine no longer has.) The general lesson: a config value is only real once
   it has been read back from the artifact that ships, not the source file that describes
   it — same principle as "never claim success without a read-back," applied to build
   tooling rather than a live system.
