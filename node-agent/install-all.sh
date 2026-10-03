@@ -136,7 +136,17 @@ fi
 
 umask 022
 echo "$RELEASE" > /opt/gateflame/RELEASE
-IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+# Wired first, then the default route's `src` - the same policy install-dns-stack.sh
+# used to bind the resolver, so this banner names the address that actually serves.
+gateflame_lan_ip() {
+  local ip
+  ip="$(ip -4 -o addr show scope global up 2>/dev/null \
+        | awk '$2 ~ /^(eth|en)/ { sub(/\/.*/, "", $4); print $4; exit }')"
+  [ -n "$ip" ] || ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
+        | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  printf '%s\n' "$ip"
+}
+IP="$(gateflame_lan_ip)"
 [ -n "$IP" ] || IP="$(ip -4 -o addr show scope global 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}')"
 cat <<EOF
 

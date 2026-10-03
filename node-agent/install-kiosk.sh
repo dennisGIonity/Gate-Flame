@@ -305,7 +305,17 @@ systemctl restart "$UNIT" || warn "start failed - journalctl -u $UNIT -n 40"
 sleep 4
 systemctl is-active --quiet "$UNIT" && ok "kiosk running" || warn "not active yet; check the journal"
 
-LAN="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')"
+# Wired first, then the default route's `src` found by name (column 7 was only ever
+# right when the route had a `via`). Same policy as the resolver bind.
+gateflame_lan_ip() {
+  local ip
+  ip="$(ip -4 -o addr show scope global up 2>/dev/null \
+        | awk '$2 ~ /^(eth|en)/ { sub(/\/.*/, "", $4); print $4; exit }')"
+  [ -n "$ip" ] || ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
+        | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  printf '%s\n' "$ip"
+}
+LAN="$(gateflame_lan_ip)"
 cat <<EOF
 
   Kiosk ......... http://localhost:$PORT/device-kiosk/

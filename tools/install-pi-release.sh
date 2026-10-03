@@ -50,11 +50,23 @@ read_version() {
 }
 VER="$(read_version "$STAGE/VERSION" || true)"
 
-# The first global IPv4 this box holds on its default-route interface, or - on an
-# isolated segment with no default route (a lab switch) - its first global IPv4.
+# The address the router forwards to: WIRED FIRST, then the default route's `src`.
+# On 2026-10-03 the route-first version of this (and the watchdog's) rebound the lab
+# Pi's resolver onto household Wi-Fi (wlan0 192.168.0.12) the moment that interface
+# won the default route, and 192.168.124.3:53 went silent. Byte-identical to the
+# watchdog's copy - tests/test_lan_ip_policy.py keeps every copy the same.
+gateflame_lan_ip() {
+  local ip
+  ip="$(ip -4 -o addr show scope global up 2>/dev/null \
+        | awk '$2 ~ /^(eth|en)/ { sub(/\/.*/, "", $4); print $4; exit }')"
+  [ -n "$ip" ] || ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
+        | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  printf '%s\n' "$ip"
+}
+# On a Wi-Fi-only segment with no default route (a lab switch) - the first global IPv4.
 lan_ip() {
   local ip
-  ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+  ip="$(gateflame_lan_ip)"
   [ -n "$ip" ] || ip="$(ip -4 -o addr show scope global 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}')"
   echo "$ip"
 }

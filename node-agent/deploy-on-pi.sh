@@ -170,10 +170,19 @@ install -m 0755 /dev/stdin /usr/local/bin/gateflame-mdns-alias <<'WRAP'
 # Publishes gateflame.local -> this node's current primary IPv4 address.
 # Re-resolved on every start, so a DHCP lease change is fixed by a restart.
 set -euo pipefail
+# Wired first, then the default route's `src` by name - the address the resolver
+# binds, so gateflame.local never points a phone at the interface nothing serves on.
+gateflame_lan_ip() {
+  local ip
+  ip="$(ip -4 -o addr show scope global up 2>/dev/null \
+        | awk '$2 ~ /^(eth|en)/ { sub(/\/.*/, "", $4); print $4; exit }')"
+  [ -n "$ip" ] || ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
+        | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  printf '%s\n' "$ip"
+}
 for _ in $(seq 1 30); do
-  # The route's `src`, by name (its column moves when the route has no `via`); on a
-  # segment with no default route at all, the first global address.
-  ip4="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+  # On a Wi-Fi-only segment with no default route at all, the first global address.
+  ip4="$(gateflame_lan_ip)"
   [ -n "${ip4:-}" ] || ip4="$(ip -4 -o addr show scope global 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}')"
   [ -n "${ip4:-}" ] && break
   sleep 2   # network-online.target can fire before DHCP has actually finished
@@ -206,7 +215,16 @@ systemctl enable --now avahi-daemon
 systemctl daemon-reload
 systemctl enable --now gateflame-mdns-alias
 sleep 2
-LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+# Same wired-first policy as the wrapper above and the resolver bind.
+gateflame_lan_ip() {
+  local ip
+  ip="$(ip -4 -o addr show scope global up 2>/dev/null \
+        | awk '$2 ~ /^(eth|en)/ { sub(/\/.*/, "", $4); print $4; exit }')"
+  [ -n "$ip" ] || ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
+        | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  printf '%s\n' "$ip"
+}
+LAN_IP="$(gateflame_lan_ip)"
 [ -n "$LAN_IP" ] || LAN_IP="$(ip -4 -o addr show scope global 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}')"
 if systemctl is-active --quiet gateflame-mdns-alias; then
   echo "gateflame.local -> ${LAN_IP:-<resolving>}"

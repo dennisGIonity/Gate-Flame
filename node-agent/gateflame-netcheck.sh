@@ -102,8 +102,18 @@ resolved() {
 # Pi-hole's blocking replies: 0.0.0.0 (NULL mode), NXDOMAIN, or an empty NOERROR.
 is_block() { [[ "$1" == "0.0.0.0" || "$1" == "NXDOMAIN" || "$1" == "NODATA" ]]; }
 
-# `src` found by name - column 7 is only `src`'s value when the route has a `via`.
-LAN_IP="${GATEFLAME_LAN_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}')}"
+# The address the household reaches this box on: wired first, then the default
+# route's `src` found by name. Must match what the watchdog probes and the stack
+# binds, or this check passes on an address nobody is forwarded to.
+gateflame_lan_ip() {
+  local ip
+  ip="$(ip -4 -o addr show scope global up 2>/dev/null \
+        | awk '$2 ~ /^(eth|en)/ { sub(/\/.*/, "", $4); print $4; exit }')"
+  [ -n "$ip" ] || ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
+        | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  printf '%s\n' "$ip"
+}
+LAN_IP="${GATEFLAME_LAN_IP:-$(gateflame_lan_ip)}"
 GATEWAY="$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')"
 STACK="${GATEFLAME_DNS_STACK:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dns-stack}"
 

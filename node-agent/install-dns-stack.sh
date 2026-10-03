@@ -31,9 +31,19 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STACK="${GATEFLAME_DNS_STACK:-$HERE/dns-stack}"
 DROPIN_DIR="/etc/systemd/system/gateflame-node-agent.service.d"
 RESOLV_BACKUP="/var/backups/gateflame-resolv.conf.orig"
-# `src` field, not a fixed column: the column moves when the route has no `via`.
-# Falls back to the first global address on a segment with no default route.
-LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+# The address the router forwards to: WIRED FIRST, then the default route's `src`
+# (found by name - its column moves when the route has no `via`). Identical to the
+# watchdog's copy; tests/test_lan_ip_policy.py keeps them the same. Falls back to the
+# first global address only on a Wi-Fi-only segment with no default route.
+gateflame_lan_ip() {
+  local ip
+  ip="$(ip -4 -o addr show scope global up 2>/dev/null \
+        | awk '$2 ~ /^(eth|en)/ { sub(/\/.*/, "", $4); print $4; exit }')"
+  [ -n "$ip" ] || ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
+        | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  printf '%s\n' "$ip"
+}
+LAN_IP="$(gateflame_lan_ip)"
 [[ -n "$LAN_IP" ]] || LAN_IP="$(ip -4 -o addr show scope global 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}')"
 USE_LOCALLY=0
 

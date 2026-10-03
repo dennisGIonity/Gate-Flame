@@ -58,15 +58,26 @@ STATE_DIR="/var/lib/gateflame"
 # surviving. With `:-` an empty override was silently replaced by route detection, so
 # that path was only ever exercised on machines with no `ip` binary (Windows).
 #
-# The address is the route's `src` field, found by name. It used to be column 7,
-# which is `src`'s value only when the route has a `via` hop; on a directly
-# connected route the columns shift and column 7 is the uid or nothing. No
-# fallback beyond the route on purpose: this value is written INTO .env below, and
-# guessing "the first address on some interface" when the route is briefly gone
-# (router reboot) could rebind the resolver to the wrong interface.
-current_lan_ip() {
-  ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}'
+# The address the household reaches this box on. WIRED FIRST. A box that also has
+# Wi-Fi up (first-boot setup, or the lab's dual-homed Pi) must not move its resolver
+# onto the wireless address just because that interface won the default route: on
+# 2026-10-03 this self-heal did exactly that (wlan0 192.168.0.12 over eth0
+# 192.168.124.3) - the lab address went silent while this watchdog read "healthy"
+# on the wrong one. Only when no wired interface holds a global IPv4 is the default
+# route's `src` used, found by name (its column moves when the route has no `via`).
+# Nothing further on purpose: this value is written INTO .env below, and guessing
+# "some interface" while a route is briefly gone (router reboot) could rebind the
+# resolver to the wrong one. Same function, same text, in every installer that
+# writes this address - tests/test_lan_ip_policy.py keeps the copies identical.
+gateflame_lan_ip() {
+  local ip
+  ip="$(ip -4 -o addr show scope global up 2>/dev/null \
+        | awk '$2 ~ /^(eth|en)/ { sub(/\/.*/, "", $4); print $4; exit }')"
+  [ -n "$ip" ] || ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
+        | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+  printf '%s\n' "$ip"
 }
+current_lan_ip() { gateflame_lan_ip; }
 LAN_IP="${GATEFLAME_LAN_IP-$(current_lan_ip)}"
 FAIL_COUNT_FILE="$STATE_DIR/dns-watchdog-fails"
 BYPASS_FLAG="$STATE_DIR/bypass"
