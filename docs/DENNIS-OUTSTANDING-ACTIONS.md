@@ -85,7 +85,7 @@ haven't been actioned:
   that leaked into the repo history earlier this project's life. Go to
   github.com/settings/tokens and the Gemini API console respectively, revoke,
   issue fresh ones only if something still needs them.
-- **Back up `C:\Users\DGMic\.gateflame-signing\gateflame-release.jks`.**
+- **Back up `C:\Users\Dennis-Ionity\.gateflame-signing\gateflame-release.jks`.**
   This is the Android release signing keystore — if this machine dies and
   it's never been copied anywhere else, every future app update needs Google
   Play's key-recovery process instead of a normal release. Copy it to at

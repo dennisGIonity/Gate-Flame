@@ -90,7 +90,7 @@ Put the keystore **outside the repository** — the `.gitignore` covers the obvi
 names, but the safest file is one git can never see:
 
 ```
-C:\Users\DGMic\.gateflame-signing\gateflame-release.jks
+C:\Users\Dennis-Ionity\.gateflame-signing\gateflame-release.jks
 ```
 
 Then create `android/keystore.properties` (gitignored):

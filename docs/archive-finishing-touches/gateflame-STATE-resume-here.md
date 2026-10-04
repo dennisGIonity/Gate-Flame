@@ -201,7 +201,7 @@ kiosk console, CI running 548 tests and booting the agent, and the 36 root
 codemod scripts deleted (audit item 16). `v1.0.2` tagged. Earlier branch is
 PR #2 at `77f4819`.
 
-**Queue item 3 is DONE** — `C:\Users\DGMic\.gateflame-signing\gateflame-release.jks`
+**Queue item 3 is DONE** — `C:\Users\Dennis-Ionity\.gateflame-signing\gateflame-release.jks`
 exists; the keystore generator was run. A **signed release** APK is therefore
 possible and needs only the passwords, which are Dennis's. Debug builds need
 nothing.

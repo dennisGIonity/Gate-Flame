@@ -680,7 +680,7 @@ Summary:
    - **`E:\Gateflame\docs\gateflame-STATE-resume-here.md`**
      - Why important: the canonical "resume here" pointer doc for continuity across sessions.
      - Change made: updated the "STILL OPEN" bullet from `"irreplaceable, still no verified backup, no SHA-256 recorded"` to `"irreplaceable, still no verified backup. SHA-256 recorded 2026-08-29 in \`android/KEYSTORE.md\` (\`AB:F9:...:E2:7D\`) — that part is done."` Commit status unstated/unconfirmed.
-   - **Keystore file itself: `C:\Users\DGMic\.gateflame-signing\gateflame-release.jks`** (mounted at `/sessions/sweet-funny-sagan/mnt/.gateflame-signing/gateflame-release.jks`)
+   - **Keystore file itself: `C:\Users\Dennis-Ionity\.gateflame-signing\gateflame-release.jks`** (mounted at `/sessions/sweet-funny-sagan/mnt/.gateflame-signing/gateflame-release.jks`)
      - Confirmed to exist, 3932 bytes, dated Aug 17 18:24. Raw-file SHA-256 (not the cert fingerprint): `e52884d2b73b26e4e86377375c0ca7da1af418b4f259d7fc5489b0e6fad19011`.
      - Real certificate SHA-256 fingerprint (obtained by Dennis via `keytool`, now recorded in `KEYSTORE.md`): `AB:F9:6D:F7:FF:E3:2F:FC:2D:A1:22:A4:B9:70:96:3E:1D:E8:C7:F8:D8:9A:D6:27:72:F6:1F:82:81:05:E2:7D`. Signature algorithm: `SHA256withRSA`.
    - **`.gitignore` (root)** (read only) — confirmed lines correctly exclude `*.jks`, `*.keystore`, `keystore.properties`, `android/keystore.properties`, `upload-keystore*`, `release-keystore*`.

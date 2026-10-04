@@ -106,7 +106,7 @@ condition this whole exercise exists to end.
 ## 3a. The signing keystore — and a correction to `BUG-11`
 
 ```
-C:\Users\DGMic\.gateflame-signing\gateflame-release.jks
+C:\Users\Dennis-Ionity\.gateflame-signing\gateflame-release.jks
 C:\Users\DGMic\OneDrive\GateFlame-Signing\gateflame-release-2026-08-17.jks
 SHA-256 of both: E52884D2B73B26E4E86377375C0CA7DA1AF418B4F259D7FC5489B0E6FAD19011
 ```

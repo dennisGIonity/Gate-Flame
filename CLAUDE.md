@@ -439,7 +439,7 @@ design flows that assume them.
 What that makes blocking rather than optional:
 
 - **A signed release APK.** The keystore exists at
-  `C:\Users\DGMic\.gateflame-signing\gateflame-release.jks`; `android/keystore.properties`
+  `C:\Users\Dennis-Ionity\.gateflame-signing\gateflame-release.jks`; `android/keystore.properties`
   (or `GATEFLAME_KEYSTORE_*`) has never been written, so `npm run build:apk`
   cannot sign today. Debug builds need none of this.
 - **Play App Signing enrolment** — the only recovery path if the upload key is

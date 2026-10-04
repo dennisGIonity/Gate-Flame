@@ -8,7 +8,7 @@
 #   powershell -File tools\_clear-c-drive-copies.ps1 -Confirm
 #
 # NEVER TOUCHED, by design:
-#   C:\Users\DGMic\.gateflame-signing          the release keystore
+#   C:\Users\Dennis-Ionity\.gateflame-signing          the release keystore
 #   C:\Users\DGMic\OneDrive\GateFlame-Signing  its off-machine copy
 #   C:\Users\DGMic\Downloads\GF Files          invoices, quotes, PoC docs, brand package
 #

@@ -86,7 +86,7 @@ Found by `find` over `E:\` and `C:\Users\DGMic` (depth 4) plus the 2026-09-24 na
 
 | Folder | What | Verdict |
 |---|---|---|
-| `C:\Users\DGMic\.gateflame-signing` | **The live release keystore** + cert-info | **Irreplaceable — keep** (CLAUDE.md Rule 6) |
+| `C:\Users\Dennis-Ionity\.gateflame-signing` | **The live release keystore** + cert-info | **Irreplaceable — keep** (CLAUDE.md Rule 6) |
 | `C:\Users\DGMic\OneDrive\GateFlame-Signing` | Keystore copy (identical) | Keep — the only **off-machine** copy |
 | `E:\.PServer\Google_Drive\GateFlame-Signing` | Keystore copy (identical) | Keep if it syncs to Google Drive — verify it does |
 | `C:\Users\DGMic\GateFlame-Backup-2026-08-13` | 753 MB of zips/bundles | Verified contained 2026-09-20; redundant now that GitHub holds everything. Delete when ready |
