@@ -3439,7 +3439,7 @@ ok lets wrap tonight up by
 
 Now stage the built app where the sandbox can reach it, and render it with a stubbed node.
 
-- `tool` **Desktop_Commander__start_process** `cmd /c "rd /s /q "E:\.Ionicrobes\_gf-preview" 2>nul & mkdir "E:\.Ionicrobes\_gf-preview" && xcopy /E /I /Q /Y "E:\Gateflame\dist-mobile" "E:\.Ionicrobes\_gf-preview\mobile" >nul && xcopy /E /I /Q /Y "E:\Gateflame\dist-ki ...`
+- `tool` **Desktop_Commander__start_process** `cmd /c "rd /s /q "E:\.claude\Ionity\.Ionicrobes\_gf-preview" 2>nul & mkdir "E:\.claude\Ionity\.Ionicrobes\_gf-preview" && xcopy /E /I /Q /Y "E:\Gateflame\dist-mobile" "E:\.claude\Ionity\.Ionicrobes\_gf-preview\mobile" >nul && xcopy /E /I /Q /Y "E:\Gateflame\dist-ki ...`
 - `tool` **workspace__bash** `mkdir -p /tmp/shot && cat > /tmp/shot/shoot.py <<'PY' import asyncio, json, sys from playwright.async_api import async_playwright  ROOT = "/sessions/gracious-quirky-rubin/mnt/.Ionicrobes/_gf-preview/mobile" OUT  = "/sess ...`
 - `tool` **workspace__bash** `cd /tmp && mkdir -p libs && cd libs apt-get download libxdamage1 libxfixes3 libxcomposite1 libxrandr2 libxkbcommon0 libgbm1 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libcups2t64 libpango-1.0-0 l ...`
 - `tool` **workspace__bash** `cd /tmp/libs && for p in libxdamage1 libxfixes3 libxcomposite1 libxrandr2 libxkbcommon0 libgbm1 libasound2 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libcups2 libpango-1.0-0 libcairo2 libnspr4 libnss3 libxshmfence1 lib ...`
@@ -3468,7 +3468,7 @@ Let me lock that fabricated figure down with a test so it can't come back.
 
 Now rebuild and re-shoot, this time scrolling the inner container so I see full screens.
 
-- `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && set NODE_ENV=production&& npm run build:html-mobile 2>&1 | findstr /C:"verify-bundle" /C:"assemble" & rd /s /q "E:\.Ionicrobes\_gf-preview\mobile" 2>nul & xcopy /E /I /Q /Y "E:\Gateflame\dis ...`
+- `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && set NODE_ENV=production&& npm run build:html-mobile 2>&1 | findstr /C:"verify-bundle" /C:"assemble" & rd /s /q "E:\.claude\Ionity\.Ionicrobes\_gf-preview\mobile" 2>nul & xcopy /E /I /Q /Y "E:\Gateflame\dis ...`
 - `tool` **workspace__bash** `cat > /tmp/shot/shoot2.py <<'PY' import asyncio, json from playwright.async_api import async_playwright exec(open('/tmp/shot/shoot.py').read().split('async def main()')[0].split('import asyncio')[1].replace('from playwri ...`
 - `tool` **workspace__bash** `cd /sessions/gracious-quirky-rubin/mnt/.Ionicrobes/_gf-preview/mobile && (setsid python3 -m http.server 8899 --bind 127.0.0.1 >/dev/null 2>&1 < /dev/null &) ; sleep 3; curl -s -o /dev/null -w "%{http_code}\n" http://127. ...`
 
@@ -3489,7 +3489,7 @@ All eighteen rendered. Let me look at them.
 - `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && set NODE_ENV=production&& node scripts/assemble-dist.mjs mobile 2>&1 | more"`
 - `tool` **Desktop_Commander__force_terminate** 
 - `tool` **Desktop_Commander__start_process** `cmd /c "taskkill /F /IM python.exe /T 2>nul & timeout /t 2 >nul & cd /d E:\Gateflame && set NODE_ENV=production&& npm run build:html-mobile 2>&1 | findstr /C:"verify-bundle" /C:"assemble" /C:"Error" && (findstr /S /M /C: ...`
-- `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && findstr /S /C:"Blocked (37.1" dist-mobile\assets\*.js && echo FOUND-BAD || echo LEGEND-CLEAN & findstr /S /M /C:"ib-fab-bottom" dist-mobile\assets\*.js && rd /s /q "E:\.Ionicrobes\_gf-previe ...`
+- `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && findstr /S /C:"Blocked (37.1" dist-mobile\assets\*.js && echo FOUND-BAD || echo LEGEND-CLEAN & findstr /S /M /C:"ib-fab-bottom" dist-mobile\assets\*.js && rd /s /q "E:\.claude\Ionity\.Ionicrobes\_gf-previe ...`
 
 ## 🤖 Claude — 2026-08-25 08:59 SAST
 
@@ -3512,7 +3512,7 @@ Two real bugs visible: a doubled `%`, and my mock returning constants so the liv
 
 - `tool` **Desktop_Commander__edit_block** `E:\Gateflame\src\components\kiosk\charts.tsx`
 - `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && set NODE_ENV=&& npx tsc --noEmit && echo TSC-CLEAN && npx vitest run --reporter=dot 2>&1 | findstr /C:"Tests" /C:"Test Files" /C:"FAIL""`
-- `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && set NODE_ENV=production&& npm run build:html-mobile 2>&1 | findstr /C:"verify-bundle" /C:"assemble" /C:"Error" && rd /s /q "E:\.Ionicrobes\_gf-preview\mobile" & xcopy /E /I /Q /Y "E:\Gatefla ...`
+- `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && set NODE_ENV=production&& npm run build:html-mobile 2>&1 | findstr /C:"verify-bundle" /C:"assemble" /C:"Error" && rd /s /q "E:\.claude\Ionity\.Ionicrobes\_gf-preview\mobile" & xcopy /E /I /Q /Y "E:\Gatefla ...`
 - `tool` **workspace__bash** `python3 - <<'PY' p='/tmp/shot/shoot.py'; s=open(p).read() # Make the stub drift, so useSeries actually accumulates and the charts draw. s=s.replace('''            async def handle(route):                 u = route.reques ...`
 - `tool` **Read** `C:\Users\DGMic\AppData\Roaming\Claude\local-agent-mode-sessions\a4897619-500b-4063-97c3-3ab6d4d22d88\729efc92-d52e-4890-8cfc-3a76cd3bb59e\local_82b51c78-7cbf-44d1-b4ac-f111ff97c943\outputs\ui3\s-360x780-activity.png`
 
@@ -3557,7 +3557,7 @@ Now the chart has to admit when it's zoomed.
 
 Now let me see the console at 1920 to confirm the kiosk work, then commit.
 
-- `tool` **Desktop_Commander__start_process** `cmd /c "rd /s /q "E:\.Ionicrobes\_gf-preview\kiosk" 2>nul & xcopy /E /I /Q /Y "E:\Gateflame\dist-kiosk" "E:\.Ionicrobes\_gf-preview\kiosk" >nul && rd /s /q "E:\.Ionicrobes\_gf-preview\mobile" 2>nul & xcopy /E /I /Q /Y "E ...`
+- `tool` **Desktop_Commander__start_process** `cmd /c "rd /s /q "E:\.claude\Ionity\.Ionicrobes\_gf-preview\kiosk" 2>nul & xcopy /E /I /Q /Y "E:\Gateflame\dist-kiosk" "E:\.claude\Ionity\.Ionicrobes\_gf-preview\kiosk" >nul && rd /s /q "E:\.claude\Ionity\.Ionicrobes\_gf-preview\mobile" 2>nul & xcopy /E /I /Q /Y "E ...`
 - `tool` **workspace__bash** `cat > /tmp/shot/kiosk.py <<'PY' import asyncio, json, copy, random from playwright.async_api import async_playwright exec(open('/tmp/shot/shoot.py').read().split('async def main()')[0].replace('import asyncio, json','imp ...`
 - `tool` **Read** `C:\Users\DGMic\AppData\Roaming\Claude\local-agent-mode-sessions\a4897619-500b-4063-97c3-3ab6d4d22d88\729efc92-d52e-4890-8cfc-3a76cd3bb59e\local_82b51c78-7cbf-44d1-b4ac-f111ff97c943\outputs\ui5\kiosk-filtering.png`
 - `tool` **workspace__bash** `python3 - <<'PY' p='/tmp/shot/kiosk.py'; s=open(p).read() old = s[s.index('        # unlock the console'):s.index('        await pg.wait_for_timeout(12000)')] new = '''        # The lock is a press-and-HOLD by design (ph ...`
@@ -3567,7 +3567,7 @@ Now let me see the console at 1920 to confirm the kiosk work, then commit.
 
 Console renders as intended. Committing.
 
-- `tool` **Desktop_Commander__start_process** `cmd /c "rd /s /q "E:\.Ionicrobes\_gf-preview" 2>nul & cd /d E:\Gateflame && git add -A && git status --short && echo === && git rev-parse --abbrev-ref HEAD"`
+- `tool` **Desktop_Commander__start_process** `cmd /c "rd /s /q "E:\.claude\Ionity\.Ionicrobes\_gf-preview" 2>nul & cd /d E:\Gateflame && git add -A && git status --short && echo === && git rev-parse --abbrev-ref HEAD"`
 - `tool` **Desktop_Commander__write_file** `E:\Gateflame\.git\COMMIT_EDITMSG_gf`
 - `tool` **Desktop_Commander__start_process** `cmd /c "cd /d E:\Gateflame && git commit -q -F .git\COMMIT_EDITMSG_gf && del .git\COMMIT_EDITMSG_gf && git checkout -q main && git merge --ff-only fix/mobile-dns-drops && git checkout -q fix/mobile-dns-drops && git log - ...`
 - `tool` **TaskUpdate** 
