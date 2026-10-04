@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Read-only: for each activity-log topic, count matching commits (all branches) and show the newest.
-cd /e/Gateflame || exit 1
+cd /e/.claude/Ionity/Gateflame || exit 1
 check() { # label, regex
   n=$(git log --all -i -E --grep="$2" --format=%h | wc -l)
   last=$(git log --all -i -E --grep="$2" -1 --format='%h %ad %s' --date=short | cut -c1-110)

@@ -9,7 +9,7 @@
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
-CLONES=(/e/Gateflame /c/Users/DGMic/GateFlame-Repo /c/Users/DGMic/gf-scratch)
+CLONES=(/e/.claude/Ionity/Gateflame /c/Users/DGMic/GateFlame-Repo /c/Users/DGMic/gf-scratch)
 SAVED=0; FAILED=0; SKIPPED=0
 
 echo '=== 1. SSH AGENT ==='

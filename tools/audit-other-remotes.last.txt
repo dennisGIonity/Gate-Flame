@@ -1,4 +1,4 @@
-== /e/Gateflame/VSCode
+== /e/.claude/Ionity/Gateflame/VSCode
    origin: (no origin)
    commits on no remote-tracking ref: 0
    dirty files: 0

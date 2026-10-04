@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # precheck-release.sh - read-only: will the release install need pip (internet)? bash -n on the installers.
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
-C=/e/Gateflame
+C=/e/.claude/Ionity/Gateflame
 {
 for f in $C/tools/install-pi-release.sh $C/tools/stage-pi-release.sh; do bash -n $f && echo "syntax ok $(basename $f)"; done
 echo "repo reqs md5  $(tr -d '\r' < $C/node-agent/requirements.txt | md5sum)"

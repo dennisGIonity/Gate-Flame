@@ -4,12 +4,12 @@ set -u
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
 PI=192.168.124.3
 O=(-o ConnectTimeout=6 -o HostKeyAlias=raspberrypi -o StrictHostKeyChecking=yes)
-LOG=/e/Gateflame/tools/lab-move-pi.last.txt
+LOG=/e/.claude/Ionity/Gateflame/tools/lab-move-pi.last.txt
 if ! ssh-add -l >/dev/null 2>&1; then
   rm -f ~/.ssh/agent.sock; eval "$(ssh-agent -a ~/.ssh/agent.sock -s)" >/dev/null
   ssh-add ~/.ssh/id_ed25519 || exit 1
 fi
-scp "${O[@]}" -q /e/Gateflame/tools/lab-move-pi-remote.sh "wabapi@$PI:~/" || exit 1
+scp "${O[@]}" -q /e/.claude/Ionity/Gateflame/tools/lab-move-pi-remote.sh "wabapi@$PI:~/" || exit 1
 ssh -t "${O[@]}" "wabapi@$PI" 'sudo bash ~/lab-move-pi-remote.sh "$SSH_CONNECTION" 2>&1 | tee ~/lab-move-pi.log'
 scp "${O[@]}" -q "wabapi@$PI:~/lab-move-pi.log" "$LOG"
 {

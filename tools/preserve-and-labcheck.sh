@@ -2,7 +2,7 @@
 # 1) preserve the one commit that exists only in C:\Users\DGMic\TempGateFlameBuild as a pushed archive branch (no force)
 # 2) read-only lab uplink check from the Pi
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
-C=/e/Gateflame; cd $C
+C=/e/.claude/Ionity/Gateflame; cd $C
 out=$C/tools/preserve-and-labcheck.last.txt
 {
 B=archive/temp-build-scratch-2026-08-13

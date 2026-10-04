@@ -17,8 +17,8 @@ echo "== App-antigravity-workspace: what does unpushed 09ec6d3 add over pushed 9
 n=$(git -C /e/_ARCHIVE-2026-08-16/App-antigravity-workspace diff --name-only 949eae4 09ec6d3 | grep -Ev '^\.jdk(21)?/' | wc -l)
 t=$(git -C /e/_ARCHIVE-2026-08-16/App-antigravity-workspace diff --name-only 949eae4 09ec6d3 | wc -l)
 echo "   $t files differ; $n of them outside the two bundled JDK folders (.jdk/, .jdk21/)"
-echo "== /e/Gateflame/VSCode (nested .git inside the canonical tree)"
-git -C /e/Gateflame/VSCode rev-parse --verify HEAD 2>&1 | head -1
-ls -A /e/Gateflame/VSCode | head -20
+echo "== /e/.claude/Ionity/Gateflame/VSCode (nested .git inside the canonical tree)"
+git -C /e/.claude/Ionity/Gateflame/VSCode rev-parse --verify HEAD 2>&1 | head -1
+ls -A /e/.claude/Ionity/Gateflame/VSCode | head -20
 echo "== ignore status of odd top-level dirs in canonical"
-cd /e/Gateflame && for p in VSCode "NVIDIA Corporation" claude .idea desktop; do printf '%-20s ' "$p"; git check-ignore -q "$p" && echo ignored || echo "NOT ignored (tracked files: $(git ls-files "$p" | wc -l))"; done
+cd /e/.claude/Ionity/Gateflame && for p in VSCode "NVIDIA Corporation" claude .idea desktop; do printf '%-20s ' "$p"; git check-ignore -q "$p" && echo ignored || echo "NOT ignored (tracked files: $(git ls-files "$p" | wc -l))"; done

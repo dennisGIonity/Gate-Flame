@@ -3,7 +3,7 @@
 # DNS stack bind, what did the watchdog do, and does the lab give the Pi internet. No sudo.
 # Output -> tools/lab-pi-dualhome.last.txt
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
-out=/e/Gateflame/tools/lab-pi-dualhome.last.txt
+out=/e/.claude/Ionity/Gateflame/tools/lab-pi-dualhome.last.txt
 {
 echo "=== lab-pi-dualhome $(date -Is) ==="
 ssh -o BatchMode=yes -o ConnectTimeout=6 -o HostKeyAlias=raspberrypi -o StrictHostKeyChecking=yes wabapi@192.168.124.3 '

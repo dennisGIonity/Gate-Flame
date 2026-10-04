@@ -2,7 +2,7 @@
 # Checkpoint commit of the 1.1.0 work in progress (node-agent WS1 + fleet WS2),
 # so an interrupted session cannot lose it. Local commit only - no push.
 set -euo pipefail
-cd /e/Gateflame
+cd /e/.claude/Ionity/Gateflame
 git config user.name
 git add docs/BUILD-1.1.0-PLAN.md node-agent fleet tools/install-pi-release.sh tools/package-release.sh \
         tools/install-fleet-autostart.ps1 tools/START-IONITY-SERVER.cmd tools/START-IONITY-SERVER.ps1 \

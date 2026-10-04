@@ -2,7 +2,7 @@
 # commit-push.sh "<message>" <paths...> - commit named paths with the configured identity and push the current branch. Never forces.
 set -u
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
-cd /e/Gateflame || exit 1
+cd /e/.claude/Ionity/Gateflame || exit 1
 msg="$1"; shift
 {
 echo "identity: $(git config user.name) <$(git config user.email)>"

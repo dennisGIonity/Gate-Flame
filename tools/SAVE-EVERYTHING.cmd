@@ -17,7 +17,7 @@ echo.
 echo  ------------------------------------------------------------
 echo.
 pause
-"C:\Program Files\Git\bin\bash.exe" /e/Gateflame/tools/save-everything.sh
+"C:\Program Files\Git\bin\bash.exe" /e/.claude/Ionity/Gateflame/tools/save-everything.sh
 echo.
 echo  ------------------------------------------------------------
 echo   Read the summary above before closing.

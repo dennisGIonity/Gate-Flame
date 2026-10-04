@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-C=/e/Gateflame; cd $C
+C=/e/.claude/Ionity/Gateflame; cd $C
 out=$C/tools/consolidate-check2.last.txt
 {
 echo "--- git cherry (patch-equivalent already applied = '-') ---"

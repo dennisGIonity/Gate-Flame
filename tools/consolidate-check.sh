@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # consolidate-check.sh - read-only: remote branches not merged, stray files that canonical lacks.
-C=/e/Gateflame
+C=/e/.claude/Ionity/Gateflame
 out=$C/tools/consolidate-check.last.txt
 {
 cd $C

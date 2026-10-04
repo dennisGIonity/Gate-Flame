@@ -21,7 +21,7 @@ echo.
 echo  ------------------------------------------------------------
 echo.
 pause
-"C:\Program Files\Git\bin\bash.exe" -c "source /e/Gateflame/tools/_env.sh; gf_agent || { echo 'SSH key not loaded - run tools\\load-key.cmd first'; exit 1; }; ssh -t wabapi@192.168.0.10 'sudo bash /home/wabapi/apply-gateflame-fixes.sh'"
+"C:\Program Files\Git\bin\bash.exe" -c "source /e/.claude/Ionity/Gateflame/tools/_env.sh; gf_agent || { echo 'SSH key not loaded - run tools\\load-key.cmd first'; exit 1; }; ssh -t wabapi@192.168.0.10 'sudo bash /home/wabapi/apply-gateflame-fixes.sh'"
 echo.
 echo  ------------------------------------------------------------
 echo   Scroll up and read the NETWORK CHECK section.

@@ -17,10 +17,10 @@
 # Output: tools\lab-resume-gateflame.last.txt
 # ===========================================================================
 set -u
-LOG=/e/Gateflame/tools/lab-resume-gateflame.last.txt
+LOG=/e/.claude/Ionity/Gateflame/tools/lab-resume-gateflame.last.txt
 exec > >(tee "$LOG") 2>&1
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
-LAB=/e/.IONITY-LAB/pi
+LAB=/e/.claude/Ionity/.IONITY-LAB/pi
 SSH_OPTS=(-o ConnectTimeout=6 -o HostKeyAlias=raspberrypi -o StrictHostKeyChecking=yes)
 echo "=== lab-resume-gateflame $(date -Is) ==="
 

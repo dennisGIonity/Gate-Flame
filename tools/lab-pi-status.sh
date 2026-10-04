@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lab-pi-status.sh - read-only look at the Pi on the lab (no sudo, no prompts).
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
-out=/e/Gateflame/tools/lab-pi-status.last.txt
+out=/e/.claude/Ionity/Gateflame/tools/lab-pi-status.last.txt
 {
 echo "=== $(date -Is) ==="
 ssh-add -l 2>&1 | head -2

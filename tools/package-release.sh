@@ -10,7 +10,7 @@
 # Secrets are excluded by construction: no .env, no fleet.env.ps1, no *.db, no keystore.
 set -eu
 unset NODE_ENV
-C=/e/Gateflame; cd $C
+C=/e/.claude/Ionity/Gateflame; cd $C
 # The release version, from the ONE line that assigns it, validated as semver. An
 # unanchored grep once matched the file's comment line too ("# VERSION_NAME  human-
 # facing semver ...") and `cut -d= -f2` returns a line with no '=' whole - which is

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Read-only git history dump. No commit, push, checkout, or identity flags.
 # Output: tools/history-dump.last.txt (not committed; tools/*.last.txt convention)
-cd /e/Gateflame || exit 1
-OUT=/e/Gateflame/tools/history-dump.last.txt
+cd /e/.claude/Ionity/Gateflame || exit 1
+OUT=/e/.claude/Ionity/Gateflame/tools/history-dump.last.txt
 {
   echo "=== generated $(date '+%Y-%m-%d %H:%M:%S %z') ==="
   echo

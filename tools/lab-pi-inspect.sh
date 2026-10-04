@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lab-pi-inspect.sh - read-only: open-webui wiring, agent env location, clock, agent failure reason.
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
-out=/e/Gateflame/tools/lab-pi-inspect.last.txt
+out=/e/.claude/Ionity/Gateflame/tools/lab-pi-inspect.last.txt
 ssh -o BatchMode=yes -o ConnectTimeout=5 -o HostKeyAlias=raspberrypi wabapi@192.168.124.3 '
 echo "--- open-webui (no env values) ---"
 docker inspect -f "net={{.HostConfig.NetworkMode}} ports={{json .HostConfig.PortBindings}} mounts={{range .Mounts}}{{.Type}}:{{.Name}}{{.Source}}->{{.Destination}} {{end}}" open-webui

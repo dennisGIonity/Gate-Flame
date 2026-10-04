@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lab-pi-uplink.sh - read-only: does the lab (H3C) give the Pi internet? why does unbound SERVFAIL?
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
-out=/e/Gateflame/tools/lab-pi-uplink.last.txt
+out=/e/.claude/Ionity/Gateflame/tools/lab-pi-uplink.last.txt
 ssh -o BatchMode=yes -o ConnectTimeout=5 -o HostKeyAlias=raspberrypi wabapi@192.168.124.3 '
 date -Is
 ip -4 route

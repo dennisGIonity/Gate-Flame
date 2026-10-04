@@ -2,7 +2,7 @@
 # run-all-suites.sh - the whole automated gate from Git-bash. Output -> tools/run-all-suites.last.txt
 # node-agent pytest (its .venv), fleet + feed-receiver pytest, tsc, vitest, all three bundles, ruff, shell syntax.
 unset NODE_ENV
-C=/e/Gateflame; cd $C
+C=/e/.claude/Ionity/Gateflame; cd $C
 out=$C/tools/run-all-suites.last.txt
 PY=$C/node-agent/.venv/Scripts/python.exe
 {

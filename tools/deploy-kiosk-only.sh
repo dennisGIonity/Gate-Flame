@@ -5,7 +5,7 @@ PI=wabapi@192.168.0.10
 
 echo "=== staging the rebuilt kiosk bundle ==="
 ssh $PI 'rm -rf ~/kiosk-staging && mkdir -p ~/kiosk-staging'
-scp -q -r /e/Gateflame/dist-kiosk/. $PI:~/kiosk-staging/
+scp -q -r /e/.claude/Ionity/Gateflame/dist-kiosk/. $PI:~/kiosk-staging/
 
 echo "=== verifying the staged bundle carries the Shield panel ==="
 ssh $PI 'grep -l "Not set up on this box yet" ~/kiosk-staging/assets/kiosk.*.js >/dev/null && echo "  Shield present" || { echo "  SHIELD MISSING - refusing"; exit 1; }'

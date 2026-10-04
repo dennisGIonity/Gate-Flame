@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # esp32-survey.sh - locate ESP32 / lab projects on this machine (read-only).
-out=/e/Gateflame/tools/esp32-survey.last.txt
+out=/e/.claude/Ionity/Gateflame/tools/esp32-survey.last.txt
 {
 echo "=== E:\\ top level ==="; ls -la /e/ 2>&1
-echo; echo "=== E:\\.claude\\Ionity\\.IONITY-LAB ==="; ls -la /e/.IONITY-LAB 2>&1
+echo; echo "=== E:\\.claude\\Ionity\\.IONITY-LAB ==="; ls -la /e/.claude/Ionity/.IONITY-LAB 2>&1
 echo; echo "=== candidate folders ==="
 for d in /e/*/ /c/Users/DGMic/*/ /c/Users/DGMic/Documents/*/ /c/Users/DGMic/source/repos/*/; do
   case "${d,,}" in *esp32*|*reporter*|*ionity-lab*|*mcp*) echo "$d"; git -C "$d" remote -v 2>/dev/null | head -2; git -C "$d" log -1 --format='  last: %h %an %ad %s' 2>/dev/null;; esac

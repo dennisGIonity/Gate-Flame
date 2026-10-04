@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # find-copies.sh - read-only: every Gate^Flame checkout / copy on this machine and what it holds that E:\.claude\Ionity\Gateflame lacks.
-out=/e/Gateflame/tools/find-copies.last.txt
-CANON=/e/Gateflame
+out=/e/.claude/Ionity/Gateflame/tools/find-copies.last.txt
+CANON=/e/.claude/Ionity/Gateflame
 {
 echo "=== $(date -Is) ==="
 echo "--- folders whose name looks like gateflame / finishing ---"

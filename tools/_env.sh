@@ -19,7 +19,7 @@
 # Those are home-directory by definition. Everything else moves.
 # ========================================================================================
 
-REPO_ROOT="${GATEFLAME_REPO:-/e/Gateflame}"
+REPO_ROOT="${GATEFLAME_REPO:-/e/.claude/Ionity/Gateflame}"
 
 # Resolve the SSH agent.
 #

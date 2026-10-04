@@ -21,7 +21,7 @@
 # ========================================================================================
 set -uo pipefail
 
-CANONICAL_DIR="/e/Gateflame"
+CANONICAL_DIR="/e/.claude/Ionity/Gateflame"
 CANONICAL_NAME="DennisIonity"
 CANONICAL_EMAIL="dennis@ionitynetwork.onmicrosoft.com"
 REMOTE_MATCH="Gate-Flame"

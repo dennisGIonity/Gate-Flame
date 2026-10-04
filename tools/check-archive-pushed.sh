@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Read-only: confirms docs/archive-finishing-touches is committed and on origin/main.
-cd /e/Gateflame || exit 1
+cd /e/.claude/Ionity/Gateflame || exit 1
 git fetch -q origin
 echo "BRANCH: $(git branch --show-current)"
 echo "Uncommitted changes in archive/inventory (blank = none):"
