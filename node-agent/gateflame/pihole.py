@@ -25,6 +25,20 @@ FTL's own src/api/auth.c / config.c:
     429 on POST /api/auth = "api_seats_exceeded": every one of
         webserver.api.max_sessions (default 16) is taken.
 
+Restarting FTL (BUG-31) - checked 2026-10-03 against the spec the lab box's
+own FTL serves (http://192.168.124.3:8081/api/docs/specs/main.yaml, which maps
+/action/restartdns -> action.yaml, and info.yaml) and FTL master
+src/api/action.c, src/signals.c, src/main.c, src/api/info.c:
+
+    POST   /api/action/restartdns          -> 200 {"status": "success", "took"}
+                                              403 "forbidden" when
+                                              webserver.api.allow_destructive is off
+    GET    /api/info/ftl                   -> {"ftl": {"pid", "uptime" (ms), ...}}
+
+FTL answers the restart request FIRST and restarts after (restart_ftl()
+SIGTERMs itself; main() then execvp()s the same binary), so the pid survives
+a restart and only the uptime resets. See ftl_process() and restart_dns().
+
 The SID goes in an `X-FTL-SID` header - one of the four documented methods
 (query string, body, that header, or a `sid` cookie plus `X-FTL-CSRF`). A bare
 `sid` header is not one of them (BUG-18, fixed 2026-09-14).
@@ -127,32 +141,36 @@ class Result:
     detail: str | None = None
 
 
-def gap_for(failure: str | None, what: str = "this", detail: str | None = None) -> str:
-    """One sentence naming why `what` could not be read. Never blames the wrong party."""
+def gap_for(failure: str | None, what: str = "this", detail: str | None = None, *, verb: str = "read") -> str:
+    """One sentence naming why `what` could not be read. Never blames the wrong party.
+
+    `verb` is for actions rather than reads ("so the filter cannot be
+    restarted"). The default keeps every existing sentence byte-for-byte.
+    """
     if failure == FAIL_UNCONFIGURED:
-        return f"Pi-hole is not configured on this box (GATEFLAME_PIHOLE_URL is unset), so {what} cannot be read"
+        return f"Pi-hole is not configured on this box (GATEFLAME_PIHOLE_URL is unset), so {what} cannot be {verb}"
     if failure == FAIL_NO_PASSWORD:
         return (
             f"Pi-hole requires a password and this box has none configured "
-            f"(GATEFLAME_PIHOLE_PASSWORD), so {what} cannot be read"
+            f"(GATEFLAME_PIHOLE_PASSWORD), so {what} cannot be {verb}"
         )
     if failure == FAIL_AUTH_REFUSED:
-        return f"Pi-hole refused this box's password, so {what} cannot be read"
+        return f"Pi-hole refused this box's password, so {what} cannot be {verb}"
     if failure == FAIL_NO_SEATS:
         return (
             f"Pi-hole refused a new API session (every API seat is in use), so {what} "
-            "cannot be read right now"
+            f"cannot be {verb} right now"
         )
     if failure == FAIL_TIMEOUT:
-        return f"Pi-hole did not answer in time, so {what} cannot be read right now"
+        return f"Pi-hole did not answer in time, so {what} cannot be {verb} right now"
     if failure == FAIL_UNREACHABLE:
-        return f"Pi-hole did not answer, so {what} cannot be read right now"
+        return f"Pi-hole did not answer, so {what} cannot be {verb} right now"
     if failure == FAIL_HTTP:
         suffix = f" ({detail})" if detail else ""
-        return f"Pi-hole answered with an error{suffix}, so {what} cannot be read"
+        return f"Pi-hole answered with an error{suffix}, so {what} cannot be {verb}"
     if failure == FAIL_BAD_BODY:
-        return f"Pi-hole answered in a shape this agent does not understand, so {what} cannot be read"
-    return f"{what} could not be read from Pi-hole"
+        return f"Pi-hole answered in a shape this agent does not understand, so {what} cannot be {verb}"
+    return f"{what} could not be {verb} from Pi-hole"
 
 
 def _base() -> str | None:
@@ -486,3 +504,53 @@ def reachable() -> bool:
     asking both questions costs Pi-hole one request, not two.
     """
     return summary() is not None
+
+
+# ------------------------------------------------------------------ restart
+
+
+def ftl_process(*, timeout: float | None = None) -> Result:
+    """Which FTL process is answering: data `{"pid", "uptimeMs"}` from GET /api/info/ftl.
+
+    This is the read-back for restart_dns(). Pi-hole answering is not proof
+    that it restarted - the request that asked for the restart was answered by
+    the process that was about to go, and that process can answer for a moment
+    longer. The proof is a DIFFERENT process answering. FTL restarts by
+    execvp() on itself, which keeps the pid, so the pid alone cannot show it;
+    the uptime can, because the new image starts its clock again at zero
+    (timer_start(EXIT_TIMER) at the top of main()).
+
+    Either field is None when this FTL did not supply it - never a guess.
+    Uncached on purpose: a cached answer is exactly the stale process this
+    exists to tell apart from a new one.
+    """
+    r = request("GET", "/api/info/ftl", timeout=timeout)
+    if not r.ok:
+        return r
+    ftl = r.data.get("ftl") if isinstance(r.data, dict) else None
+    if not isinstance(ftl, dict):
+        return Result(False, status=r.status, failure=FAIL_BAD_BODY)
+    return Result(
+        True,
+        data={"pid": _int(ftl.get("pid")), "uptimeMs": _float(ftl.get("uptime"))},
+        status=r.status,
+    )
+
+
+def restart_dns() -> Result:
+    """Ask Pi-hole to restart pihole-FTL, its DNS service: POST /api/action/restartdns.
+
+    Endpoint and answers verified 2026-10-03 (see the module docstring): 200
+    `{"status": "success"}`, 401 without a session, 403 "forbidden" when
+    `webserver.api.allow_destructive` is off.
+
+    An ok Result means Pi-hole ACCEPTED the request and nothing more. FTL
+    answers first and restarts after, and a connection cut by the restarting
+    process looks exactly like one that never arrived - so neither an ok nor
+    an unreachable Result is believed until ftl_process() shows a new process.
+    """
+    r = request("POST", "/api/action/restartdns", expect="any")
+    # Whatever came back, every cached read may now describe a process that is
+    # gone (same rule as every other write this agent makes).
+    invalidate_cache()
+    return r

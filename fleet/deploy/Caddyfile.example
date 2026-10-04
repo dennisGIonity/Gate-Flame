@@ -2,7 +2,12 @@
 # deploy/gateflame-fleet.service on 127.0.0.1:8091.
 #   sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile   # edit the domain
 #   sudo systemctl reload caddy
+# Caddy connects from loopback, the app's default trusted proxy. It sets
+# X-Forwarded-For / -Proto itself; X-Forwarded-Prefix it must strip, because
+# the app would trust a client's copy passed through it.
 feeds.ionity.today {
 	encode zstd gzip
-	reverse_proxy 127.0.0.1:8091
+	reverse_proxy 127.0.0.1:8091 {
+		header_up -X-Forwarded-Prefix
+	}
 }

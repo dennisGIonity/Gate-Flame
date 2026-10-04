@@ -27,6 +27,7 @@ import { PHONE_TEXT_SCALE, useAccessibility } from '../../hooks/useAccessibility
 import type { ProfileId, ProfilesResponse } from '../../types/guard';
 import { CH, Meter } from '../../components/kiosk/charts';
 import { Card, Chip, Gap, Screen, ScreenTitle, Warning } from '../mobileUi';
+import { ProtectionChip } from '../protection';
 
 export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState> }) {
   const f = filtering.data;
@@ -77,11 +78,10 @@ export function ControlsScreen({ filtering }: { filtering: Polled<FilteringState
         kicker="06 · Controls"
         title="Settings"
         sub="Changeable from here."
-        right={
-          <Chip tone={paused ? 'warn' : f.enabled ? 'good' : 'fault'}>
-            {paused ? 'paused' : f.enabled ? 'on' : 'off'}
-          </Chip>
-        }
+        // From protectionStatus, all five values. It used to be
+        // `paused ? 'paused' : enabled ? 'on' : 'off'`, which drew a FAILED box
+        // as the owner's own switch - see mobile/protection.tsx.
+        right={<ProtectionChip status={f.protectionStatus} />}
       />
 
       {/* ------------------------------------------------ what is set now

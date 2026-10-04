@@ -3,7 +3,9 @@
   serve            run the server (0.0.0.0:8095, mDNS advert)
   build            build all filters now, in the foreground, and print the log
   pubkey-header    print firmware pubkey.h (the build script writes it into the sketch)
-  device-token     print the device token (the build script writes it into secrets.h)
+  enrol-token      print the enrolment token (typed into a board once, at provisioning)
+  device-token     the pre-0.2 shared fleet token (refused unless T1_LEGACY_TOKEN=1)
+  backup [DIR]     zip the signing key, secrets and database (default: t1/server/backups)
   admin-token      print the admin token (for the dashboard from another machine / MCP over LAN)
 """
 from __future__ import annotations
@@ -28,9 +30,13 @@ def main() -> int:
     elif cmd == "pubkey-header":
         from .signing import firmware_header
         sys.stdout.write(firmware_header())
-    elif cmd in ("device-token", "admin-token"):
+    elif cmd in ("device-token", "admin-token", "enrol-token"):
         from .config import tokens
         print(tokens()[cmd.replace("-", "_")])
+    elif cmd == "backup":
+        from .backup import make_backup
+        from .config import DATA_DIR
+        print(make_backup(sys.argv[2] if len(sys.argv) > 2 else DATA_DIR.parent / "backups"))
     else:
         print(__doc__)
         return 2

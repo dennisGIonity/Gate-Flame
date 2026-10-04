@@ -123,16 +123,18 @@ def test_stop_requires_kiosk_not_control():
         assert start.status_code == 200
         assert start.json()["ok"] is True
 
-        # ...but not stop. Only kiosk (loopback) scope can.
+        # ...but not stop. Only kiosk (loopback) scope can. (A module that HAS a
+        # stop: telemetry is passive, and stopping a passive module is now a
+        # refusal, 409, rather than a 200 that changed nothing - BUG-31.)
         stop = remote.post(
-            "/api/v1/services/module_telemetry/stop",
+            "/api/v1/services/module_wan_audit/stop",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert stop.status_code == 401
 
     with loopback_client() as kiosk2:
         stop = kiosk2.post(
-            "/api/v1/services/module_telemetry/stop",
+            "/api/v1/services/module_wan_audit/stop",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert stop.status_code == 200

@@ -164,15 +164,43 @@ def _send_once(store: Store) -> bool:
     """
     global _consecutive_failures, _last_success_at, _last_error
     payload = build_payload(store)
-    token = store.get_setting(FEED_TOKEN_KEY) or config.feed_token
+    url = f"{config.feed_url}/{store.node_id()}/health"
+    stored = store.get_setting(FEED_TOKEN_KEY)
+    token = stored or config.feed_token
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
-        r = httpx.post(
-            f"{config.feed_url}/{store.node_id()}/health",
-            json=payload,
-            headers=headers,
-            timeout=5.0,
-        )
+        r = httpx.post(url, json=payload, headers=headers, timeout=5.0)
+        # BUG-30 (2026-10-03). The fleet console was rebuilt with an empty database
+        # and this box kept presenting the per-node token the OLD console had
+        # issued. The new console had never heard of it, answered 401, and this
+        # loop never tried anything else: 105 check-ins refused in a row, the
+        # dashboard empty, nothing self-healing. A console whose database is
+        # restored, migrated to the real server, or simply lost would do that to
+        # EVERY customer box at once. So: a stored token that is refused gets ONE
+        # retry with the shared enrolment token. A console that has no row for
+        # this box enrols it again and issues a fresh token (201); a console that
+        # does know this box, and has activated it, refuses the shared token too
+        # (401) - that boundary is deliberate, it is what stops the shared token
+        # impersonating an enrolled box - and then a person has to act, loudly.
+        if r.status_code == 401 and stored and config.feed_token and config.feed_token != stored:
+            logger.warning(
+                "health feed: the fleet console refused this box's own token; retrying once "
+                "with the shared enrolment token (BUG-30: console database reset or migrated?)"
+            )
+            r = httpx.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {config.feed_token}"},
+                timeout=5.0,
+            )
+            if r.status_code == 401:
+                logger.error(
+                    "health feed: the shared enrolment token was refused as well. Either the "
+                    "console's GATEFLAME_FLEET_TOKEN changed, or this box is already enrolled "
+                    "there under a token it no longer holds - support must forget this node's "
+                    "token on the console (DELETE /api/v1/nodes/%s/token) before it can report again",
+                    store.node_id(),
+                )
         if r.status_code == 201:
             try:
                 issued = (r.json() or {}).get("nodeToken")
@@ -180,7 +208,10 @@ def _send_once(store: Store) -> bool:
                 issued = None
             if issued:
                 store.set_setting(FEED_TOKEN_KEY, issued)
-                logger.info("health feed: stored this node's own feed token")
+                logger.info(
+                    "health feed: %s this node's own feed token",
+                    "replaced" if stored else "stored",
+                )
         ok = r.status_code < 300
         if ok:
             if _consecutive_failures >= _LOUD_AFTER_FAILURES:

@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS filters (
 CREATE TABLE IF NOT EXISTS allowlist (domain TEXT PRIMARY KEY, added REAL, note TEXT);
 CREATE TABLE IF NOT EXISTS events (ts REAL, device_id TEXT, kind TEXT, detail TEXT);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS device_tokens (
+  device_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, created REAL, last_used REAL, revoked REAL);
+CREATE TABLE IF NOT EXISTS firmware (
+  version TEXT PRIMARY KEY, path TEXT, size INTEGER, sha256 TEXT, sig TEXT, uploaded REAL, notes TEXT);
 """
 
 

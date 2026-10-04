@@ -32,6 +32,7 @@ from . import (
     dns_history,
     filtering_state,
     health_feed,
+    network_setup,
     pihole,
     profiles,
     services,
@@ -364,6 +365,32 @@ def set_client_name(mac: str, body: DeviceNameBody, _=Depends(control_scope)):
 
 
 # ---- Modules / services -----------------------------------------------------
+#
+# Every action route answers at the status code that tells the truth (BUG-31):
+# 200 only when the action happened, 404 for a module this box does not have,
+# 409 when the box understood but its state will not allow it, 502 when
+# Pi-hole was asked to restart and did not come back. They used to answer 200
+# with `ok: false` in the body, and Ionibot - which checks the status, like
+# every HTTP client - told a customer the filter had restarted when the box had
+# said "unknown_module". A route's status code settles questions without SSH;
+# a failed action that answers 200 settles them wrongly.
+
+
+def _module_action(result: services.ToggleResult):
+    """The action's own body, at the status code that matches it.
+
+    A failure keeps the top-level keys a success has (`ok`, `error`,
+    `advisory`) and repeats `error`/`advisory` under `detail`, FastAPI's error
+    envelope - which is where kioskClient.nodeRequest and services/apiClient.ts
+    look for the node's sentence on a non-2xx.
+    """
+    from fastapi.responses import JSONResponse
+
+    body = result.to_dict()
+    if result.ok:
+        return body
+    body["detail"] = {key: body[key] for key in ("error", "advisory") if key in body}
+    return JSONResponse(status_code=result.http_status, content=body)
 
 
 @app.get("/api/v1/services")
@@ -378,12 +405,32 @@ def get_module_metrics(module_id: str, _=Depends(read_scope)):
 
 @app.post("/api/v1/services/{module_id}/start")
 def start_service(module_id: str, _=Depends(control_scope)):
-    return services.start_module(module_id).to_dict()
+    return _module_action(services.start_module(module_id))
 
 
 @app.post("/api/v1/services/{module_id}/stop")
 def stop_service(module_id: str, _=Depends(kiosk_only)):
-    return services.stop_module(module_id).to_dict()
+    return _module_action(services.stop_module(module_id))
+
+
+@app.post("/api/v1/services/{module_id}/restart")
+def restart_service(module_id: str, _=Depends(control_scope)):
+    """Restart a module, answering only once a read-back shows it came back.
+
+    `control` scope, like start: a restart puts the same protection back and
+    switches nothing off. Only module_dns_filter has one - pihole-FTL, through
+    Pi-hole's own POST /api/action/restartdns - and the request is held for up
+    to services.RESTART_WAIT_SECONDS while a NEW FTL process is waited for,
+    because "Pi-hole said OK" is not the same thing as "it restarted".
+    """
+    return _module_action(services.restart_module(module_id))
+
+
+# ---- Network setup (the box's screen: join Wi-Fi, router read-back) ----------
+# Reading where the box is and whether the router forwards to it takes `read`;
+# scanning, joining and forgetting Wi-Fi take `kiosk` (physical presence), so a
+# paired phone can never move the box onto another network.
+app.include_router(network_setup.build_router(read_scope=read_scope, kiosk_only=kiosk_only))
 
 
 # ---- Firewall bounce (module_firewall_bounce) -------------------------------

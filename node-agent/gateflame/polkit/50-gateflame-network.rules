@@ -1,0 +1,18 @@
+// Gate^Flame node-agent: let the agent's own user join a Wi-Fi network from the box's
+// screen, and nothing else. Installed to /etc/polkit-1/rules.d/ by install.sh and
+// tools/install-pi-release.sh, which replace __GATEFLAME_USER__ with the account the
+// agent's systemd unit actually runs as.
+//
+// Three actions, no more: network-control (connect/disconnect), wifi.scan, and
+// settings.modify.system (create/delete the saved Wi-Fi profile). Not wifi.share, not
+// enable-disable-*, not reload, not settings.modify.hostname.
+polkit.addRule(function (action, subject) {
+  var allowed = [
+    "org.freedesktop.NetworkManager.network-control",
+    "org.freedesktop.NetworkManager.wifi.scan",
+    "org.freedesktop.NetworkManager.settings.modify.system"
+  ];
+  if (subject.user == "__GATEFLAME_USER__" && allowed.indexOf(action.id) >= 0) {
+    return polkit.Result.YES;
+  }
+});

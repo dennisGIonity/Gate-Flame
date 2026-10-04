@@ -13,8 +13,24 @@ import React, { useEffect, useRef } from 'react';
 import { useConnection } from '../hooks/useConnection';
 import { useReducedMotion } from './kiosk/charts';
 
+/**
+ * Why the field is stopped, when it is.
+ *
+ *   owner     the owner paused filtering        the core says PAUSED
+ *   fault     bypass / degraded / unconfigured  the core says nothing
+ *   unknown   the box has not answered          the core says nothing
+ *
+ * Until 2026-10-03 every stopped field said PAUSED, so a box that had FAILED,
+ * or one the phone simply could not reach, carried the word for a choice
+ * nobody made - underneath a hero reading "Not filtering" or "Cannot see your
+ * box". The field still stops in all three; only the owner's own pause is named.
+ */
+export type GravityStoppedBy = 'owner' | 'fault' | 'unknown';
+
 interface GravityParticleCanvasProps {
   isPaused?: boolean;
+  /** Read only while `isPaused`. Omitted means the owner paused (the old meaning). */
+  stoppedBy?: GravityStoppedBy;
   /**
    * Real blocked-domain names observed by the node. When non-empty these are
    * the ONLY labels drawn.
@@ -52,6 +68,7 @@ interface Particle {
  *  the picture instead of restarting it - see the note on the effect below. */
 interface LiveInputs {
   isPaused: boolean;
+  stoppedBy: GravityStoppedBy;
   blockPercentage: number | null;
   threatFeed: string[];
   cleanFeed: string[];
@@ -59,8 +76,13 @@ interface LiveInputs {
 
 const MAX_PARTICLES = 30;
 
+/** The word on the core, or '' for none. See GravityStoppedBy. */
+const coreLabel = (isPaused: boolean, stoppedBy: GravityStoppedBy): string =>
+  !isPaused ? 'GRAVITY' : stoppedBy === 'owner' ? 'PAUSED' : '';
+
 export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React.memo(({
   isPaused = false,
+  stoppedBy = 'owner',
   threatFeed,
   cleanFeed,
   blockPercentage = null,
@@ -85,12 +107,14 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
    */
   const live = useRef<LiveInputs>({
     isPaused,
+    stoppedBy,
     blockPercentage,
     threatFeed: threatFeed ?? [],
     cleanFeed: cleanFeed ?? [],
   });
   live.current = {
     isPaused,
+    stoppedBy,
     blockPercentage,
     threatFeed: threatFeed ?? [],
     cleanFeed: cleanFeed ?? [],
@@ -250,12 +274,16 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
       ctx.setLineDash([]);
       ctx.stroke();
 
-      // Core symbol
-      ctx.fillStyle = paused ? '#E11D48' : '#0EA5E9';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(paused ? 'PAUSED' : 'GRAVITY', 0, 0);
+      // Core symbol. Decoration naming the core; "PAUSED" only for the owner's
+      // own pause - see GravityStoppedBy.
+      const word = coreLabel(paused, live.current.stoppedBy);
+      if (word) {
+        ctx.fillStyle = paused ? '#E11D48' : '#0EA5E9';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(word, 0, 0);
+      }
 
       ctx.restore();
 
@@ -336,10 +364,14 @@ export const GravityParticleCanvas: React.FC<GravityParticleCanvasProps> = React
   return (
     <div className="relative w-full h-full bg-slate-950 rounded-[24px] border border-slate-800 overflow-hidden shadow-sm font-sans">
       <canvas ref={canvasRef} className="w-full h-full block" aria-hidden="true" />
-      <div className="absolute top-3 left-3 flex items-center gap-2 bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] text-sky-500 font-bold tracking-wider uppercase">
-        <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping"></span>
-        <span>GRAVITY™ EDGE AI THREAT INTERCEPTOR</span>
-      </div>
+      {/*
+        A caption badge stood here until 2026-10-03: "GRAVITY™ EDGE AI THREAT
+        INTERCEPTOR" beside a permanently pinging dot. Removed on Dennis's call.
+        The box is a DNS blocklist filter; "AI threat interceptor" was a claim
+        it cannot back, on the one screen whose job is telling the truth, and a
+        dot that pings forever is a timer dressed as a live feed (charts.tsx,
+        rule 2). The legend below carries the real figure and stays.
+      */}
       <div className="absolute bottom-3 right-3 flex items-center gap-3 text-[10px] font-medium text-slate-400 bg-slate-900/80 backdrop-blur-sm px-2.5 py-1.5 rounded-lg border border-slate-800 uppercase tracking-wider">
         {/*
           THIS FIGURE WAS HARDCODED AS "37.1%" — found by screenshot, 2026-08-25.

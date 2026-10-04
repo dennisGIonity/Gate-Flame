@@ -5,6 +5,13 @@
 #   sudo cp deploy/gateflame-fleet.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now gateflame-fleet
 # Secrets live in the EnvironmentFile, never inline in this unit.
+#
+# BACKUPS - data/fleet.db is the customer trust store: the per-node tokens live
+# there, and losing it 401s every box's own token at once. Copy it with SQLite's
+# online backup (consistent while this service writes; a plain cp is not), daily:
+#   /opt/gateflame-fleet/.venv/bin/python -c "import sqlite3,time; sqlite3.connect('/opt/gateflame-fleet/data/fleet.db').backup(sqlite3.connect(time.strftime('/var/backups/gateflame-fleet/fleet-%Y%m%d-%H%M.db')))"
+#   (escape each % as \% inside a crontab). The Windows offline server does the
+#   same with tools\fleet-backup.ps1 - keeps 30, prints a read-back.
 [Unit]
 Description=Gate^Flame Fleet Dashboard
 After=network-online.target

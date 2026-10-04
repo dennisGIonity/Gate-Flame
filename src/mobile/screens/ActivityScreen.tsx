@@ -1,15 +1,20 @@
 /**
  * Activity — what the box has been doing, as pictures.
  *
- * Everything here is live sampling, not history. The agent has no telemetry
- * table yet, so a reboot is amnesia and this screen says so rather than drawing
- * a 24-hour axis it cannot fill. The previous app drew exactly that axis, with
- * a curve that came from nowhere.
+ * Two kinds of chart, and they must never be confused for each other:
  *
- * That constraint is also the design: because every line starts empty when the
- * app opens, the charts have to look deliberate WHILE EMPTY. `AreaChart` says
- * "collecting samples…" in a dashed frame rather than drawing a flat line
- * along the floor — a flat line at zero is a claim, and it is the wrong one.
+ *   HISTORY (top)  the box's own record, from /dns/history (1.1.0): Pi-hole's
+ *                  totals over 24 hours, 7 days or 30 days, captioned with the
+ *                  resolution the node reports. Real from the first minute.
+ *   LIVE (below)   samples this screen has taken since it opened. They start
+ *                  empty, so they have to look deliberate WHILE EMPTY:
+ *                  `AreaChart` shows a dashed frame rather than a flat line
+ *                  along the floor - a flat line at zero is a claim, and it is
+ *                  the wrong one.
+ *
+ * Until 1.1.0 this screen said "Live only — no history kept yet.", which was
+ * true then; the previous app had drawn a 24-hour axis with a curve that came
+ * from nowhere. The history card replaced that line the day the route existed.
  */
 
 import {
@@ -24,6 +29,7 @@ import {
 } from '../../components/kiosk/kioskClient';
 import { AnimatedNumber, AreaChart, CH, Delta, Meter, RingGauge } from '../../components/kiosk/charts';
 import { Card, ChartCard, Gap, Metric, Screen, ScreenTitle, Tiles } from '../mobileUi';
+import { LookupsHistory } from '../history';
 
 export function ActivityScreen({ telemetry }: { telemetry: Polled<TelemetrySummary> }) {
   const t = telemetry.data;
@@ -35,11 +41,12 @@ export function ActivityScreen({ telemetry }: { telemetry: Polled<TelemetrySumma
 
   return (
     <Screen>
-      <ScreenTitle
-        kicker="01 · Live"
-        title="Activity"
-        sub="Live only — no history kept yet."
-      />
+      <ScreenTitle kicker="01 · Live" title="Activity" />
+
+      {/* ------------------------------------------------------- history
+          The box's own record. Opens on a week; the caption under it is the
+          node's resolution for whichever window is chosen.                */}
+      <LookupsHistory initialRange="7d" switchable height={112} />
 
       {/* ------------------------------------------------- share blocked */}
       <Card>

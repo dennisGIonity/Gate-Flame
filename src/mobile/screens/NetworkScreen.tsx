@@ -14,7 +14,9 @@ import { Laptop, Router as RouterIcon, Smartphone, HelpCircle } from 'lucide-rea
 
 import { num, usePolled, useSeries, type LanClient } from '../../components/kiosk/kioskClient';
 import { AreaChart, BarList, CH, Delta, RingGauge } from '../../components/kiosk/charts';
+import type { RouterCheckResponse } from '../../types/routerCheck';
 import { C, Card, ChartCard, Chip, DASH, Empty, Pulse, Screen, ScreenTitle, SlideIn } from '../mobileUi';
+import { ROUTER_CHECK_INTERVAL_MS, ROUTER_CHECK_PATH, RouterCheckCard } from '../routerCheck';
 
 interface ClientsResponse {
   clients: LanClient[];
@@ -39,6 +41,10 @@ function glyph(hostname: string | null) {
 
 export function NetworkScreen({ active }: { active: boolean }) {
   const clients = usePolled<ClientsResponse>('/clients', 10000, active);
+  // ADR-001's one customer step, read back. Its own poll: whether the router
+  // forwards to the box has nothing to do with which devices spoke recently,
+  // and a slow /clients must not hold this card hostage (or the reverse).
+  const router = usePolled<RouterCheckResponse>(ROUTER_CHECK_PATH, ROUTER_CHECK_INTERVAL_MS, active);
   const list = clients.data?.clients ?? [];
   const seen = useSeries(clients.data ? list.length : undefined);
 
@@ -62,6 +68,11 @@ export function NetworkScreen({ active }: { active: boolean }) {
         sub="Heard from recently. Sleeping devices are absent."
         right={clients.data ? <Chip tone="cyan">{num(list.length)} heard</Chip> : null}
       />
+
+      {/* --------------------------------------------------------- router
+          First, because it is the one thing on this screen the customer may
+          have to DO something about. See mobile/routerCheck.tsx.          */}
+      <RouterCheckCard check={router} />
 
       {/* ------------------------------------------------------- presence */}
       {clients.data && list.length > 0 && (

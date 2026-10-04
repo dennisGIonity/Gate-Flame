@@ -3,7 +3,10 @@ three surfaces can never disagree with each other."""
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import re
+import secrets
 import threading
 import time
 from pathlib import Path
@@ -12,8 +15,16 @@ from typing import Callable
 import numpy as np
 
 from . import bloom, lists, signing
-from .config import COMMANDS, FETCH_TIMEOUT, FP_RATE, KEEP_FILTERS, LEVELS, ONLINE_S, STALE_S, data_path
+from .config import (COMMANDS, FETCH_TIMEOUT, FP_RATE, KEEP_FILTERS, KEEP_FIRMWARE, LEVELS, MAX_FIRMWARE_BYTES,
+                     ONLINE_S, STALE_S, data_path)
 from .store import Store
+
+_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,47}$")
+_FW_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z._-]{0,15}$")
+
+
+def _sha(s: str) -> str:
+    return hashlib.sha256(s.encode()).hexdigest()
 
 # The device reports protectionStatus with the SAME five values as the T3 box, and the
 # dashboard maps them the same way. Raw tokens are never shown to a customer.
@@ -183,12 +194,130 @@ class Service:
             m = self.s.kv_get("allow")
         return m
 
+    # ── identity: one token per board ───────────────────────────────────────
+    # The board is enrolled once, with the enrolment token typed in at provisioning; the server
+    # answers with a token of the board's own and keeps only its SHA-256. A lost or stolen board
+    # is cut off by revoking ITS token - no other board is touched. A revoked or already-enrolled
+    # id cannot enrol again until an admin RESETS it: "this box is known under a token it no
+    # longer holds" is a person's decision (the same rule the T3 fleet console learned as BUG-30).
+    def enrol(self, device_id: str) -> str:
+        if not _ID_RE.match(device_id or ""):
+            raise ValueError("bad device id")
+        row = self.s.q("SELECT revoked FROM device_tokens WHERE device_id=?", (device_id,))
+        if row:
+            why = "revoked" if row[0]["revoked"] else "already_enrolled"
+            self.s.event("enrol_refused", why, device_id)
+            raise PermissionError(why)
+        token = secrets.token_urlsafe(32)
+        self.s.x("INSERT INTO device_tokens (device_id, token_hash, created) VALUES (?,?,?)",
+                 (device_id, _sha(token), time.time()))
+        self.s.event("device_enrolled", "token issued", device_id)
+        return token
+
+    def authenticate(self, device_id: str, token: str) -> bool:
+        if not device_id or not token:
+            return False
+        row = self.s.q("SELECT token_hash, last_used, revoked FROM device_tokens WHERE device_id=?", (device_id,))
+        if not row or row[0]["revoked"] or not hmac.compare_digest(row[0]["token_hash"], _sha(token)):
+            return False
+        now = time.time()
+        if not row[0]["last_used"] or now - row[0]["last_used"] > 60:
+            self.s.x("UPDATE device_tokens SET last_used=? WHERE device_id=?", (now, device_id))
+        return True
+
+    def token_state(self, device_id: str) -> str:
+        r = self.s.q("SELECT revoked FROM device_tokens WHERE device_id=?", (device_id,))
+        return "none" if not r else "revoked" if r[0]["revoked"] else "enrolled"
+
+    def revoke_token(self, device_id: str) -> bool:
+        if self.token_state(device_id) == "none":
+            return False
+        self.s.x("UPDATE device_tokens SET revoked=? WHERE device_id=?", (time.time(), device_id))
+        self.s.event("token_revoked", "board cut off", device_id)
+        return True
+
+    def reset_token(self, device_id: str) -> bool:
+        """Forget the token entirely so the board may enrol again (needs the enrolment token)."""
+        if self.token_state(device_id) == "none":
+            return False
+        self.s.x("DELETE FROM device_tokens WHERE device_id=?", (device_id,))
+        self.s.event("token_reset", "board may enrol again", device_id)
+        return True
+
+    # ── firmware: signed, staged ────────────────────────────────────────────
+    def firmware_add(self, version: str, blob: bytes, notes: str = "") -> dict:
+        if not _FW_RE.match(version or ""):
+            raise ValueError("version: 1-16 characters of letters, digits . _ -")
+        if len(blob) < 64 * 1024 or blob[:1] != b"\xe9":
+            raise ValueError("not an ESP32 application image (it must start with byte 0xE9)")
+        if len(blob) > MAX_FIRMWARE_BYTES:
+            raise ValueError(f"image is {len(blob)} bytes; one app slot holds {MAX_FIRMWARE_BYTES}")
+        path = data_path("firmware", f"{version}.bin")
+        path.write_bytes(blob)
+        sha, sig = hashlib.sha256(blob).hexdigest(), signing.sign(blob)
+        self.s.x("INSERT OR REPLACE INTO firmware VALUES (?,?,?,?,?,?,?)",
+                 (version, str(path), len(blob), sha, sig, time.time(), notes[:200]))
+        self.s.event("firmware_added", f"{version} {len(blob)} bytes sha256 {sha[:12]}")
+        keep = (self.rollout_get() or {}).get("version")
+        for r in self.s.q("SELECT version, path FROM firmware ORDER BY uploaded DESC")[KEEP_FIRMWARE:]:
+            if r["version"] != keep:
+                Path(r["path"]).unlink(missing_ok=True)
+                self.s.x("DELETE FROM firmware WHERE version=?", (r["version"],))
+        return {"version": version, "size": len(blob), "sha256": sha}
+
+    def firmware_list(self) -> list[dict]:
+        return self.s.q("SELECT version, size, sha256, uploaded, notes FROM firmware ORDER BY uploaded DESC")
+
+    def firmware_file(self, version: str) -> Path | None:
+        r = self.s.q("SELECT path FROM firmware WHERE version=?", (version,))
+        return Path(r[0]["path"]) if r and Path(r[0]["path"]).exists() else None
+
+    def rollout_get(self) -> dict | None:
+        return self.s.kv_get("rollout")
+
+    def rollout_set(self, version: str, percent: int = 0, devices: list[str] | None = None) -> dict:
+        if not self.s.q("SELECT 1 FROM firmware WHERE version=?", (version,)):
+            raise KeyError(version)
+        percent = int(percent)
+        if not 0 <= percent <= 100:
+            raise ValueError("percent must be 0..100")
+        ro = {"version": version, "percent": percent, "devices": sorted(set(devices or [])), "set": time.time()}
+        self.s.kv_set("rollout", ro)
+        self.s.event("rollout_set", f"{version} to {percent}% + {len(ro['devices'])} named board(s)")
+        return ro
+
+    def rollout_clear(self) -> None:
+        self.s.x("DELETE FROM kv WHERE k='rollout'")
+        self.s.event("rollout_cleared", "no firmware is offered")
+
+    @staticmethod
+    def _in_wave(device_id: str, ro: dict) -> bool:
+        """Named boards first (the canary), then a stable slice of the rest. The slice is a
+        hash of the id, so 10 % stays the SAME 10 % when it grows to 100 %."""
+        if device_id in ro.get("devices", []):
+            return True
+        return int(hashlib.sha256(device_id.encode()).hexdigest()[:8], 16) % 100 < int(ro.get("percent", 0))
+
+    def firmware_offer(self, device_id: str | None, running: str | None) -> dict | None:
+        ro = self.rollout_get()
+        if not ro or not device_id or running == ro["version"] or not self._in_wave(device_id, ro):
+            return None
+        r = self.s.q("SELECT * FROM firmware WHERE version=?", (ro["version"],))
+        return r[0] if r and self.firmware_file(ro["version"]) else None
+
     # ── device side ─────────────────────────────────────────────────────────
-    def manifest_text(self, level: str) -> str:
+    def manifest_text(self, level: str, device_id: str | None = None, running_fw: str | None = None) -> str:
         level = level if level in LEVELS else "low"
         f = self.current_filter(level)
         a = self.allow_meta()
         lines = [f"level={level}"]
+        if running_fw is None and device_id:
+            d = self.s.q("SELECT fw FROM devices WHERE id=?", (device_id,))
+            running_fw = d[0]["fw"] if d else None
+        fw = self.firmware_offer(device_id, running_fw)
+        if fw:
+            lines += [f"fw_version={fw['version']}", f"fw_url=/api/t1/v1/firmware/{fw['version']}.bin",
+                      f"fw_size={fw['size']}", f"fw_sha256={fw['sha256']}", f"fw_sig={fw['sig']}"]
         if f:
             lines += [f"filter_version={f['version']}", f"filter_url=/api/t1/v1/filter/{level}/{f['version']}.bin",
                       f"filter_size={f['size']}", f"filter_sha256={f['sha256']}", f"filter_sig={f['sig']}"]
@@ -264,6 +393,7 @@ class Service:
             "heap_free": last.get("heap_free"), "psram_total": last.get("psram_total"),
             "psram_free": last.get("psram_free"), "upstream": last.get("upstream"),
             "paused_left": last.get("paused_left"),
+            "token": self.token_state(d["id"]),
             "queries": q, "blocked": blk, "forwarded": int(last.get("fwd", 0)),
             "timeouts": int(last.get("to", 0)), "blocked_pct": round(100 * blk / q, 1) if q else None,
             "qps": qps, "blocked_per_s": bps}
@@ -322,7 +452,11 @@ class Service:
         st = {}
         for d in devs:
             st[d["status_label"]] = st.get(d["status_label"], 0) + 1
-        return {"devices": len(devs), "health": by, "protection": st,
+        fw: dict[str, int] = {}
+        for d in devs:
+            fw[d["fw"] or "unknown"] = fw.get(d["fw"] or "unknown", 0) + 1
+        return {"devices": len(devs), "health": by, "protection": st, "firmware": fw,
+                "rollout": self.rollout_get(),
                 "queries": sum(d["queries"] for d in devs), "blocked": sum(d["blocked"] for d in devs),
                 "out_of_date": [d["id"] for d in devs if not d["filter_current"]],
                 "filters": {lv: (self.current_filter(lv) or {}).get("version", 0) for lv in LEVELS}}

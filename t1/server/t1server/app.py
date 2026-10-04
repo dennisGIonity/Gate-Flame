@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 from fastapi.staticfiles import StaticFiles
 
 from . import mcp, signing
-from .config import LEVELS, PORT, data_path, tokens
+from .config import ENROL_PER_MINUTE, LEGACY_SHARED_TOKEN, LEVELS, PORT, TRUST_LOOPBACK, data_path, tokens
 from .service import Service
 from .store import Store
 
@@ -61,15 +61,26 @@ def create_app(store: Store | None = None, svc: Service | None = None, advertise
     started = time.time()
 
     def device_auth(req: Request):
-        if not hmac.compare_digest(req.headers.get("x-t1-token", ""), tok["device_token"]):
-            raise HTTPException(401, "device token required")
+        """A board proves who it is with ITS OWN token (X-T1-Id + X-T1-Token). The pre-0.2
+        shared fleet token is refused unless T1_LEGACY_TOKEN=1 - see config."""
+        did = req.headers.get("x-t1-id", "")
+        token = req.headers.get("x-t1-token", "")
+        if svc.authenticate(did, token):
+            req.state.device_id, req.state.auth = did, "per-device"
+            return
+        if LEGACY_SHARED_TOKEN and hmac.compare_digest(token, tok["device_token"]):
+            req.state.device_id, req.state.auth = did, "legacy"
+            return
+        raise HTTPException(401, "a device token issued to this board is required")
 
     def admin_auth(req: Request):
         host = req.client.host if req.client else ""
-        if host in ("127.0.0.1", "::1", "localhost", "testclient"):
+        if TRUST_LOOPBACK and host in ("127.0.0.1", "::1", "localhost", "testclient"):
             return
         if not hmac.compare_digest(req.headers.get("x-t1-admin", ""), tok["admin_token"]):
             raise HTTPException(401, "admin token required from another machine")
+
+    enrol_hits: list[float] = []
 
     # ── open ──
     @app.get("/api/t1/v1/health")
@@ -77,10 +88,38 @@ def create_app(store: Store | None = None, svc: Service | None = None, advertise
         return {"ok": True, "service": "gateflame-t1", "uptime_s": round(time.time() - started),
                 "filters": {lv: (svc.current_filter(lv) or {}).get("version", 0) for lv in LEVELS}}
 
+    # ── enrolment: the one call a board makes with the enrolment token ──
+    @app.post("/api/t1/v1/enrol")
+    async def enrol(req: Request):
+        now = time.time()
+        enrol_hits[:] = [t for t in enrol_hits if now - t < 60]
+        if len(enrol_hits) >= ENROL_PER_MINUTE:
+            raise HTTPException(429, "too many enrolment attempts; wait a minute")
+        enrol_hits.append(now)
+        if not hmac.compare_digest(req.headers.get("x-t1-enrol", ""), tok["enrol_token"]):
+            raise HTTPException(401, "enrolment token required")
+        try:
+            did = str((await req.json()).get("id", ""))
+            return {"id": did, "token": svc.enrol(did)}
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        except PermissionError as e:
+            msg = ("this board's token was revoked; an admin must reset it before it can enrol again"
+                   if str(e) == "revoked" else
+                   "this board is already enrolled; an admin must reset its token to enrol it again")
+            raise HTTPException(409, msg) from e
+
     # ── device ──
     @app.get("/api/t1/v1/manifest.txt", dependencies=[Depends(device_auth)])
-    def manifest(level: str = "low"):
-        return PlainTextResponse(svc.manifest_text(level))
+    def manifest(req: Request, level: str = "low", fw: str | None = None):
+        return PlainTextResponse(svc.manifest_text(level, getattr(req.state, "device_id", None) or None, fw))
+
+    @app.get("/api/t1/v1/firmware/{version}.bin", dependencies=[Depends(device_auth)])
+    def firmware_bin(version: str):
+        p = svc.firmware_file(version)
+        if not p:
+            raise HTTPException(404, "no such firmware")
+        return FileResponse(p, media_type="application/octet-stream")
 
     @app.get("/api/t1/v1/filter/{level}/{version}.bin", dependencies=[Depends(device_auth)])
     def filter_bin(level: str, version: int):
@@ -98,6 +137,8 @@ def create_app(store: Store | None = None, svc: Service | None = None, advertise
     async def telemetry(req: Request):
         try:
             body = await req.json()
+            if req.state.auth == "per-device" and body.get("id") != req.state.device_id:
+                raise HTTPException(403, "a board may only report as itself")
             return PlainTextResponse(svc.ingest(body, req.client.host if req.client else ""))
         except (ValueError, TypeError) as e:
             raise HTTPException(400, str(e)) from e
@@ -138,9 +179,48 @@ def create_app(store: Store | None = None, svc: Service | None = None, advertise
 
     @app.delete("/api/t1/v1/devices/{did}", dependencies=A)
     def forget(did: str):
-        for t in ("devices", "telemetry", "commands"):
+        for t in ("devices", "telemetry", "commands", "device_tokens"):
             store.x(f"DELETE FROM {t} WHERE {'id' if t == 'devices' else 'device_id'}=?", (did,))
-        store.event("device_forgotten", "removed from the fleet list", did)
+        store.event("device_forgotten", "removed from the fleet list; its token is gone", did)
+        return {"ok": True}
+
+    @app.post("/api/t1/v1/devices/{did}/token/revoke", dependencies=A)
+    def token_revoke(did: str):
+        if not svc.revoke_token(did):
+            raise HTTPException(404, "that board has no token")
+        return {"ok": True, "token": "revoked"}
+
+    @app.post("/api/t1/v1/devices/{did}/token/reset", dependencies=A)
+    def token_reset(did: str):
+        if not svc.reset_token(did):
+            raise HTTPException(404, "that board has no token")
+        return {"ok": True, "token": "none", "next": "the board may enrol again with the enrolment token"}
+
+    # ── firmware (admin): upload, list, stage ──
+    @app.post("/api/t1/v1/firmware", dependencies=A)
+    async def firmware_upload(req: Request, version: str, notes: str = ""):
+        try:
+            return svc.firmware_add(version, await req.body(), notes)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/t1/v1/firmware", dependencies=A)
+    def firmware_list():
+        return {"firmware": svc.firmware_list(), "rollout": svc.rollout_get()}
+
+    @app.post("/api/t1/v1/firmware/rollout", dependencies=A)
+    async def rollout_set(req: Request):
+        b = await req.json()
+        try:
+            return svc.rollout_set(str(b.get("version", "")), int(b.get("percent", 0)), list(b.get("devices") or []))
+        except KeyError as e:
+            raise HTTPException(404, f"no firmware {e}") from e
+        except (ValueError, TypeError) as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.delete("/api/t1/v1/firmware/rollout", dependencies=A)
+    def rollout_clear():
+        svc.rollout_clear()
         return {"ok": True}
 
     @app.post("/api/t1/v1/filters/build", dependencies=A)

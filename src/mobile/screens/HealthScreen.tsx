@@ -32,6 +32,7 @@ import {
 } from '../../components/kiosk/kioskClient';
 import { AreaChart, CH, Meter, RingGauge } from '../../components/kiosk/charts';
 import { C, Card, Chip, Gap, Metric, Screen, ScreenTitle, Stat, Tiles, Warning } from '../mobileUi';
+import { VitalsHistory } from '../history';
 
 interface ServicesResponse {
   modules: ServiceModule[];
@@ -211,6 +212,12 @@ export function HealthScreen({
           </div>
           <Gap text={t?.gap} />
         </Card>
+
+      {/* ------------------------------------------------------ last 24 h
+          The same two readings from the box's own 60-second sampler (1.1.0):
+          the traces above say how it is NOW, this says whether it has been
+          pinned or running hot while nobody was looking.                  */}
+      <VitalsHistory active={active} />
 
       {/* Warnings keep their words - they are the one place on this screen
           where a customer needs a sentence, because they have to DO

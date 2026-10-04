@@ -64,6 +64,8 @@ main{max-width:1440px;margin:0 auto;padding:22px 24px 40px}
 .btn.ghost{background:transparent}
 .btn.sm{padding:5px 10px;font-size:12px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.danger{background:transparent;border-color:rgba(244,63,94,.45);color:var(--bad)}
+.btn.danger:hover:not(:disabled){border-color:var(--bad);background:var(--bad-bg)}
 
 /* ------------------------------------------------------------------ tiles */
 .tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:18px}
@@ -196,6 +198,10 @@ td.num{font-variant-numeric:tabular-nums}
 .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
 .field input,.field select{width:100%}
 .formrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kv.kv-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.tokenstate{margin-top:12px}
+.tokenhelp{margin-top:10px}
+.tokenrow{margin-top:10px}
 .savemsg{font-size:12px;color:var(--muted)}
 .savemsg.bad{color:var(--bad)} .savemsg.ok{color:var(--ok)}
 .note{border-left:2px solid var(--border-2);padding:2px 0 2px 12px;margin-top:14px}

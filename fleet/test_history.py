@@ -17,21 +17,24 @@
 # ========================================================================================
 
 import base64
-import os
-import sqlite3
 import time
 
 import pytest
-
-os.environ.setdefault("GATEFLAME_FLEET_ADMIN_PASSWORD", "test-pw")
 
 
 @pytest.fixture()
 def fleet(tmp_path, monkeypatch):
     import app  # noqa: WPS433 - the module under test reads env at import
 
+    # Pin every module attribute these tests depend on. app.py reads them from
+    # the environment at import, so a shell that had sourced fleet.env.ps1
+    # (GATEFLAME_FLEET_ADMIN_USER set) used to fail test_30d_history with a 401:
+    # only the password was pinned, and `_auth()` below says "admin".
     monkeypatch.setattr(app, "DB_PATH", str(tmp_path / "fleet.db"))
+    monkeypatch.setattr(app, "ADMIN_USER", "admin")
     monkeypatch.setattr(app, "ADMIN_PASSWORD", "test-pw")
+    monkeypatch.setattr(app, "RAW_RETENTION_DAYS", 7)
+    monkeypatch.setattr(app, "HOURLY_RETENTION_DAYS", 90)
     app.init_db()
     return app
 

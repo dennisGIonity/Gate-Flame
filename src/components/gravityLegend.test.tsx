@@ -27,7 +27,7 @@
  * file does exactly that, and nothing else.
  */
 
-import { describe, expect, it, vi, beforeAll } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 import { GravityParticleCanvas } from './GravityParticleCanvas';
@@ -91,4 +91,83 @@ describe('GravityParticleCanvas legend', () => {
     );
     expect(container.textContent).not.toContain('0.0%');
   });
+});
+
+/**
+ * B4, 2026-10-03 (Dennis's call): the caption "GRAVITY™ EDGE AI THREAT
+ * INTERCEPTOR" is gone. The box is a DNS blocklist filter; that sentence was a
+ * claim it cannot back, on the phone's Home screen, beside a dot that pinged
+ * forever. The legend with the real figure stays.
+ */
+describe('GravityParticleCanvas caption', () => {
+  it('makes no "AI threat interceptor" claim, and keeps the real legend', () => {
+    const { container } = render(
+      <GravityParticleCanvas isPaused={false} threatFeed={[]} blockPercentage={7.2} />,
+    );
+    expect(container.textContent).not.toMatch(/INTERCEPTOR|EDGE AI|™/i);
+    expect(container.querySelector('.animate-ping')).toBeNull();
+    expect(screen.getByText(/Blocked \(7\.2%\)/)).toBeTruthy();
+  });
+});
+
+/**
+ * Found while checking the core label for B4: every stopped field said PAUSED,
+ * so a box in bypass/degraded/unconfigured - or one the phone could not reach -
+ * carried the word for the OWNER'S choice under a hero reading "Not filtering"
+ * or "Cannot see your box". Only the owner's own pause is named now.
+ */
+describe('GravityParticleCanvas core word', () => {
+  let saved: HTMLCanvasElement['getContext'];
+  let drawn: string[] = [];
+
+  beforeEach(() => {
+    drawn = [];
+    saved = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () =>
+        new Proxy(
+          {},
+          {
+            get: (_t, prop) =>
+              prop === 'fillText'
+                ? (text: string) => {
+                    drawn.push(text);
+                  }
+                : prop === 'canvas'
+                  ? document.createElement('canvas')
+                  : () => undefined,
+          },
+        ),
+    ) as unknown as HTMLCanvasElement['getContext'];
+    // Reduced motion draws the single still frame synchronously, inside the
+    // effect - no animation loop to wait for.
+    document.documentElement.classList.add('reduce-motion');
+  });
+
+  afterEach(() => {
+    document.documentElement.classList.remove('reduce-motion');
+    HTMLCanvasElement.prototype.getContext = saved;
+  });
+
+  it('a running field names its core GRAVITY', () => {
+    render(<GravityParticleCanvas isPaused={false} threatFeed={[]} blockPercentage={7.2} />);
+    expect(drawn).toContain('GRAVITY');
+    expect(drawn).not.toContain('PAUSED');
+  });
+
+  it('the owner’s pause is PAUSED - and so is a caller that does not say why (the old meaning)', () => {
+    render(<GravityParticleCanvas isPaused stoppedBy="owner" threatFeed={[]} blockPercentage={null} />);
+    expect(drawn).toContain('PAUSED');
+    drawn = [];
+    render(<GravityParticleCanvas isPaused threatFeed={[]} blockPercentage={null} />);
+    expect(drawn).toContain('PAUSED');
+  });
+
+  for (const why of ['fault', 'unknown'] as const) {
+    it(`stopped by ${why}: no PAUSED, and no GRAVITY either`, () => {
+      render(<GravityParticleCanvas isPaused stoppedBy={why} threatFeed={[]} blockPercentage={null} />);
+      expect(drawn).not.toContain('PAUSED');
+      expect(drawn).not.toContain('GRAVITY');
+    });
+  }
 });

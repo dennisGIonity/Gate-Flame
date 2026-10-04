@@ -38,6 +38,7 @@ import type {
   UpstreamModeId,
   UpstreamResponse,
 } from '../../types/guard';
+import type { WifiConnectResponse, WifiScan } from '../../types/networkSetup';
 import type {
   VpnDeviceState,
   VpnDevicesResponse,
@@ -363,10 +364,11 @@ const TIMEOUT_MS = 4000;
 
 export async function nodeRequest<T>(
   path: string,
-  init: { method?: string; body?: unknown; signal?: AbortSignal } = {},
+  init: { method?: string; body?: unknown; signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeoutMs = init.timeoutMs ?? TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   // Chain the caller's signal so an unmounting component cancels the socket
   // rather than leaving polls to stack up behind a stalled node.
   const onAbort = () => controller.abort();
@@ -421,7 +423,7 @@ export async function nodeRequest<T>(
     if (err instanceof NodeError) throw err;
     const aborted = err instanceof DOMException && err.name === 'AbortError';
     throw new NodeError(
-      aborted ? 'the node did not answer within 4 seconds' : 'no route to the node agent',
+      aborted ? `the node did not answer within ${Math.round(timeoutMs / 1000)} seconds` : 'no route to the node agent',
       null,
       true,
     );
@@ -439,6 +441,17 @@ export const kioskApi = {
   requestPairingCode: () => nodeRequest<PairResponse>('/pair/request', { method: 'POST' }),
   revokeDevice: (id: string) => nodeRequest<{ ok: boolean }>(`/pair/devices/${id}`, { method: 'DELETE' }),
   revokeAll: () => nodeRequest<{ ok: boolean }>('/pair/devices/revoke-all', { method: 'POST' }),
+  // Setup from the box's own screen (network_setup.py). Kiosk scope: joining a
+  // network is physical presence, so no paired phone can do it. A scan can take
+  // ~20 s on the node while nodeRequest gives up at 4 s, hence the longer window.
+  wifiScan: () => nodeRequest<WifiScan>('/network/wifi/scan', { timeoutMs: 25000 }),
+  wifiConnect: (ssid: string, password: string | null) =>
+    nodeRequest<WifiConnectResponse>('/network/wifi/connect', {
+      method: 'POST',
+      body: { ssid, password },
+      timeoutMs: 60000,
+    }),
+  wifiForget: () => nodeRequest<{ ok: boolean; forgotten: string | null }>('/network/wifi/forget', { method: 'POST' }),
 
   setThreatLevel: (level: ThreatLevelId) =>
     nodeRequest<FilteringState>('/filtering/threat-level', { method: 'PUT', body: { level } }),

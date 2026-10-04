@@ -1,7 +1,7 @@
 # Gate^Flame — read this first
 
 > 🗂 **WHERE EVERYTHING LIVES: `docs/INVENTORY-REPOS-AND-FOLDERS-2026-09-25.md`.** One
-> repo (`dennisGIonity/Gate-Flame`), one working copy (`E:\Gateflame`). Verified
+> repo (`dennisGIonity/Gate-Flame`), one working copy (`E:\.claude\Ionity\Gateflame`). Verified
 > 2026-09-25: no commit on this machine is missing from GitHub. The "Gate^Flame Finishing
 > touches" Claude project is fully captured (docs + all 8 chats in
 > `docs/archive-finishing-touches/`) and is being retired — work continues in the
@@ -11,7 +11,7 @@
 > reading of `docs/PIN-2026-09-21.md`). The household LAN did **not** renumber —
 > `192.168.124.x` is Dennis's new **isolated lab** (H3C Magic, `192.168.124.1`).
 > **All Gate^Flame work happens on the lab. Leave the TP-Link (`192.168.0.1`) alone —
-> it is household internet only.** Lab definition: `E:\.IONITY-LAB\lab.json`
+> it is household internet only.** Lab definition: `E:\.claude\Ionity\.IONITY-LAB\lab.json`
 > (repo `Ionity-Lab`). Restart GF on the lab: `tools\LAB-RESUME-GATEFLAME.cmd`
 > (refuses unless the Pi holds a `192.168.124.x` address). ESP32 parts for later
 > models: `docs/ESP32-PARTS-INVENTORY-2026-09-24.md`.
@@ -22,9 +22,10 @@
 > (`doubleclick.net → 0.0.0.0`). **Open WebUI was stopped (restart=no, volume kept)**
 > because it held :8080 in host-network mode — undo:
 > `docker update --restart=always open-webui && docker start open-webui`.
-> ⚠ **The lab has no internet** (H3C WAN not uplinked): Unbound SERVFAILs every
-> non-blocked name and the Pi's clock is stuck ~4 days behind (NTP can't resolve).
-> A timestamp on the Pi reads as 2026-09-20 — that is the clock, not old data.
+> ~~⚠ **The lab has no internet** (H3C WAN not uplinked)~~ — **uplinked 2026-10-03**: the
+> laptop resolves via `192.168.124.1` and reaches `1.1.1.1:443` over the lab cable; the Pi's
+> clock is NTP-synchronised again. (Before that, Unbound SERVFAILed every non-blocked name
+> and Pi timestamps read 2026-09-20 — the clock, not old data.)
 > Addresses in "The live estate" below are stale.
 
 Working notes for Claude. Not documentation — this is the set of things that have
@@ -59,7 +60,7 @@ template. It is **not** a git identity.
    pinned globally *and* `--local` in every live clone. To change it, change it
    in config once — never per-commit.
 
-3. **`E:\Gateflame` is the ONLY copy that gets edited.** Ever. Others exist and
+3. **`E:\.claude\Ionity\Gateflame` is the ONLY copy that gets edited.** Ever. Others exist and
    some hold unique commits, but they are read-only until retired.
 
 4. **Never `push --force`, never rewrite pushed history.** The historic 8
@@ -78,7 +79,7 @@ Earlier sessions scattered **98 loose scratch files** into the home folder —
 That is how a machine ends up with nineteen copies of a project and nobody able
 to say which one is real.
 
-**Scratch goes in `E:\Gateflame\tools\` and gets committed, or it does not
+**Scratch goes in `E:\.claude\Ionity\Gateflame\tools\` and gets committed, or it does not
 exist.** If a script is worth writing twice it is worth version-controlling; if
 it is not, delete it in the same breath.
 
@@ -91,7 +92,7 @@ Only these legitimately stay on C:, because their tools look nowhere else:
 | `~/.gateflame-signing` | the release keystore — **irreplaceable, back it up** |
 | `~/.gradle`, Android SDK | hardcoded by their toolchains |
 
-### The commands — all in `E:\Gateflame\tools\`
+### The commands — all in `E:\.claude\Ionity\Gateflame\tools\`
 
 ```
 tools\doctor.cmd            read-only: identity, clones, unpushed work
@@ -117,13 +118,41 @@ what the evidence shows, not what is convenient.
 
 ## The product, in one line each
 
+> 🎯 **LAUNCH SCOPE (Dennis, 2026-10-03): `docs/LAUNCH-SCOPE-T3-T1-2026-10-03.md` — READ IT
+> BEFORE ANYTHING BELOW.** Two models go to launch, **Standard T3** and **T1**; nothing else
+> is built until they are ready. It re-states the product and supersedes "the product IS
+> the kiosk":
+> - **T3: the screen on the box is SETUP** — connect to the household network (Wi-Fi or
+>   cable), the one router step with a live read-back, pair the phone. After that it shows
+>   a status face; everything else on it is a nicety. **The app is where the customer
+>   lives**: every number and every setting. The box does background work and reports to
+>   the fleet. *"setup once, thereafter only look and set this and that from the synced apk."*
+> - **T1: the ESP32 connects and reports; everything else is on the Ionity server** —
+>   lists, dashboard, alerts, MCP tools, OTA, support. *"ALOT more reporting with no real
+>   other functions other than connection."*
+> - **Per-device categories ("no porn on devices a, b, c") are NOT possible on Standard
+>   T3** under ADR-001 — Pi-hole sees one client, the router. Categories are household-wide;
+>   Shield is per device by a different mechanism. The app must never promise otherwise.
+> ⚠ **The lab Pi re-homes itself onto household Wi-Fi after a reboot** (2026-10-03:
+> `Afrihost Fibre DTM` had autoconnect=yes again; wlan0 won the default route). Every
+> script that derived "the LAN address" from `ip route get … src` then followed it, and the
+> watchdog self-heal rebound the resolver to `192.168.0.12` and read "healthy" while
+> `192.168.124.3:53` was silent. Policy now: **wired first** (`gateflame_lan_ip()`, one
+> text in seven scripts, `tests/test_lan_ip_policy.py`). Put the Pi back with
+> `tools\LAB-PI-ETH0-ONLY.cmd`. The laptop's lab address is whatever the H3C gave it
+> (`.124.2` on 10-03; an ESP32-S3 held `.124.4`) — `stage-pi-release.sh` reads it from
+> `ipconfig`, never hardcode `.4`.
+> ⚠ **A fleet console with a reset database 401s every enrolled box forever** (BUG-30,
+> 105 refusals on 09-26). The agent now retries once with the shared enrolment token;
+> `fleet.db` is the customer trust store — back it up, carry it on any migration.
+
 > 🧭 **TIERING (decided 2026-09-25): `docs/TIERING-PLAN.md`.** Models are T1–T4, each in a
 > Standard and a Premium edition. **Standard T3 = Radxa Cubie A7A 6 GB** (what is described
 > below as STANDARD). **Premium T3 = Standard T3 + features to safeguard crypto wallets on a
 > private server, 16 GB** — this *replaces* the "Bond villain" PREMIUM below; whether it is
 > in-path is undecided. **T1 = ESP32-S3 DNS filter, built in `t1/` (read `t1/README.md`)** —
 > server `tools\T1-SERVER.cmd` on **:8095**, flash `tools\T1-BUILD-FLASH.cmd`. It is NOT the
-> `E:\.ESP32-MCP` project (:8099) and must never be merged into it. T2/T4 to come.
+> `E:\.claude\Ionity\.ESP32-MCP` project (:8099) and must never be merged into it. T2/T4 to come.
 > 🔎 **A-TO-Z AUDIT, IN PASSES (started 2026-10-02, Dennis's call: whole repo, one surface
 > per session).** Pass 1 = the mobile app → `docs/AUDIT-PASS-1-MOBILE-2026-10-02.md`
 > (BUG-20…29 in `FUNCTION-STATUS-AND-BUGS.md`). Rule for every pass: screen copy is
@@ -156,7 +185,10 @@ about. Advertising ourselves narrows the gap; it never closes it.
   order, so protection becomes intermittent and inexplicable. Bypass mode is the
   fallback instead. `install-dns-stack.sh` used to advise a secondary; that was a
   bug and is fixed.
-- **The product IS the kiosk.** Don't frame the device UI as secondary.
+- ~~**The product IS the kiosk.** Don't frame the device UI as secondary.~~ **Superseded
+  2026-10-03** (`docs/LAUNCH-SCOPE-T3-T1-2026-10-03.md`): the screen is **setup** —
+  connect, router step, pair — then a status face. The app is the product the customer
+  uses; the box does background work. Don't build new features onto the kiosk.
 - **No enforcement without consent**, and no honest-looking screen showing invented
   data. `DataSourceBanner` exists for this.
 - **Loopback is not the product.** Anything that proves health must prove it on the
@@ -308,7 +340,7 @@ about. Advertising ourselves narrows the gap; it never closes it.
 | **`load-key.cmd` fails on a stale agent socket** | `unix_listener: cannot bind to path /c/Users/DGMic/.ssh/agent.sock: Address already in use` (also seen as `Operation not supported`). Reads like a broken script; it is a leftover socket file. Fix, from Git-bash: `rm -f ~/.ssh/agent.sock && eval "$(ssh-agent -a ~/.ssh/agent.sock -s)" && ssh-add ~/.ssh/id_ed25519`. |
 | `pathlib.Path` on appliance paths | Appliance paths are always POSIX. `Path` is platform-dependent and mangles them on Windows. Use `PurePosixPath`. |
 | Don't test in BlueStacks | `emulator-5554` is BlueStacks: NATs, no LAN, no mDNS, Android 9 x86_64. |
-| **Never run git in the Cowork Linux sandbox against `E:\Gateflame`** | Even a "read-only" `git status` refreshes the index: it creates `.git/index.lock`, then the mount refuses the unlink (`Operation not permitted`) and the lock **stays behind**, blocking every Windows git command with "Another git process seems to be running". Happened 2026-09-25; removed from PowerShell. Run all git through Git-bash on Windows (`& 'C:\Program Files\Git\bin\bash.exe' -lc ...`), via a script in `tools/` — inline quoting through PowerShell → bash also silently eats output. If a lock is ever found, confirm no git.exe is running, then delete it. |
+| **Never run git in the Cowork Linux sandbox against `E:\.claude\Ionity\Gateflame`** | Even a "read-only" `git status` refreshes the index: it creates `.git/index.lock`, then the mount refuses the unlink (`Operation not permitted`) and the lock **stays behind**, blocking every Windows git command with "Another git process seems to be running". Happened 2026-09-25; removed from PowerShell. Run all git through Git-bash on Windows (`& 'C:\Program Files\Git\bin\bash.exe' -lc ...`), via a script in `tools/` — inline quoting through PowerShell → bash also silently eats output. If a lock is ever found, confirm no git.exe is running, then delete it. |
 
 ## The live estate
 
@@ -323,7 +355,7 @@ about. Advertising ourselves narrows the gap; it never closes it.
 - **Fleet control plane**: `GATEFLAME_FEED_URL=http://192.168.0.3:8091/api/v1/nodes`
   as of 2026-08-31 — it **moved from `.6`**, and `DENNIS-OUTSTANDING-ACTIONS.md` still
   says `192.168.0.6:8080`. Confirmed by an install read-back on the box, not by a doc.
-- Canonical repo `E:\Gateflame` — **all** work, mobile included. `C:\Users\DGMic\GateFlame-Repo`
+- Canonical repo `E:\.claude\Ionity\Gateflame` — **all** work, mobile included. `C:\Users\DGMic\GateFlame-Repo`
   is a stale clone (every commit on GitHub, 2026-09-25) and must not be edited.
 
 ## The business model — decided, and it changes the architecture

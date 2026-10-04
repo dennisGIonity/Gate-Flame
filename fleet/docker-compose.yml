@@ -6,7 +6,17 @@
 #   docker compose up -d --build
 #
 # The fleet container publishes NO port: only Caddy can reach it, which is why
-# it may trust Caddy's X-Forwarded-* headers (the docker bridge range below).
+# it may trust Caddy's X-Forwarded-* headers. The trust range is the compose
+# network's subnet, PINNED below: left to Docker, a busy host hands out
+# 192.168.x.x/20 networks too, Caddy would fall outside a 172.16/12 + 10/8 trust
+# range, and the app would then silently drop X-Forwarded-Proto (no Secure
+# cookie, no HSTS) and key the login rate limit on Caddy's address - 8 bad
+# passwords from anyone locking everyone out. A pinned subnet that collides with
+# an existing network fails `docker compose up` loudly instead. Change both
+# lines together (test_web.py::test_deploy_files_agree_with_the_app checks).
+#
+# Back up data/fleet.db - the per-node tokens live there. See
+# deploy/gateflame-fleet.service for the one-line online backup.
 services:
   fleet:
     build: .
@@ -15,7 +25,7 @@ services:
     env_file: fleet.env
     environment:
       GATEFLAME_FLEET_DB: /data/fleet.db
-      GATEFLAME_FLEET_TRUSTED_PROXIES: "172.16.0.0/12,10.0.0.0/8"
+      GATEFLAME_FLEET_TRUSTED_PROXIES: "172.30.91.0/24"
     volumes:
       - ./data:/data
     expose:
@@ -36,6 +46,12 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: "172.30.91.0/24"
 
 volumes:
   caddy_data:

@@ -17,6 +17,16 @@
  *     palette is the app's own (it was the only screen still in Tailwind's
  *     stock emerald/slate).
  *   - the root clears the status bar on an edge-to-edge Android 15+ handset.
+ *
+ * 2026-10-03 — the address box is there from the first frame. Discovery
+ * probes two mDNS names and a fixed list of 192.168.0/1/8.x and 10.0.0.x
+ * addresses; a box on any other subnet (the lab is 192.168.124.x) is found only
+ * if `.local` resolves on that handset. The manual entry used to appear only
+ * after the whole race had FAILED, so the customer waited out every probe
+ * before being allowed to type the address their box was already showing them.
+ * Lab addresses are deliberately NOT added to the candidate list: the product
+ * must work on any subnet, and the cure for that is the box showing its address
+ * and the phone accepting it, not a longer list of guesses.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -274,7 +284,10 @@ export function AppPairingScreen({ onPaired }: Props) {
         </div>
       )}
 
-      {(step === 'error' || showManual) && (
+      {/* Shown WHILE discovery runs, not only after it fails - see the
+          2026-10-03 note at the top. Typing an address and pressing Connect
+          cancels the race (beginRun), so the two never compete. */}
+      {(step === 'discover' || step === 'error' || showManual) && (
         <form
           className="mt-2 flex flex-col gap-2 border-t border-[#1E293B] pt-4"
           onSubmit={(e) => {
@@ -285,10 +298,14 @@ export function AppPairingScreen({ onPaired }: Props) {
           <label htmlFor="gf-manual-address" className="text-sm text-slate-400">
             Know the node&rsquo;s address? Enter it here.
           </label>
+          <p id="gf-manual-address-where" className="text-xs text-[#64748B]">
+            The address is shown on your Gate^Flame screen.
+          </p>
           <input
             id="gf-manual-address"
             value={manualAddress}
             onChange={(e) => setManualAddress(e.target.value)}
+            aria-describedby="gf-manual-address-where gf-manual-address-port"
             inputMode="url"
             autoCapitalize="none"
             autoCorrect="off"
@@ -297,7 +314,9 @@ export function AppPairingScreen({ onPaired }: Props) {
             placeholder="192.168.4.20"
             className={`${FIELD} font-mono`}
           />
-          <p className="text-xs text-[#64748B]">Port 8080 is assumed unless you type a different one.</p>
+          <p id="gf-manual-address-port" className="text-xs text-[#64748B]">
+            Port 8080 is assumed unless you type a different one.
+          </p>
           <button type="submit" disabled={manualAddress.trim().length === 0} className={PRIMARY}>
             Connect
           </button>

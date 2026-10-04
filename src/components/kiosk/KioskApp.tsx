@@ -56,6 +56,7 @@ import {
 import { ActionButton, Card, HoldButton, NotTheConsole } from './kioskUi';
 import { CH, LiveBackdrop } from './charts';
 import ConsoleLock from './ConsoleLock';
+import SetupFlow from './SetupFlow';
 import { FilteringPanel, NetworkPanel, OverviewPanel, ThreatsPanel, type PanelContext } from './panels';
 import { FirewallPanel, ModulesPanel, SystemPanel, WanPanel } from './panelsSystem';
 import { ShieldPanel, SHIELD_TAB_ICON } from './panelsShield';
@@ -149,6 +150,25 @@ export default function KioskApp() {
    */
   const refused = telemetry.error?.status === 401 && status.data !== null;
 
+  // ---- first-time setup --------------------------------------------------
+  // The screen on the box is SETUP (docs/LAUNCH-SCOPE-T3-T1-2026-10-03.md). A box with
+  // no paired phone has nothing to lock and nothing to show yet, so it opens on the
+  // setup flow. Decided ONCE, from the node's own list of paired devices, then latched:
+  // the flow must stay up after the first phone pairs so the owner sees "Phone paired"
+  // instead of the screen changing under them. `null` = not yet known, and an unreadable
+  // list never starts setup - the console behaves exactly as before.
+  const [setupActive, setSetupActive] = useState<boolean | null>(null);
+  const pairedProbe = usePolled<{ devices: unknown[] }>(
+    '/pair/devices',
+    5000,
+    authority === 'console' && setupActive === null,
+  );
+  useEffect(() => {
+    if (setupActive === null && authority === 'console' && pairedProbe.data) {
+      setSetupActive((pairedProbe.data.devices?.length ?? 1) === 0);
+    }
+  }, [pairedProbe.data, authority, setupActive]);
+
   // ---- idle re-lock ------------------------------------------------------
   const lastTouch = useRef(Date.now());
   useEffect(() => {
@@ -201,6 +221,10 @@ export default function KioskApp() {
     authority,
     active: tab === id,
   });
+
+  if (setupActive) {
+    return <SetupFlow onFinish={() => setSetupActive(false)} />;
+  }
 
   if (!unlocked) {
     return (

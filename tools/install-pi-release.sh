@@ -115,6 +115,17 @@ if ! cmp -s "$STAGE/requirements.txt" "$AGENT/requirements.txt"; then
   "$AGENT/venv/bin/pip" install -q -r "$AGENT/requirements.txt" && pass "requirements updated" || { bad "pip install (no internet?)"; rollback; }
 fi
 install -m 0755 "$STAGE/gateflame-netcheck.sh" "$AGENT/gateflame-netcheck.sh"
+# The Wi-Fi permission the setup screen needs (network_setup.py), for whichever account
+# the agent's unit runs as - `gateflame` on a fresh install, the login user on the lab Pi.
+if [ -d /etc/polkit-1/rules.d ] && [ -f "$STAGE/gateflame/polkit/50-gateflame-network.rules" ]; then
+  SVC_USER="$(systemctl show -p User --value "$UNIT" 2>/dev/null)"; SVC_USER="${SVC_USER:-gateflame}"
+  sed "s/__GATEFLAME_USER__/$SVC_USER/" "$STAGE/gateflame/polkit/50-gateflame-network.rules" \
+    > /etc/polkit-1/rules.d/50-gateflame-network.rules
+  chmod 0644 /etc/polkit-1/rules.d/50-gateflame-network.rules
+  pass "polkit rule for $SVC_USER (network-control, wifi.scan, settings.modify.system)"
+else
+  warn "no polkit rules.d on this box: the screen can read the network but not join Wi-Fi"
+fi
 # The version the agent reports on /system/status, as a drop-in so it survives
 # package replacement and is one file to read when support asks "what build is this".
 install -d "$DROPIN_DIR"

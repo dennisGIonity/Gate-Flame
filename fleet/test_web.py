@@ -4,7 +4,9 @@ ingest validation. Each test names the failure it pins.
 Run: python -m pytest -q   (from fleet/)
 """
 import base64
+import ipaddress
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,17 +14,64 @@ from fastapi.testclient import TestClient
 import app as fleet
 
 
-@pytest.fixture()
-def client(tmp_path, monkeypatch):
+def _pin(monkeypatch, tmp_path):
+    """Every setting app.py reads from the environment, pinned to its default.
+    A shell that has sourced fleet.env.ps1 (or set any GATEFLAME_FLEET_* knob)
+    must not be able to change a verdict here - it used to: with the admin
+    user set, test_history failed; with ROOT_PATH/TRUSTED_PROXIES/COOKIE_SECURE
+    set, 19 tests in this file did."""
     monkeypatch.setattr(fleet, "DB_PATH", str(tmp_path / "fleet.db"))
     monkeypatch.setattr(fleet, "ADMIN_USER", "admin")
     monkeypatch.setattr(fleet, "ADMIN_PASSWORD", "test-pw")
     monkeypatch.setattr(fleet, "ENROL_TOKEN", "enrol-secret")
+    monkeypatch.setattr(fleet, "ROOT_PATH", "")
+    monkeypatch.setattr(fleet, "_TRUSTED", fleet._parse_trusted("127.0.0.1,::1"))
+    monkeypatch.setattr(fleet, "COOKIE_SECURE", "auto")
+    monkeypatch.setattr(fleet, "SESSION_HOURS", 12.0)
+    monkeypatch.setattr(fleet, "LOGIN_MAX_FAILURES", 8)
+    monkeypatch.setattr(fleet, "LOGIN_WINDOW_SECONDS", 900)
+    monkeypatch.setattr(fleet, "STALE_AFTER_SECONDS", 1800)
+    monkeypatch.setattr(fleet, "RAW_RETENTION_DAYS", 7)
+    monkeypatch.setattr(fleet, "HOURLY_RETENTION_DAYS", 90)
+    monkeypatch.delenv("GATEFLAME_FLEET_SESSION_SECRET", raising=False)
     fleet.login_limiter.reset()
     fleet._payload_cache.clear()
+
+
+@pytest.fixture()
+def client(tmp_path, monkeypatch):
+    _pin(monkeypatch, tmp_path)
     with TestClient(fleet.app, base_url="http://testserver", client=("127.0.0.1", 50000)) as c:  # runs the lifespan
         yield c
     fleet.login_limiter.reset()
+
+
+@pytest.fixture()
+def client_from(tmp_path, monkeypatch):
+    """A client whose TCP peer is the given address - for proxy-trust tests."""
+    _pin(monkeypatch, tmp_path)
+    opened = []
+
+    def make(peer):
+        c = TestClient(fleet.app, base_url="http://testserver", client=(peer, 40000))
+        c.__enter__()
+        opened.append(c)
+        return c
+
+    yield make
+    for c in opened:
+        c.__exit__(None, None, None)
+    fleet.login_limiter.reset()
+
+
+def cookie_attrs(set_cookie: str) -> dict:
+    """Attributes of a Set-Cookie header, {lower-cased name: value}. Checking
+    names, not substrings, so a cookie VALUE can never satisfy `"secure" in`."""
+    out = {}
+    for part in set_cookie.split(";")[1:]:
+        k, _, v = part.strip().partition("=")
+        out[k.lower()] = v
+    return out
 
 
 def basic(pw="test-pw"):
@@ -46,6 +95,7 @@ def post_health(c, node="GF-T1", token="enrol-secret", body=None, prefix=""):
 
 def test_lifespan_refuses_to_start_without_secrets(monkeypatch, tmp_path):
     monkeypatch.setattr(fleet, "DB_PATH", str(tmp_path / "x.db"))
+    monkeypatch.setattr(fleet, "ENROL_TOKEN", "enrol-secret")  # so it is the PASSWORD check that refuses
     monkeypatch.setattr(fleet, "ADMIN_PASSWORD", "")
     with pytest.raises(RuntimeError):
         with TestClient(fleet.app):
@@ -72,14 +122,15 @@ def test_login_sets_strict_httponly_cookie_and_dashboard_loads(client):
     assert r.status_code == 303 and r.headers["location"] == "/"
     sc = r.headers["set-cookie"].lower()
     assert "httponly" in sc and "samesite=strict" in sc and "path=/" in sc
-    assert "secure" not in sc  # plain http: a Secure cookie would never come back
+    assert "secure" not in cookie_attrs(sc)  # plain http: a Secure cookie would never come back
+    assert "strict-transport-security" not in r.headers  # HSTS over plain http is meaningless
     page = client.get("/")
     assert page.status_code == 200 and "assets/app.js" in page.text
 
 
 def test_cookie_is_secure_when_proxy_says_https(client):
     r = login(client, headers={"X-Forwarded-Proto": "https"})
-    assert "secure" in r.headers["set-cookie"].lower()
+    assert "secure" in cookie_attrs(r.headers["set-cookie"])
     assert "strict-transport-security" in r.headers
 
 
@@ -145,6 +196,92 @@ def test_note_author_is_the_signed_in_user_not_the_body(client):
     assert client.post("/api/v1/nodes/GF-T1/notes", json={"body": "hi", "author": "mallory"}, headers=h).status_code == 201
     notes = client.get("/api/v1/nodes/GF-T1").json()["notes"]
     assert notes[0]["author"] == "admin"
+
+
+# ------------------------------------------------------------ forget a node's token (C2)
+#
+# BUG-30's console half. A re-imaged box presents the shared token; while this
+# server holds an ACTIVATED token for it, that is refused forever. Support
+# forgets the token; the next shared-token check-in enrols the box again.
+
+XRW = {"X-Requested-With": "gateflame-fleet"}
+
+
+def enrol_and_activate(c, node="GF-T1"):
+    tok = post_health(c, node=node).json()["nodeToken"]
+    assert post_health(c, node=node, token=tok).status_code == 204  # first use activates it
+    return tok
+
+
+def token_rows(node="GF-T1"):
+    with fleet.db() as conn:
+        return conn.execute("SELECT COUNT(*) FROM tokens WHERE node_id = ?", (node,)).fetchone()[0]
+
+
+def test_forget_token_needs_admin_auth(client):
+    enrol_and_activate(client)
+    r = client.delete("/api/v1/nodes/GF-T1/token")
+    assert r.status_code == 401 and "www-authenticate" not in r.headers
+    assert client.delete("/api/v1/nodes/GF-T1/token", headers=basic("wrong")).status_code == 401
+    assert token_rows() == 1
+
+
+def test_forget_token_on_a_cookie_session_needs_the_csrf_header(client):
+    enrol_and_activate(client)
+    login(client)
+    assert client.delete("/api/v1/nodes/GF-T1/token").status_code == 403
+    assert token_rows() == 1
+
+
+def test_forget_token_removes_only_the_token_audits_it_and_the_box_re_enrols(client):
+    old = enrol_and_activate(client)
+    login(client)
+    client.put("/api/v1/nodes/GF-T1/admin", json={"label": "Van Wyk", "tags": ["b3"], "billingState": "active"},
+               headers=XRW)
+    client.post("/api/v1/nodes/GF-T1/notes", json={"body": "box re-imaged by customer"}, headers=XRW)
+    before = client.get("/api/v1/nodes/GF-T1").json()
+    assert before["tokenActivatedAt"] is not None
+
+    r = client.delete("/api/v1/nodes/GF-T1/token", headers=XRW)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and body["forgottenIssuedAt"] == before["tokenIssuedAt"]
+    assert body["forgottenActivatedAt"] == before["tokenActivatedAt"]
+    assert token_rows() == 0                                        # the row is gone
+
+    d = client.get("/api/v1/nodes/GF-T1").json()                    # ...and nothing else
+    assert d["tokenIssuedAt"] is None and d["tokenActivatedAt"] is None
+    assert (d["label"], d["tags"], d["billingState"]) == ("Van Wyk", ["b3"], "active")
+    assert len(client.get("/api/v1/nodes/GF-T1/history").json()["points"]) == 2
+    audit = [n for n in d["notes"] if n["body"].startswith("Feed token forgotten by admin at ")]
+    assert len(audit) == 1 and audit[0]["author"] == "admin" and audit[0]["id"] == body["noteId"]
+    assert "first used by the box" in audit[0]["body"]
+    assert any(n["body"] == "box re-imaged by customer" for n in d["notes"])
+
+    again = post_health(client)                                     # the shared token enrols it again
+    assert again.status_code == 201 and again.json()["nodeToken"] != old
+    assert client.get("/api/v1/nodes/GF-T1").json()["tokenIssuedAt"] is not None
+
+
+def test_after_forget_the_old_per_node_token_is_refused(client):
+    """The forget must not leave the old token valid - it is the credential of
+    a box that may no longer be the customer's (re-imaged, resold, stolen)."""
+    old = enrol_and_activate(client)
+    assert client.delete("/api/v1/nodes/GF-T1/token", headers=basic()).status_code == 200
+    assert post_health(client, token=old).status_code == 401        # before the box re-enrols
+    new = post_health(client).json()["nodeToken"]
+    assert post_health(client, token=old).status_code == 401        # and after
+    assert post_health(client, token=new).status_code == 204
+
+
+def test_forget_with_nothing_on_file_is_404_and_writes_no_audit(client):
+    assert client.delete("/api/v1/nodes/GF-NEVER/token", headers=basic()).status_code == 404
+    enrol_and_activate(client)
+    assert client.delete("/api/v1/nodes/GF-T1/token", headers=basic()).status_code == 200
+    second = client.delete("/api/v1/nodes/GF-T1/token", headers=basic())
+    assert second.status_code == 404 and "nothing was forgotten" in second.json()["detail"]
+    notes = client.get("/api/v1/nodes/GF-T1", headers=basic()).json()["notes"]
+    assert sum(n["body"].startswith("Feed token forgotten") for n in notes) == 1
 
 
 # ------------------------------------------------------------ rate limit
@@ -224,6 +361,74 @@ def test_forwarded_for_is_the_rate_limit_key_behind_the_proxy(client, monkeypatc
     assert login(client, headers=b).headers["location"] == "/"
 
 
+# ------------------------------------------------------------ TLS front door (C4)
+
+# The docker-compose.yml shape: Caddy is NOT loopback, it is a container on the
+# pinned compose subnet, and the fleet trusts exactly that subnet.
+COMPOSE_SUBNET = "172.30.91.0/24"
+HTTPS = {"X-Forwarded-Proto": "https"}
+
+
+def test_behind_a_trusted_proxy_https_means_secure_cookie_and_hsts(client_from, monkeypatch):
+    monkeypatch.setattr(fleet, "_TRUSTED", fleet._parse_trusted(COMPOSE_SUBNET))
+    caddy = client_from("172.30.91.3")
+    r = login(caddy, headers=HTTPS)
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert "secure" in cookie_attrs(r.headers["set-cookie"])
+    assert r.headers["strict-transport-security"].startswith("max-age=")
+    # Every response over https carries it, not only the login.
+    assert "strict-transport-security" in caddy.get("/healthz", headers=HTTPS).headers
+    # And the same proxy forwarding plain http gets neither.
+    plain = login(caddy, headers={"X-Forwarded-Proto": "http"})
+    assert "secure" not in cookie_attrs(plain.headers["set-cookie"])
+    assert "strict-transport-security" not in plain.headers
+
+
+def test_forwarded_headers_from_an_untrusted_peer_are_ignored(client_from, monkeypatch):
+    """The fleet binds 0.0.0.0 for the boxes, so any LAN device can reach it.
+    One claiming to be a proxy must change nothing: no https (no Secure, no
+    HSTS), no prefix, and no client address it picked - or it could dodge the
+    login rate limit by inventing a new X-Forwarded-For per attempt."""
+    monkeypatch.setattr(fleet, "LOGIN_MAX_FAILURES", 2)
+    lan = client_from("192.168.124.50")  # default trust is loopback only
+    spoof = {"X-Forwarded-Proto": "https", "X-Forwarded-Prefix": "/gateflame", "X-Forwarded-For": "10.1.1.1"}
+    r = login(lan, headers=spoof)
+    assert r.headers["location"] == "/"                            # prefix ignored
+    assert cookie_attrs(r.headers["set-cookie"])["path"] == "/"     # cookie not scoped to the claimed prefix
+    assert "secure" not in cookie_attrs(r.headers["set-cookie"])    # proto ignored
+    assert "strict-transport-security" not in r.headers
+    login(lan, pw="x", headers={"X-Forwarded-For": "10.0.0.1"})
+    login(lan, pw="x", headers={"X-Forwarded-For": "10.0.0.2"})
+    locked = login(lan, headers={"X-Forwarded-For": "10.0.0.3"})
+    assert locked.headers["location"] == "/login?e=locked"         # keyed on the real peer
+
+
+def test_deploy_files_agree_with_the_app():
+    """The packaging only works if it matches what app.py does today: Caddy's
+    address inside the trusted range, the health check on a real route, uvicorn
+    never rewriting the client address first, and the front door owning
+    X-Forwarded-Prefix rather than passing a client's through."""
+    root = fleet.STATIC_DIR.parent
+    compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+    subnet = re.search(r"subnet:\s*\"?([0-9a-fA-F:./]+)", compose)
+    trusted = re.search(r"GATEFLAME_FLEET_TRUSTED_PROXIES:\s*\"([^\"]+)\"", compose)
+    assert subnet and trusted, "compose must pin its subnet and trust it explicitly"
+    assert subnet.group(1) == COMPOSE_SUBNET
+    net = ipaddress.ip_network(subnet.group(1))
+    assert any(n != "*" and net.version == n.version and net.subnet_of(n)
+               for n in fleet._parse_trusted(trusted.group(1))), "Caddy's subnet is not trusted"
+    assert "*" not in trusted.group(1)
+    docker = (root / "Dockerfile").read_text(encoding="utf-8")
+    assert "127.0.0.1:8091/healthz" in docker and "--no-proxy-headers" in docker
+    assert any(getattr(r, "path", None) == "/healthz" for r in fleet.app.routes)
+    unit = (root / "deploy" / "gateflame-fleet.service").read_text(encoding="utf-8")
+    assert "--host 127.0.0.1" in unit and "--no-proxy-headers" in unit
+    assert "fleet-backup" in unit, "the unit's comment block must point at the backup"
+    for name in ("Caddyfile", "Caddyfile.example"):
+        caddy = (root / "deploy" / name).read_text(encoding="utf-8")
+        assert re.search(r"^\s*header_up -X-Forwarded-Prefix\s*$", caddy, re.M), name
+
+
 # ------------------------------------------------------------ headers
 
 def test_security_headers_and_strict_csp(client):
@@ -281,6 +486,39 @@ def test_list_reflects_a_new_checkin_despite_payload_cache(client):
     _t.sleep(0.01)
     assert post_health(client, token=tok, body={"nodeId": "GF-T1", "host": {"cpuPercent": 77.0}}).status_code == 204
     assert client.get("/api/v1/nodes", headers=basic()).json()[0]["host"]["cpuPercent"] == 77.0
+
+
+def _race(monkeypatch, sql):
+    """Run `sql` in the gap between _authorise_node's read and its write - the
+    moment it mints the token - to stand in for a concurrent request."""
+    real = fleet.secrets.token_urlsafe
+
+    def minted(n=32):
+        with fleet.db() as conn:
+            conn.execute(sql)
+        monkeypatch.setattr(fleet.secrets, "token_urlsafe", real)  # once
+        return real(n)
+
+    monkeypatch.setattr(fleet.secrets, "token_urlsafe", minted)
+
+
+def test_a_reissue_that_loses_a_race_is_not_answered_201(client, monkeypatch):
+    """A 201 hands the box a token it will present from then on. If its row was
+    forgotten between the read and the write, this server does not hold that
+    token - answering 201 would be a verdict it cannot back."""
+    assert post_health(client, node="GF-R1").status_code == 201   # issued, never used
+    _race(monkeypatch, "DELETE FROM tokens WHERE node_id = 'GF-R1'")
+    r = post_health(client, node="GF-R1")                          # shared token -> re-issue path
+    assert r.status_code == 409 and "nodeToken" not in r.text
+    assert post_health(client, node="GF-R1").status_code == 201   # the next check-in sorts it out
+
+
+def test_a_first_enrolment_that_loses_a_race_is_not_answered_201(client, monkeypatch):
+    _race(monkeypatch, "INSERT INTO tokens (node_id, token_hash, issued_at) VALUES ('GF-R2', 'other', 1)")
+    r = post_health(client, node="GF-R2")
+    assert r.status_code == 409 and "nodeToken" not in r.text
+    with fleet.db() as conn:
+        assert conn.execute("SELECT token_hash FROM tokens WHERE node_id='GF-R2'").fetchone()[0] == "other"
 
 
 def test_history_route_requires_auth_and_answers(client):

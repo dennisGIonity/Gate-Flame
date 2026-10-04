@@ -27,7 +27,6 @@ import { ShieldCheck, ShieldOff, ShieldAlert, HelpCircle } from 'lucide-react';
 
 import type { FilteringState } from '../../types/filtering';
 import {
-  DASH,
   num,
   pct,
   useSeries,
@@ -38,10 +37,11 @@ import {
   AnimatedNumber,
   AreaChart,
   CH,
-  Delta,
   RingGauge,
 } from '../../components/kiosk/charts';
-import { Card, ChartCard, Gap, Metric, Pulse, Screen, Skeleton, Warning } from '../mobileUi';
+import type { GravityStoppedBy } from '../../components/GravityParticleCanvas';
+import { Card, Gap, Metric, Pulse, Screen, Skeleton, Warning } from '../mobileUi';
+import { LookupsHistory } from '../history';
 
 const GravityParticleCanvas = lazy(() =>
   import('../../components/GravityParticleCanvas').then((m) => ({
@@ -140,6 +140,16 @@ export function statusOf(filtering: FilteringState | null, reachable: boolean): 
   }
 }
 
+/**
+ * Why the gravity field is stopped. Only the owner's own pause may put the
+ * word PAUSED on its core; a fault or an unreachable box stops it unnamed.
+ */
+const STOPPED_BY: Record<Exclude<Status, 'protected'>, GravityStoppedBy> = {
+  paused: 'owner',
+  unprotected: 'fault',
+  unknown: 'unknown',
+};
+
 export function HomeScreen({
   telemetry,
   filtering,
@@ -170,9 +180,8 @@ export function HomeScreen({
   const look = LOOK[status];
   const Icon = look.icon;
 
-  // Blocked-per-poll, so the hero animation reacts to real traffic rather than
-  // to a timer. A null sample breaks the line instead of being drawn as zero.
-  const blocked = useSeries(t?.queriesBlockedToday ?? null);
+  // The block share per poll, for the ring card's live line. A null sample
+  // breaks the line instead of being drawn as zero.
   const share = useSeries(t?.blockPercentage ?? null);
 
   return (
@@ -182,9 +191,9 @@ export function HomeScreen({
         className={`overflow-hidden rounded-3xl border ${look.ring} bg-[#111A28]/70 backdrop-blur-xl`}
       >
         {/* Verdict first, and on its own. The gravity field carries its own
-            caption and legend, so text laid OVER it collided with them - the
-            two fought for the same pixels on the first run. It sits underneath
-            instead, where it is decoration rather than a competing headline. */}
+            legend, so text laid OVER it collided with it - the two fought for
+            the same pixels on the first run. It sits underneath instead, where
+            it is decoration rather than a competing headline. */}
         <div className="flex flex-col items-center px-5 pb-4 pt-7 text-center sm:pt-9">
           <div className="relative">
             {/* The halo now BREATHES when the box is healthy and sits still
@@ -243,6 +252,7 @@ export function HomeScreen({
                 the exact substitution this product refuses everywhere else. */}
             <GravityParticleCanvas
               isPaused={status !== 'protected'}
+              stoppedBy={status === 'protected' ? undefined : STOPPED_BY[status]}
               threatFeed={[]}
               blockPercentage={t?.blockPercentage ?? null}
             />
@@ -333,18 +343,13 @@ export function HomeScreen({
           <Gap text={f?.lastError} />
         </Card>
 
-      {/* ---------------------------------------------------------- trend */}
-              <ChartCard
-          label="Blocked since you opened this"
-          value={t ? num(t.queriesBlockedToday) : DASH}
-          tone={CH.orange}
-          right={<Delta samples={blocked.samples} />}
-          // Still says it is not history - that claim has to stay - but in one
-          // clause rather than two sentences.
-          footer="Live only — the box keeps no history yet."
-        >
-          <AreaChart samples={blocked.samples} height={104} stroke={CH.orange} label="blocked today" />
-        </ChartCard>
+      {/* ------------------------------------------------------ last 24 h
+          The box's own record since 1.1.0: Pi-hole's 10-minute totals,
+          looked up against blocked. This replaced "Blocked since you opened
+          this", a line that started empty every time the screen opened and
+          carried the caption "Live only — the box keeps no history yet." -
+          true when written, false from the day /dns/history shipped. */}
+      <LookupsHistory initialRange="24h" height={64} />
     </Screen>
   );
 }

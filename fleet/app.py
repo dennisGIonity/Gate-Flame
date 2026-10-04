@@ -26,6 +26,10 @@ older whole hours into `samples_hourly`, kept HOURLY_RETENTION_DAYS.
 
 PER-NODE TOKENS. The shared token (GATEFLAME_FLEET_TOKEN) only ENROLS a node
 that has never activated its own token; after that only its own token works.
+Support can FORGET a node's token (DELETE /api/v1/nodes/{id}/token) to re-admit
+a re-imaged box: the row goes, the old token dies with it, and the node's next
+check-in with the shared token enrols it again. The tokens table is the trust
+store - back fleet.db up (tools\\fleet-backup.ps1).
 
 REMOTE CONTROL is deliberately absent: nodes post outward and nothing reaches
 back. The UI says so rather than offering a button that would do nothing.
@@ -657,10 +661,15 @@ def _authorise_node(node_id: str, authorization: str | None) -> str | None:
         if row["activated_at"] is None and secrets.compare_digest(presented.encode(), ENROL_TOKEN.encode()):
             reissued = secrets.token_urlsafe(32)
             with _write_lock, db() as conn:
-                conn.execute(
+                changed = conn.execute(
                     "UPDATE tokens SET token_hash = ?, issued_at = ? WHERE node_id = ? AND activated_at IS NULL",
                     (_hash(reissued), time.time(), node_id),
-                )
+                ).rowcount
+            # The row was activated or forgotten between the read above and this
+            # write. A 201 would hand the box a token this server does not hold -
+            # a verdict it cannot back. Refuse this one check-in; the next sorts it out.
+            if changed != 1:
+                raise HTTPException(status_code=409, detail="this node's token changed during enrolment - retry")
             return reissued
         raise HTTPException(status_code=401, detail="bad token for this node")
 
@@ -669,11 +678,13 @@ def _authorise_node(node_id: str, authorization: str | None) -> str | None:
 
     issued = secrets.token_urlsafe(32)
     with _write_lock, db() as conn:
-        conn.execute(
+        changed = conn.execute(
             "INSERT INTO tokens (node_id, token_hash, issued_at, activated_at) VALUES (?, ?, ?, NULL) "
             "ON CONFLICT(node_id) DO NOTHING",
             (node_id, _hash(issued), time.time()),
-        )
+        ).rowcount
+    if changed != 1:  # another enrolment for this id won the race; same reasoning as above
+        raise HTTPException(status_code=409, detail="this node enrolled concurrently - retry")
     return issued
 
 
@@ -1253,6 +1264,57 @@ def add_note(node_id: str, request: Request, body: dict = Body(...)) -> JSONResp
         )
         note_id = cur.lastrowid
     return JSONResponse(status_code=201, content={"id": note_id, "ok": True})
+
+
+def _utc(ts: float | None) -> str:
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ts)) if ts else "at an unknown time"
+
+
+@app.delete("/api/v1/nodes/{node_id}/token")
+def forget_token(node_id: str, request: Request) -> JSONResponse:
+    """Forget the credential a node posts with - the console half of BUG-30.
+
+    For a box that was re-imaged or lost its stored token. While this server
+    holds an ACTIVATED token for it, its shared-token check-ins are refused
+    (that boundary is what stops the shared token impersonating an enrolled
+    box), and the box's own log tells support to call exactly this route.
+
+    Deletes the `tokens` row and nothing else: node record, history, admin
+    record and support log stay. The old token stops working at once - there
+    is no row left for it to match - and the box's next check-in with the
+    shared enrolment token enrols it again (201, fresh token). Until then
+    anyone holding the shared token could enrol under this id, which is why
+    this is an authenticated, audited support action and never automatic.
+
+    The audit line is a support-log note written in the SAME transaction as
+    the delete, so neither exists without the other. Nothing on file is a 404,
+    never a success: "forgotten" and "there was nothing to forget" must not
+    share a sentence.
+    """
+    user = _require_admin(request)
+    now = time.time()
+    with _write_lock, db() as conn:
+        row = conn.execute("SELECT issued_at, activated_at FROM tokens WHERE node_id = ?", (node_id,)).fetchone()
+        if not row:
+            known = conn.execute("SELECT 1 FROM nodes WHERE node_id = ?", (node_id,)).fetchone()
+            raise HTTPException(status_code=404, detail=(
+                "no token on file for this node - nothing was forgotten; its next check-in with the "
+                "shared enrolment token enrols it" if known else
+                "this server has no token and no check-in for a node with that id - nothing was forgotten"))
+        if conn.execute("DELETE FROM tokens WHERE node_id = ?", (node_id,)).rowcount != 1:
+            raise HTTPException(status_code=409, detail="the token changed while it was being forgotten - retry")
+        used = (f"first used by the box {_utc(row['activated_at'])}" if row["activated_at"]
+                else "never used by the box")
+        note_id = conn.execute(
+            "INSERT INTO notes (node_id, body, author, created_at) VALUES (?,?,?,?)",
+            (node_id,
+             f"Feed token forgotten by {user[:48]} at {_utc(now)}. It was issued {_utc(row['issued_at'])} "
+             f"and {used}; it no longer works. The box re-enrols with the shared enrolment token on its "
+             f"next check-in.",
+             user[:48], now),
+        ).lastrowid
+    return JSONResponse({"ok": True, "nodeId": node_id, "forgottenIssuedAt": row["issued_at"],
+                         "forgottenActivatedAt": row["activated_at"], "noteId": note_id})
 
 
 @app.get("/api/v1/session")

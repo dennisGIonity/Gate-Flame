@@ -26,7 +26,16 @@ Starts the fleet (`fleet\.venv`, created on first run; secrets from `fleet\fleet
 | `http://<laptop-ip>:8080/gateflame/` | dashboard, plain HTTP via the Local Drive |
 | `http://<laptop-ip>:8091/` | the fleet directly |
 
-Autostart at boot/logon (elevated, run it yourself): `tools\install-fleet-autostart.ps1`.
+Autostart at boot/logon (elevated, run it yourself): `tools\install-fleet-autostart.ps1`. It
+also registers the daily backup below.
+
+**Back up `fleet\fleet.db`: `tools\FLEET-BACKUP.cmd`** (or `tools\fleet-backup.ps1`). It is the
+customer trust store — the per-node tokens live there, and losing it 401s every box's own token
+at once (boxes with the BUG-30 agent fix re-enrol by themselves; older ones cannot, and until each
+box re-enrols the shared token could claim its id). SQLite online backup, safe while the fleet
+runs, to `E:\Gateflame-backups\fleet\fleet-YYYYMMDD-HHMM.db` (never inside the repo), keeps the
+last 30, prints the copy's integrity check and `nodes`/`tokens` counts. Restore: stop the fleet,
+delete `fleet.db-wal`/`fleet.db-shm`, copy a backup over `fleet.db`, start it.
 
 ## Auth
 
@@ -37,6 +46,11 @@ Autostart at boot/logon (elevated, run it yourself): `tools\install-fleet-autost
 - **Rate limit:** 8 failed logins or Basic attempts per client address per 15 min → 429.
 - **Nodes:** unchanged. `POST {GATEFLAME_FEED_URL}/{nodeId}/health` with `Bearer`; the shared
   `GATEFLAME_FLEET_TOKEN` only enrols a box, which then gets and must use its own token.
+- **Re-imaged box / lost token:** its shared-token check-ins are refused while the console holds
+  an activated token for it. Support forgets that token — the **Forget token (re-enrol)** button
+  on the box's page, or `DELETE /api/v1/nodes/{nodeId}/token` (admin) — and the box's next
+  check-in enrols it again. Only the token goes (history, notes, your record stay); the old token
+  is dead at once; the support log records who did it. Nothing on file is a 404, not a success.
 
 ## Behind a reverse proxy, under a path
 
@@ -56,7 +70,9 @@ On a Linux VPS with Docker and a domain (say `feeds.ionity.today`):
    **same** `GATEFLAME_FLEET_TOKEN` as today (boxes that have not activated their own token yet
    still enrol with it) and set `FLEET_DOMAIN` / `FLEET_ACME_EMAIL`.
 4. **Data:** stop the fleet on the laptop first (WAL: a copy of a running database can miss the
-   last writes), then copy `fleet\fleet.db` to `data/fleet.db` on the server.
+   last writes), then copy `fleet\fleet.db` to `data/fleet.db` on the server. (Or run
+   `tools\fleet-backup.ps1` after stopping it and carry the newest backup: one self-contained,
+   integrity-checked file.)
    `mkdir -p data && sudo chown 10001:10001 data`. Node tokens, history, admin records, notes
    and the session key all live in that one file.
 5. **Start:** `docker compose up -d --build`. Caddy fetches the certificate automatically.
@@ -77,6 +93,7 @@ No Docker? `deploy/gateflame-fleet.service` (systemd, secrets in
 | `Dockerfile`, `docker-compose.yml`, `deploy/Caddyfile` | real-server packaging |
 | `deploy/gateflame-fleet.service`, `deploy/Caddyfile.example` | systemd alternative |
 | `fleet.env.example` / `fleet.env.ps1.example` | secrets templates (Linux / Windows) |
+| `..\tools\fleet-backup.ps1`, `..\tools\FLEET-BACKUP.cmd` | online backup of `fleet.db` (Windows) |
 | `requirements.txt`, `requirements-dev.txt` | pinned runtime / test dependencies |
 | `test_*.py` | `python -m pytest -q` from this folder |
 

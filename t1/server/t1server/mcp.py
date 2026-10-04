@@ -38,6 +38,17 @@ TOOLS = [
      "on their next update check.", {"domain": _S, "note": _S}, ["domain"]),
     ("t1_allowlist_remove", "Remove a domain from the allow-list.", {"domain": _S}, ["domain"]),
     ("t1_recent_events", "Fleet event log, newest first.", {"limit": {"type": "integer"}}, []),
+    ("t1_firmware_list", "Uploaded firmware images, which boards run which version, and the current "
+     "staged rollout (version, percent, named canary boards).", {}, []),
+    ("t1_firmware_rollout", "Offer an uploaded firmware version to named canary boards plus a stable "
+     "percentage of the rest (the same boards stay in the wave as it grows). percent 0 with no devices "
+     "stops offering it. Boards update on their next check and keep their old image if the new one "
+     "does not report healthy.",
+     {"version": _S, "percent": {"type": "integer"}, "devices": {"type": "array", "items": _S}}, ["version"]),
+    ("t1_revoke_device", "Cut one board off: its token stops working and it cannot enrol again until "
+     "t1_reset_device_token. No other board is affected.", {"device_id": _S}, ["device_id"]),
+    ("t1_reset_device_token", "Forget a board's token so it may enrol again (it needs the enrolment "
+     "token). Use after reflashing a board, or to restore one that was revoked.", {"device_id": _S}, ["device_id"]),
 ]
 
 
@@ -65,6 +76,19 @@ def _call(svc: Service, name: str, a: dict):
         return svc.allow_remove(a["domain"])
     if name == "t1_recent_events":
         return svc.events(int(a.get("limit", 50)))
+    if name == "t1_firmware_list":
+        return {"firmware": svc.firmware_list(), "rollout": svc.rollout_get(),
+                "running": svc.fleet_summary()["firmware"]}
+    if name == "t1_firmware_rollout":
+        return svc.rollout_set(a["version"], int(a.get("percent", 0)), list(a.get("devices") or []))
+    if name == "t1_revoke_device":
+        if not svc.revoke_token(a["device_id"]):
+            raise KeyError(f"no token for {a['device_id']}")
+        return {"ok": True, "token": "revoked"}
+    if name == "t1_reset_device_token":
+        if not svc.reset_token(a["device_id"]):
+            raise KeyError(f"no token for {a['device_id']}")
+        return {"ok": True, "token": "none"}
     raise LookupError(name)
 
 

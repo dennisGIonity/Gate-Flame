@@ -94,20 +94,26 @@ def client(tmp_path):
     return TestClient(create_app(store, svc)), svc
 
 
-def dev_headers():
-    return {"X-T1-Token": tokens()["device_token"]}
+def enrol(c, did="gft1-aabbcc"):
+    """Enrol a board the way the firmware does, and return the headers it then sends."""
+    r = c.post("/api/t1/v1/enrol", json={"id": did}, headers={"X-T1-Enrol": tokens()["enrol_token"]})
+    assert r.status_code == 200, r.text
+    return {"X-T1-Id": did, "X-T1-Token": r.json()["token"]}
 
 
 def test_device_needs_token(client):
     c, _ = client
     assert c.get("/api/t1/v1/manifest.txt").status_code == 401
     assert c.post("/api/t1/v1/telemetry", json={"id": "x"}).status_code == 401
+    # The 0.1 shared fleet token no longer opens anything.
+    assert c.get("/api/t1/v1/manifest.txt", headers={"X-T1-Token": tokens()["device_token"]}).status_code == 401
 
 
 def test_manifest_file_and_signature_verify(client):
     c, _ = client
-    man = dict(l.split("=", 1) for l in c.get("/api/t1/v1/manifest.txt?level=medium", headers=dev_headers()).text.split())
-    blob = c.get(man["filter_url"], headers=dev_headers()).content
+    H = enrol(c)
+    man = dict(l.split("=", 1) for l in c.get("/api/t1/v1/manifest.txt?level=medium", headers=H).text.split())
+    blob = c.get(man["filter_url"], headers=H).content
     assert len(blob) == int(man["filter_size"]) and hashlib.sha256(blob).hexdigest() == man["filter_sha256"]
     assert signing.verify(blob, man["filter_sig"])
     assert bloom.Filter(blob).contains("known-bad.example")
@@ -115,18 +121,19 @@ def test_manifest_file_and_signature_verify(client):
 
 def test_telemetry_command_round_trip(client):
     c, svc = client
+    H = enrol(c)
     base = {"id": "gft1-aabbcc", "fw": "0.1.0", "status": "active", "level": "low", "boot": "b1",
             "q": 10, "blk": 3, "fwd": 7, "filter_version": 0}
-    assert c.post("/api/t1/v1/telemetry", json=base, headers=dev_headers()).text == "ok\n"
+    assert c.post("/api/t1/v1/telemetry", json=base, headers=H).text == "ok\n"
     r = c.post("/api/t1/v1/devices/gft1-aabbcc/cmd", json={"command": "pause", "arg": "15"})
     cid = r.json()["queued"][0]
     assert c.post("/api/t1/v1/devices/gft1-aabbcc/cmd", json={"command": "rm -rf"}).status_code == 400
-    text = c.post("/api/t1/v1/telemetry", json=base, headers=dev_headers()).text
+    text = c.post("/api/t1/v1/telemetry", json=base, headers=H).text
     assert f"cmd {cid} pause 15" in text
     # delivered once, not twice
-    assert "cmd" not in c.post("/api/t1/v1/telemetry", json=base, headers=dev_headers()).text
+    assert "cmd" not in c.post("/api/t1/v1/telemetry", json=base, headers=H).text
     c.post("/api/t1/v1/telemetry", json={**base, "status": "paused", "last_cmd_id": cid, "last_cmd_ok": 1,
-                                          "last_cmd_msg": "paused 15 min"}, headers=dev_headers())
+                                          "last_cmd_msg": "paused 15 min"}, headers=H)
     d = c.get("/api/t1/v1/devices/gft1-aabbcc").json()
     assert d["status_label"] == "PAUSED" and d["commands"][0]["result_ok"] == 1
     assert d["filter_current"] is False            # reports version 0, server has a newer one
@@ -138,7 +145,7 @@ def test_check_domain_explains_itself(client):
     assert r["verdict"] == "blocked (on a blocklist)"
     c.post("/api/t1/v1/allowlist", json={"domain": "known-bad.example"})
     assert c.get("/api/t1/v1/check?domain=known-bad.example").json()["verdict"].startswith("allowed (on the allow")
-    assert c.get("/api/t1/v1/allow.txt", headers=dev_headers()).text == "known-bad.example\n"
+    assert c.get("/api/t1/v1/allow.txt", headers=enrol(c, "gft1-allow01")).text == "known-bad.example\n"
 
 
 def test_mcp(client):

@@ -9,3 +9,4 @@ scripts/*.last.txt
 scripts/*.out.txt
 scripts/*.err.txt
 scripts/*.pid
+server/backups/

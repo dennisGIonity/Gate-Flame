@@ -359,8 +359,9 @@ function renderNode() {
     <section class="card"><h3>Remote support</h3>
       <div class="notice">Not available yet. Boxes post outward only — nothing reaches back, so this console can watch a box but cannot change one.
         The chosen design is a persistent per-box tunnel, which needs the same control plane Shield is waiting on.</div>
-      <div class="sub mono">feed token: ${n.tokenIssuedAt ? (n.tokenActivatedAt ? 'own token, active since ' + fmtDate(n.tokenActivatedAt) : 'issued ' + fmtDate(n.tokenIssuedAt) + ', box still on the shared token') : 'none issued'}</div>
     </section>
+
+    ${tokenCard(n)}
 
     <section class="card"><h3>Support log</h3>
       <form id="noteForm"><div class="field"><textarea id="n-body" rows="3" maxlength="4000" placeholder="What happened, what you did…"></textarea></div>
@@ -370,6 +371,64 @@ function renderNode() {
     </section>
   </div></div>`;
   applyWidths($('view'));
+}
+
+/* Feed token. Three states, each from the detail JSON and nothing else: none on
+ * file, issued but never used by the box, in use by the box. */
+function tokenCard(n) {
+  const issued = num(n.tokenIssuedAt), used = num(n.tokenActivatedAt);
+  const stateLine = issued == null
+    ? 'No token on file. The box’s next check-in with the shared enrolment token enrols it and issues a fresh one.'
+    : used == null
+      ? 'Issued, but the box has not posted with it yet — as far as this server knows, the box is still on the shared enrolment token.'
+      : 'The box has posted with its own token since ' + fmtDate(used) + '. The shared enrolment token can no longer post as this box.';
+  return `<section class="card"><h3>Feed token</h3>
+      <div class="sub">The credential this box posts its check-ins with. This server keeps only a hash of it.</div>
+      <div class="kv kv-2">
+        <div><div class="k">Issued</div><div class="v">${fmtDate(issued)}</div></div>
+        <div><div class="k">First used by the box</div><div class="v">${issued == null ? DASH : used == null ? 'not yet' : fmtDate(used)}</div></div>
+      </div>
+      <div class="notice tokenstate">${esc(stateLine)}</div>
+      <div class="sub tokenhelp">For a box that was re-imaged or lost its token: its check-ins are refused while this server holds a token the box no longer has.</div>
+      <div class="formrow tokenrow"><button type="button" class="btn sm danger" data-action="forget-token"${issued == null ? ' disabled' : ''}>Forget token (re-enrol)</button>
+        <span class="savemsg" id="t-msg"></span></div>
+    </section>`;
+}
+
+async function forgetToken() {
+  const n = detail;
+  if (!n || num(n.tokenIssuedAt) == null) return;
+  const ok = window.confirm(`Forget the feed token for ${n.label || n.nodeId}?\n\n`
+    + '• The token on file stops working immediately.\n'
+    + '• The box’s next check-in with the shared enrolment token enrols it again, with a fresh token.\n'
+    + '• History, notes and your record are kept. The support log records who did this.\n\n'
+    + 'Until the box re-enrols, anyone holding the shared enrolment token could enrol as it. '
+    + 'A box that still holds the old token and runs an agent without the BUG-30 fix will not fall back to the shared token.');
+  if (!ok) return;
+  const before = n.tokenIssuedAt, id = state.nodeId;
+  const msg = $('t-msg'); msg.className = 'savemsg'; msg.textContent = 'forgetting…';
+  let failed = null;
+  try {
+    await api('api/v1/nodes/' + encodeURIComponent(id) + '/token', { method: 'DELETE' });
+  } catch (e) {
+    if (e.kind === 'auth') return;
+    failed = e;
+  }
+  // Read back from the detail rather than trust the DELETE's answer.
+  await showNode(true);
+  const m2 = $('t-msg');
+  if (!m2 || state.nodeId !== id) return;
+  const after = detail ? num(detail.tokenIssuedAt) : null;
+  if (failed) {
+    m2.className = 'savemsg bad';
+    m2.textContent = (failed.status === 404 ? 'nothing forgotten — ' : 'not forgotten — ') + failed.message;
+  } else if (after == null) {
+    m2.className = 'savemsg ok'; m2.textContent = 'forgotten: no token on file now. The box re-enrols on its next check-in.';
+  } else if (after !== before) {
+    m2.className = 'savemsg ok'; m2.textContent = 'forgotten, and the box has already re-enrolled (fresh token issued ' + fmtDate(after) + ').';
+  } else {
+    m2.className = 'savemsg bad'; m2.textContent = 'the server answered, but the old token is still on file — not confirmed.';
+  }
 }
 
 async function saveAdmin(ev) {
@@ -413,6 +472,7 @@ document.addEventListener('click', (ev) => {
   else if (a === 'clear') { state.q = ''; state.status = ''; state.tag = ''; state.billing = ''; loadFleet(); }
   else if (a === 'window') { state.window = v; go('#/node/' + encodeURIComponent(state.nodeId) + '?w=' + v); }
   else if (a === 'refresh') { showNode(true); }
+  else if (a === 'forget-token') { forgetToken(); }
 });
 document.addEventListener('keydown', (ev) => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('tr[data-action="node"]')) {

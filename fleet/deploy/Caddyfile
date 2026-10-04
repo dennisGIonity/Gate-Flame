@@ -7,9 +7,19 @@
 
 {$FLEET_DOMAIN} {
 	encode zstd gzip
-	# Caddy already sends X-Forwarded-For / -Proto / -Host. The dashboard is at
-	# the root of the domain, so no X-Forwarded-Prefix is needed. To serve it
-	# under a path instead, use:  handle_path /gateflame/* { reverse_proxy fleet:8091 {
-	#   header_up X-Forwarded-Prefix /gateflame } }
-	reverse_proxy fleet:8091
+	# Caddy sets X-Forwarded-For / -Proto / -Host itself (ignoring client-sent
+	# values). The app also trusts X-Forwarded-Prefix from this proxy, so this
+	# proxy must own that header too: drop whatever a client sent. HSTS and the
+	# Secure cookie come from the app, which sees X-Forwarded-Proto: https.
+	reverse_proxy fleet:8091 {
+		header_up -X-Forwarded-Prefix
+	}
+	# The dashboard is at the root of the domain. To serve it under a path
+	# instead, replace the reverse_proxy block above with:
+	#   redir /gateflame /gateflame/ 308
+	#   handle_path /gateflame/* {
+	#     reverse_proxy fleet:8091 {
+	#       header_up X-Forwarded-Prefix /gateflame
+	#     }
+	#   }
 }

@@ -46,6 +46,13 @@ cp "$HERE/requirements.txt" "$INSTALL_DIR"/
 if [[ -f "$HERE/gateflame-netcheck.sh" ]]; then
   install -m 0755 "$HERE/gateflame-netcheck.sh" "$INSTALL_DIR/gateflame-netcheck.sh"
 fi
+# The Wi-Fi permission the setup screen needs (network_setup.py): NetworkManager asks
+# polkit, and the agent is an unprivileged user. Three actions, that one user.
+if [[ -d /etc/polkit-1/rules.d ]]; then
+  sed "s/__GATEFLAME_USER__/$SERVICE_USER/" "$HERE/gateflame/polkit/50-gateflame-network.rules" \
+    > /etc/polkit-1/rules.d/50-gateflame-network.rules
+  chmod 0644 /etc/polkit-1/rules.d/50-gateflame-network.rules
+fi
 # Stale bytecode survives a source replacement and is loaded in preference to
 # a .py whose mtime it still matches. Clear it with the source.
 find "$INSTALL_DIR" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
