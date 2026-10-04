@@ -1,5 +1,5 @@
 @echo off
-cd /d E:\Gateflame
+cd /d E:\.claude\Ionity\Gateflame
 title Gate^^Flame - load SSH key
 echo.
 echo  ============================================================

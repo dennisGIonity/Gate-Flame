@@ -6,7 +6,7 @@ Key infrastructure and stakeholders:
 - **Live test Pi**: hostname `raspberrypi`, user `wabapi`, static IP `192.168.0.10`, node ID `GF-72TYTITQ`, Raspberry Pi 5 16GB running Raspberry Pi OS 13 (Trixie/Debian)
 - **Dennis's workstation**: `Wabakipi`, Windows, `192.168.0.5`; `NODE_ENV=production` set machine-wide and `npm config omit=dev` persisted in npmrc — this causes every `npm install` to silently strip devDependencies, root cause of recurring "green yesterday" failures
 - **GitHub repo**: `dennisGIonity/Gate-Flame`, branch `feat/kiosk-and-icons`
-- **Canonical working copy**: `E:\Gateflame`; prior copies archived to `E:\_ARCHIVE-2026-08-16`
+- **Canonical working copy**: `E:\.claude\Ionity\Gateflame`; prior copies archived to `E:\_ARCHIVE-2026-08-16`
 - **Product documents**: `E:\.PServer\Google_Drive\...\Ionity_Project_Gate^Flame\`
 - **Premium-tier SIEM prior art** (Node.js/Express/Suricata/Prometheus stack): preserved at `E:\_ARCHIVE-2026-08-16\App-antigravity-workspace` — must not be deleted
 

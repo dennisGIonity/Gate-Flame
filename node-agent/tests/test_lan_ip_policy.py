@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent.parent  # E:\Gateflame
+ROOT = Path(__file__).resolve().parent.parent.parent  # E:\.claude\Ionity\Gateflame
 NODE_AGENT = ROOT / "node-agent"
 
 # Every file that must carry the policy. Adding a script that derives the address

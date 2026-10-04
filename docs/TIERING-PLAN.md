@@ -57,7 +57,7 @@ Standard and Premium T2 + T1 and T4 models as we go."*
 # T1 — ESP32 / Pico + MCP (scoping, 2026-09-25)
 
 > ✅ **Approved by Dennis the same day and built:** `t1/README.md`. Separate folder, port
-> 8095, own mDNS service and `t1_*` MCP tools — `E:\.ESP32-MCP` is untouched.
+> 8095, own mDNS service and `t1_*` MCP tools — `E:\.claude\Ionity\.ESP32-MCP` is untouched.
 
 Engineering assessment, from the parts in `docs/ESP32-PARTS-INVENTORY-2026-09-24.md` and
 the `Esp32-MCP` repo. Numbers marked *estimate* must be measured on the lab bench before

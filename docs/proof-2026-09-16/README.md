@@ -21,7 +21,7 @@ is meant to answer without a token). Real, live response: node ID, agent version
 
 **02-node-feed-health.png** — `GET /api/v1/system/feed`, returns `404 Not Found`. This is
 the **expected, honest result today** — the BUG-07 fix (this route) exists in the
-`E:\Gateflame` source and is documented in `FUNCTION-STATUS-AND-BUGS.md`, but has not yet
+`E:\.claude\Ionity\Gateflame` source and is documented in `FUNCTION-STATUS-AND-BUGS.md`, but has not yet
 been deployed to the physical Pi (the Pi is not a git repo; it needs an `scp` deploy per
 `tools/install-pi-update.sh`). This screenshot is proof of the current real gap, not proof
 the fix doesn't work — the fix passed all 634 local tests (see `TEST-REPORT-2026-09-15.md`

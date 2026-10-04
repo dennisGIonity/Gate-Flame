@@ -7,7 +7,7 @@ rem   local-console.cmd build   -> rebuild dist-kiosk + dist-mobile (needs NODE_
 rem   local-console.cmd run     -> start uvicorn on 127.0.0.1:8080 (foreground)
 setlocal
 set NODE_ENV=
-cd /d E:\Gateflame
+cd /d E:\.claude\Ionity\Gateflame
 if "%1"=="build" (
   call npm run build:html-kiosk > tools\local-console.build.txt 2>&1
   call npm run build:html-mobile >> tools\local-console.build.txt 2>&1
@@ -17,7 +17,7 @@ if "%1"=="build" (
 if "%1"=="run" (
   set GATEFLAME_DB_PATH=%TEMP%\gateflame-local-state.db
   set GATEFLAME_DATA_ROOT=%TEMP%\gateflame-local-dump
-  set GATEFLAME_KIOSK_DIR=E:\Gateflame\dist-kiosk
+  set GATEFLAME_KIOSK_DIR=E:\.claude\Ionity\Gateflame\dist-kiosk
   set GATEFLAME_FEED_ENABLED=false
   set GATEFLAME_HOST=127.0.0.1
   set GATEFLAME_PORT=8080

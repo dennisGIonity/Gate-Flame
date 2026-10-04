@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# find-copies.sh - read-only: every Gate^Flame checkout / copy on this machine and what it holds that E:\Gateflame lacks.
+# find-copies.sh - read-only: every Gate^Flame checkout / copy on this machine and what it holds that E:\.claude\Ionity\Gateflame lacks.
 out=/e/Gateflame/tools/find-copies.last.txt
 CANON=/e/Gateflame
 {
@@ -15,7 +15,7 @@ echo "--- git repos among them ---"
 git -C $CANON fetch -q --all 2>/dev/null
 while read -r d; do
   [ -d "$d/.git" ] || [ -f "$d/.git" ] || continue
-  [ "$(cd "$d" && pwd -W 2>/dev/null)" = "E:/Gateflame" ] && continue
+  [ "$(cd "$d" && pwd -W 2>/dev/null)" = "E:/.claude/Ionity/Gateflame" ] && continue
   echo "== $d"
   git -C "$d" remote -v 2>/dev/null | head -2
   git -C "$d" log -1 --format='  head: %h %ad %an %s' --date=short 2>/dev/null

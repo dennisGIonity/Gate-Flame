@@ -81,8 +81,8 @@ def run_health(loopback_ok: bool, lan_ok: bool, lan_ip: str = "192.168.0.10"):
     resolver healthy and will take no action.
     """
     # Forward slashes, not the native separator: Git bash treats a backslash inside
-    # single quotes as a literal character, so 'E:\\Gateflame\\...' is not a path.
-    # 'E:/Gateflame/...' works on both Git bash and a real Linux shell.
+    # single quotes as a literal character, so 'E:\\.claude\\Ionity\\Gateflame\\...' is not a path.
+    # 'E:/.claude/Ionity/Gateflame/...' works on both Git bash and a real Linux shell.
     watchdog_path = WATCHDOG.as_posix()
     script = f"""
       export GATEFLAME_WATCHDOG_LIB=1

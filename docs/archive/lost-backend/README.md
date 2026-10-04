@@ -21,7 +21,7 @@ and nobody ever did.
 | `09ec6d3498a4614ce2c782a56c74aaece47a8f69` | 2026-08-11 14:23 | feat: complete backend API integration, Pi-hole polling, and mobile nodeIP routing |
 
 **None of these SHAs exist on GitHub.** Verified again on 2026-09-20: all four bundle
-heads were missing from `E:\Gateflame`'s object database, while the nine *other* bundles
+heads were missing from `E:\.claude\Ionity\Gateflame`'s object database, while the nine *other* bundles
 beside it were confirmed fully contained and are therefore genuinely redundant.
 
 Source: `C:\Users\DGMic\GateFlame-Backup-2026-08-13\_fix-2026-08-13\E-App-SAFETY-2026-08-16.bundle`

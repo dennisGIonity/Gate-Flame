@@ -17,7 +17,7 @@ marked **NOT RUN** with the reason — a blank or a guess is never recorded as a
 
 | Item | Value |
 |---|---|
-| Source | `github.com/dennisGIonity/Gate-Flame`, branch `fix/mobile-dns-drops` (the only local copy is `E:\Gateflame`) |
+| Source | `github.com/dennisGIonity/Gate-Flame`, branch `fix/mobile-dns-drops` (the only local copy is `E:\.claude\Ionity\Gateflame`) |
 | App version | 1.0.3, Android versionCode 15 |
 | APK | `GateFlame-Mobile-1.0.3-debug.apk`, 4,796,075 bytes, sha256 `5AC1130C…07BF0D79` |
 | Test device | Raspberry Pi 5 16 GB, Trixie, node `GF-72TYTITQ`, on the isolated Ionity lab (H3C, `192.168.124.3`, eth0 only) |

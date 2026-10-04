@@ -2,7 +2,7 @@
 # Read-only. Sweeps every routable /24 this machine sits on for :8080 (agent),
 # :8091 (fleet), :8081 (Pi-hole admin), :53 (DNS), :22 (ssh), then asks any :8080 hit
 # for /system/status. Windows PowerShell 5.1 compatible (no ThreadJob).
-# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File E:\Gateflame\tools\find-box.ps1
+# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File E:\.claude\Ionity\Gateflame\tools\find-box.ps1
 $subnets = Get-NetIPAddress -AddressFamily IPv4 |
   Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.PrefixLength -le 24 } |
   ForEach-Object { ($_.IPAddress -split '\.')[0..2] -join '.' } | Sort-Object -Unique

@@ -8,7 +8,7 @@
 #   1. finds the Pi and REFUSES unless it holds a 192.168.124.x address
 #      (lab rule: no GateFlame on the household TP-Link network)
 #   2. one sudo on the Pi:
-#        a. E:\.IONITY-LAB\pi\gateflame-resume.sh  (undoes PAUSE exactly)
+#        a. E:\.claude\Ionity\.IONITY-LAB\pi\gateflame-resume.sh  (undoes PAUSE exactly)
 #        b. rewrites dns-stack/.env GATEFLAME_LAN_IP to the Pi's LAB address
 #           (the stale 192.168.0.10 is why Pi-hole could not bind port 53)
 #        c. docker compose up -d for the DNS stack, restarts the node agent

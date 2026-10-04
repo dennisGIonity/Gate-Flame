@@ -15,7 +15,7 @@ Classification: INTERNAL | Building Tomorrow, Today. | Anything is Possible with
 
 **Two different projects, two different clients.**
 
-| | ESP32-MCP (`E:\.ESP32-MCP`, repo `Esp32-MCP`) | Gate^Flame T1 (`t1/`, this repo) |
+| | ESP32-MCP (`E:\.claude\Ionity\.ESP32-MCP`, repo `Esp32-MCP`) | Gate^Flame T1 (`t1/`, this repo) |
 |---|---|---|
 | Client | A different client | Gate^Flame households |
 | Job | Fleet telemetry, sensors, actuators, edge inference | DNS filtering |

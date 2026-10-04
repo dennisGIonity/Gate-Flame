@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pi-drift.sh - read-only: what is deployed on the Pi vs what is in E:\Gateflame (md5 per file).
+# pi-drift.sh - read-only: what is deployed on the Pi vs what is in E:\.claude\Ionity\Gateflame (md5 per file).
 export SSH_AUTH_SOCK=/c/Users/DGMic/.ssh/agent.sock
 C=/e/Gateflame; PI=wabapi@192.168.124.3
 O=(-o BatchMode=yes -o ConnectTimeout=6 -o HostKeyAlias=raspberrypi)

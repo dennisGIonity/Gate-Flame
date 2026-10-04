@@ -1,6 +1,6 @@
 # probe-estate.ps1 — read-only reachability sweep of the live Gate^Flame estate.
 # Prints one line per endpoint: status code + first 200 bytes. Never writes anything.
-# Usage: powershell -NoProfile -File E:\Gateflame\tools\probe-estate.ps1
+# Usage: powershell -NoProfile -File E:\.claude\Ionity\Gateflame\tools\probe-estate.ps1
 $ErrorActionPreference = 'Continue'
 $urls = @(
   'http://192.168.0.10:8080/api/v1/system/status',
@@ -37,8 +37,8 @@ foreach ($n in 'doubleclick.net','ionity.today') {
         Write-Output ("{0} -> {1}" -f $n, $a.IPAddress) }
   catch { Write-Output ("{0} -> ERR {1}" -f $n, $_.Exception.Message) }
 }
-Write-Output '--- git identity in E:\Gateflame ---'
-git -C E:\Gateflame config user.name
-git -C E:\Gateflame config user.email
+Write-Output '--- git identity in E:\.claude\Ionity\Gateflame ---'
+git -C E:\.claude\Ionity\Gateflame config user.name
+git -C E:\.claude\Ionity\Gateflame config user.email
 Write-Output '--- ssh agent ---'
 & 'C:\Program Files\Git\usr\bin\ssh-add.exe' -l 2>&1

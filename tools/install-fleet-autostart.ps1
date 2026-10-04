@@ -29,7 +29,7 @@ $script   = Join-Path $PSScriptRoot "START-IONITY-SERVER.ps1"
 $envFile  = Join-Path $fleetDir "fleet.env.ps1"
 
 if (-not (Test-Path $script)) {
-    Write-Host "ERROR: $script not found - run this from the repo (E:\Gateflame), not a copy." -ForegroundColor Red
+    Write-Host "ERROR: $script not found - run this from the repo (E:\.claude\Ionity\Gateflame), not a copy." -ForegroundColor Red
     exit 1
 }
 if (-not (Test-Path $envFile)) {

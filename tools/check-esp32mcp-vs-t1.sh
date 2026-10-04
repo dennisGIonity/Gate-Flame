@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only: what is in E:\.ESP32-MCP, and when, next to Gate^Flame's t1/.
+# Read-only: what is in E:\.claude\Ionity\.ESP32-MCP, and when, next to Gate^Flame's t1/.
 d=/e/.ESP32-MCP
 [ -d "$d" ] || { echo "no $d"; exit 0; }
 cd "$d"

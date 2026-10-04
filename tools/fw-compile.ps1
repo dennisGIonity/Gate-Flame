@@ -1,6 +1,6 @@
 # fw-compile.ps1 - compile the ESP32 + Pico sketches (no upload). Output -> fw-compile.last.txt
 $acli = 'E:\Program Files (x86)\ArduinoIDE\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe'
-$fw = 'E:\.ESP32-MCP\firmware-arduino'
+$fw = 'E:\.claude\Ionity\.ESP32-MCP\firmware-arduino'
 & {
   "=== fw-compile $(Get-Date -Format s) ==="
   Select-String -Path "$fw\Esp32_MCP_Node\secrets.h","$fw\Pico_MCP_Node\secrets.h" -Pattern '#define WIFI_SSID' | ForEach-Object { "$($_.Filename): $($_.Line)" }

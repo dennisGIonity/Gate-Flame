@@ -1,5 +1,5 @@
 """
-Convert every .md in E:\\Gateflame\\docs to .docx, in the AEDI house style.
+Convert every .md in E:\\.claude\\Ionity\\Gateflame\\docs to .docx, in the AEDI house style.
 
 ON THE TEMPLATE
 The org standard is TEMPLATE_2026_OFFICAL_v1.1.docx, which is not on this
@@ -29,7 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DOCS = Path(r"E:\Gateflame\docs")
+DOCS = Path(r"E:\.claude\Ionity\Gateflame\docs")
 OUT = DOCS / "docx"
 REFERENCE = DOCS / "1-GateFlame-Status-Report-2026-08-24.docx"
 

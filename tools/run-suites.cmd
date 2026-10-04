@@ -3,7 +3,7 @@ rem run-suites.cmd — the whole automated gate, from the host, with NODE_ENV cl
 rem (CLAUDE.md: it is wrongly 'production' on this machine). Output -> tools\run-suites.last.txt
 setlocal
 set NODE_ENV=
-cd /d E:\Gateflame
+cd /d E:\.claude\Ionity\Gateflame
 echo === tsc --noEmit === > tools\run-suites.last.txt
 call npx tsc --noEmit >> tools\run-suites.last.txt 2>&1
 echo tsc rc=%ERRORLEVEL% >> tools\run-suites.last.txt

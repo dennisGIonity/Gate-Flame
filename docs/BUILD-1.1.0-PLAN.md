@@ -19,7 +19,7 @@ Classification: INTERNAL | Building Tomorrow, Today. | Anything is Possible with
 > distributable zip with all parts inside so i can hand over to a tester as a demo model."
 
 Scope = **Standard T3 only** (Radxa Cubie A7A 6 GB / lab Pi 5 16 GB). T1 (`t1/`), Premium T3,
-T2, T4 and `E:\.ESP32-MCP` are **out of scope and not touched**.
+T2, T4 and `E:\.claude\Ionity\.ESP32-MCP` are **out of scope and not touched**.
 
 ## Parts
 

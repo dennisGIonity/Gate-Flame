@@ -4,8 +4,8 @@ is down, so the client does not drop the connector; tool calls then report the o
 
 Claude Desktop config (claude_desktop_config.json):
   "gateflame-t1": {
-    "command": "E:\\\\Gateflame\\\\t1\\\\server\\\\.venv\\\\Scripts\\\\python.exe",
-    "args": ["E:\\\\Gateflame\\\\t1\\\\server\\\\mcp_stdio.py"]
+    "command": "E:\\\\.claude\\\\Ionity\\\\Gateflame\\\\t1\\\\server\\\\.venv\\\\Scripts\\\\python.exe",
+    "args": ["E:\\\\.claude\\\\Ionity\\\\Gateflame\\\\t1\\\\server\\\\mcp_stdio.py"]
   }
 Set T1_MCP_URL (and T1_ADMIN_TOKEN when the server is on another machine) if needed.
 """

@@ -1,5 +1,5 @@
 @echo off
-cd /d E:\Gateflame
+cd /d E:\.claude\Ionity\Gateflame
 title Gate^^Flame - apply fixes to the Pi
 echo.
 echo  ============================================================

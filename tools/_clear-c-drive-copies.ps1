@@ -1,4 +1,4 @@
-# Gate^Flame - clear the C: drive copies that E:\Gateflame has superseded.
+# Gate^Flame - clear the C: drive copies that E:\.claude\Ionity\Gateflame has superseded.
 # Written 2026-09-20 after the reconcile in docs/C-DRIVE-RECONCILE-2026-09-20.md.
 #
 # Everything goes to the RECYCLE BIN, not a hard delete. Recoverable.
@@ -52,7 +52,7 @@ function Recycle($path) {
 }
 
 Write-Host ''
-Write-Host 'STAGE 1 - superseded, verified contained in E:\Gateflame'
+Write-Host 'STAGE 1 - superseded, verified contained in E:\.claude\Ionity\Gateflame'
 foreach ($p in $stage1 + $stage1Files) { Recycle $p }
 
 Write-Host ''
